@@ -23,13 +23,9 @@ export const stateMeta: Record<Instance["state"], { label: string; color: string
   stopping: { label: "Stopping", color: "#d13212" },
 };
 
-export function privateIpv4(id: string) {
-  const hex = id.replace(/[^0-9a-f]/gi, "").slice(-4).padEnd(4, "0");
-  return `10.0.${parseInt(hex.slice(0, 2), 16)}.${parseInt(hex.slice(2), 16)}`;
-}
-
-export function privateDns(id: string) {
-  return `ip-${privateIpv4(id).replaceAll(".", "-")}.internal`;
+// Derived only from a real private IP; a missing IP yields no DNS name.
+function privateDnsName(ip: string) {
+  return ip ? `ip-${ip.replaceAll(".", "-")}.internal` : "";
 }
 
 export function StateDot({ state }: { state: Instance["state"] }) {
@@ -98,12 +94,12 @@ export function InstanceDetails({ instance }: { instance: Instance }) {
     <Fields>
       <Field label="Instance ID"><CopyText value={instance.id} /></Field>
       <Field label="Public IPv4 address">{dash(instance.publicIpv4)}</Field>
-      <Field label="Private IPv4 addresses">{privateIpv4(instance.id)}</Field>
+      <Field label="Private IPv4 addresses">{dash(instance.privateIpv4)}</Field>
       <Field label="IPv6 address">{dash(instance.ipv6)}</Field>
       <Field label="Instance state"><StateDot state={instance.state} /></Field>
       <Field label="Public IPv4 DNS">{dash(instance.publicDns)}</Field>
-      <Field label="Hostname type">IP name: {privateDns(instance.id)}</Field>
-      <Field label="Private IP DNS name (IPv4 only)">{privateDns(instance.id)}</Field>
+      <Field label="Hostname type">{dash(privateDnsName(instance.privateIpv4))}</Field>
+      <Field label="Private IP DNS name (IPv4 only)">{dash(privateDnsName(instance.privateIpv4))}</Field>
       <Field label="Instance type">{instance.type}</Field>
       <Field label="Elastic IP addresses">{dash(instance.elasticIp)}</Field>
       <Field label="Availability Zone">{instance.availabilityZone}</Field>
@@ -151,7 +147,7 @@ export function InstanceTab({ tab, instance, hideSummary = false }: { tab: strin
         <Fields>
           <Field label="Public IPv4 address">{dash(instance.publicIpv4)}</Field>
           <Field label="Public IPv4 DNS">{dash(instance.publicDns)}</Field>
-          <Field label="Private IPv4 addresses">{privateIpv4(instance.id)}</Field>
+          <Field label="Private IPv4 addresses">{dash(instance.privateIpv4)}</Field>
           <Field label="VPC ID">{dash(instance.vpcId)}</Field>
           <Field label="Elastic IP addresses">{dash(instance.elasticIp)}</Field>
           <Field label="IPv6 address">{dash(instance.ipv6)}</Field>
