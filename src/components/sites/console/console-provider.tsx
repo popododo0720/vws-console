@@ -28,6 +28,7 @@ import type {
   LaunchDraft,
   RouteTable,
   SecurityGroup,
+  SecurityGroupRule,
   Subnet,
   ElasticIp,
   Volume,
@@ -68,7 +69,15 @@ type ConsoleApi = {
   modifyVolume: (id: string, input: { volumeType: string; sizeGiB: number }) => void;
   createSnapshot: (input: { volumeId: string; name: string; description: string }) => void;
   deleteSnapshots: (ids: string[]) => void;
-  createSecurityGroup: (input: { name: string; groupName: string; description: string; vpcId: string; allowSsh: boolean }) => void;
+  createSecurityGroup: (input: {
+    name: string;
+    groupName: string;
+    description: string;
+    vpcId: string;
+    inbound: SecurityGroupRule[];
+    outbound: SecurityGroupRule[];
+  }) => string;
+  updateSecurityGroupRules: (id: string, direction: SecurityGroupRule["direction"], rules: SecurityGroupRule[]) => void;
   deleteSecurityGroups: (ids: string[]) => void;
   createVpc: (input: { name: string; ipv4Cidr: string }) => void;
   deleteVpcs: (ids: string[]) => void;
@@ -367,11 +376,12 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         }));
       },
       createSecurityGroup: (input) => {
+        const id = newId("sg");
         setData((prev) => ({
           ...prev,
           securityGroups: [
             {
-              id: newId("sg"),
+              id,
               name: input.name,
               groupName: input.groupName || input.name || "unnamed",
               vpcId: input.vpcId,
@@ -379,14 +389,26 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
               owner: ACCOUNT.id,
               region,
               rules: [
-                ...(input.allowSsh
-                  ? [makeRule("in", "TCP", "22", "0.0.0.0/0")]
-                  : []),
-                makeRule("out", "All", "All", "0.0.0.0/0"),
+                ...input.inbound.map((rule) => ({ ...rule, direction: "in" as const })),
+                ...input.outbound.map((rule) => ({ ...rule, direction: "out" as const })),
               ],
             },
             ...prev.securityGroups,
           ],
+        }));
+        return id;
+      },
+      updateSecurityGroupRules: (id, direction, rules) => {
+        setData((prev) => ({
+          ...prev,
+          securityGroups: prev.securityGroups.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  rules: [...item.rules.filter((rule) => rule.direction !== direction), ...rules.map((rule) => ({ ...rule, direction }))],
+                }
+              : item,
+          ),
         }));
       },
       deleteSecurityGroups: (ids) => {

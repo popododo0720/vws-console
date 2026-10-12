@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { SecurityGroup } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { useConsole } from "@/components/sites/console/console-provider";
@@ -11,30 +12,21 @@ import { Column, NameCell, ResourceTable } from "@/components/sites/console/reso
 import { Shell } from "@/components/sites/console/shell";
 import {
   CopyText,
-  FieldLabel,
   MenuButton,
   MenuChevron,
   OrangeButton,
   OutlineButton,
-  PanelDialog,
   dash,
   menuTriggerClass,
 } from "@/components/sites/console/ui";
 
 export function SecurityGroupsView() {
   const api = useConsole();
+  const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(220);
   const [updated, setUpdated] = useState("Last updated less than a minute ago");
-  const [createOpen, setCreateOpen] = useState(false);
   const [ruleTab, setRuleTab] = useState("in");
-  const [form, setForm] = useState({
-    name: "",
-    groupName: "",
-    description: "",
-    vpcId: api.vpcs[0]?.id ?? "",
-    allowSsh: true,
-  });
   const selected = api.securityGroups.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
 
@@ -92,7 +84,7 @@ export function SecurityGroupsView() {
             >
               Export security groups to CSV
             </OutlineButton>
-            <OrangeButton onClick={() => setCreateOpen(true)}>Create security group</OrangeButton>
+            <OrangeButton onClick={() => router.push("/network/security-groups/create")}>Create security group</OrangeButton>
           </>
         }
       />
@@ -139,53 +131,6 @@ export function SecurityGroupsView() {
           <p className="py-8 text-center text-[14px] text-[#5f6b7a]">Select a security group</p>
         )}
       </DetailDock>
-      <PanelDialog
-        open={createOpen}
-        title="Create security group"
-        onClose={() => setCreateOpen(false)}
-        footer={
-          <>
-            <OutlineButton onClick={() => setCreateOpen(false)}>Cancel</OutlineButton>
-            <OrangeButton
-              onClick={() => {
-                api.createSecurityGroup(form);
-                setCreateOpen(false);
-              }}
-            >
-              Create security group
-            </OrangeButton>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Name</FieldLabel>
-            <input className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-          </div>
-          <div>
-            <FieldLabel>Security group name</FieldLabel>
-            <input className="field" value={form.groupName} onChange={(event) => setForm({ ...form, groupName: event.target.value })} />
-          </div>
-          <div>
-            <FieldLabel>Description</FieldLabel>
-            <input className="field" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
-          </div>
-          <div>
-            <FieldLabel>VPC</FieldLabel>
-            <select className="field" value={form.vpcId} onChange={(event) => setForm({ ...form, vpcId: event.target.value })}>
-              {api.vpcs.map((vpc) => (
-                <option key={vpc.id} value={vpc.id}>
-                  {vpc.name || vpc.id}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.allowSsh} onChange={(event) => setForm({ ...form, allowSsh: event.target.checked })} />
-            Allow SSH from anywhere
-          </label>
-        </div>
-      </PanelDialog>
     </Shell>
   );
 }
