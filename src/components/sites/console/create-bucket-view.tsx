@@ -51,7 +51,7 @@ export function CreateBucketView() {
         <div className="mx-auto max-w-[900px] space-y-4 px-4 pb-8">
           <Section title="General configuration">
             <div>
-              <FieldLabel>AWS Region</FieldLabel>
+              <FieldLabel>Region</FieldLabel>
               <p>{api.region}</p>
             </div>
             <div className="space-y-2">
@@ -75,7 +75,7 @@ export function CreateBucketView() {
               <FieldLabel>Bucket name</FieldLabel>
               <input
                 className="field"
-                placeholder="myawsbucket"
+                placeholder="my-bucket"
                 value={name}
                 onChange={(event) => {
                   setName(event.target.value);

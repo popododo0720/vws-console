@@ -66,7 +66,7 @@ export function BucketsView() {
         </Link>
       ),
     },
-    { key: "region", header: "AWS Region", minWidth: 160, sortValue: (row) => row.region, cell: (row) => row.region },
+    { key: "region", header: "Region", minWidth: 160, sortValue: (row) => row.region, cell: (row) => row.region },
     { key: "created", header: "Creation date", minWidth: 140, sortValue: (row) => row.created, cell: (row) => row.created },
   ];
 
