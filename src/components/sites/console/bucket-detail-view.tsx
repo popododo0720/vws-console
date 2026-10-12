@@ -10,7 +10,7 @@ import { useConsole } from "@/components/sites/console/console-provider";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, ResourceTable } from "@/components/sites/console/resource-table";
 import { Shell } from "@/components/sites/console/shell";
-import { FieldLabel, OrangeButton, OutlineButton, PanelDialog, dash } from "@/components/sites/console/ui";
+import { FieldLabel, OrangeButton, OutlineButton, PanelDialog, SampleBadge, dash } from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
 
 const CONFIRM_WORD = "permanently delete";
@@ -100,6 +100,7 @@ export function BucketDetailView({ name }: { name: string }) {
         <PageHeader
           crumbs={[{ label: "S3", href: "/storage/buckets" }, { label: "Buckets", href: "/storage/buckets" }, { label: name }]}
           info="Object keys and sizes are kept in this browser session. File contents are not stored."
+          meta={api.mode === "sample" ? <SampleBadge /> : null}
         />
         <div className="mb-3 flex gap-4 px-4 text-[14px]">
           {(["objects", "properties"] as const).map((item) => (

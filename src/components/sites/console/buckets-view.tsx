@@ -16,6 +16,7 @@ import {
   OrangeButton,
   OutlineButton,
   PanelDialog,
+  SampleBadge,
 } from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +80,7 @@ export function BucketsView() {
               mark="B"
               crumbs={[{ label: "S3", href: "/storage/buckets" }, { label: "Buckets" }]}
               info="Buckets hold objects. This list is stored only in the browser session."
+              meta={api.mode === "sample" ? <SampleBadge /> : null}
             />
             <div className="mb-3 flex gap-4 px-4 text-[14px]">
               <button

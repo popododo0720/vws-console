@@ -8,7 +8,7 @@ import type { BucketKind } from "@/types/console";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
-import { FieldLabel, OrangeButton, OutlineButton } from "@/components/sites/console/ui";
+import { FieldLabel, OrangeButton, OutlineButton, SampleBadge } from "@/components/sites/console/ui";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -47,6 +47,7 @@ export function CreateBucketView() {
             { label: "Create bucket" },
           ]}
           info="Buckets are containers for objects. Settings are kept in this browser session only."
+          meta={api.mode === "sample" ? <SampleBadge /> : null}
         />
         <div className="mx-auto max-w-[900px] space-y-4 px-4 pb-8">
           <Section title="General configuration">

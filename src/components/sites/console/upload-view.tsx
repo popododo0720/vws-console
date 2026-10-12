@@ -8,7 +8,7 @@ import { formatBytes } from "@/lib/bucket-objects";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
-import { OrangeButton, OutlineButton } from "@/components/sites/console/ui";
+import { OrangeButton, OutlineButton, SampleBadge } from "@/components/sites/console/ui";
 
 export function UploadView({ name }: { name: string }) {
   const api = useConsole();
@@ -51,7 +51,11 @@ export function UploadView({ name }: { name: string }) {
   return (
     <Shell tree={storageNav}>
       <div className="min-h-0 flex-1 overflow-auto bg-[#f3f3f5]">
-        <PageHeader crumbs={crumbs} info="Only file names and sizes are recorded here. File contents are not stored." />
+        <PageHeader
+          crumbs={crumbs}
+          info="Only file names and sizes are recorded here. File contents are not stored."
+          meta={api.mode === "sample" ? <SampleBadge /> : null}
+        />
         <div className="mx-auto max-w-[900px] space-y-4 px-4 pb-8 text-[13px]">
           <section className="rounded-lg border border-[#e6e8eb] bg-white p-4">
             <p className="mb-3 text-[#5f6b7a]">Add the files you want to upload. Destination: s3://{name}/{prefix}</p>
