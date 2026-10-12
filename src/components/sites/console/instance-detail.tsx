@@ -23,11 +23,6 @@ export const stateMeta: Record<Instance["state"], { label: string; color: string
   stopping: { label: "Stopping", color: "#d13212" },
 };
 
-// Derived only from a real private IP; a missing IP yields no DNS name.
-function privateDnsName(ip: string) {
-  return ip ? `ip-${ip.replaceAll(".", "-")}.internal` : "";
-}
-
 export function StateDot({ state }: { state: Instance["state"] }) {
   const meta = stateMeta[state];
   return (
@@ -98,8 +93,7 @@ export function InstanceDetails({ instance }: { instance: Instance }) {
       <Field label="IPv6 address">{dash(instance.ipv6)}</Field>
       <Field label="Instance state"><StateDot state={instance.state} /></Field>
       <Field label="Public IPv4 DNS">{dash(instance.publicDns)}</Field>
-      <Field label="Hostname type">{dash(privateDnsName(instance.privateIpv4))}</Field>
-      <Field label="Private IP DNS name (IPv4 only)">{dash(privateDnsName(instance.privateIpv4))}</Field>
+      <Field label="Private IP DNS name (IPv4 only)">{dash(instance.privateDns)}</Field>
       <Field label="Instance type">{instance.type}</Field>
       <Field label="Elastic IP addresses">{dash(instance.elasticIp)}</Field>
       <Field label="Availability Zone">{instance.availabilityZone}</Field>
@@ -148,6 +142,7 @@ export function InstanceTab({ tab, instance, hideSummary = false }: { tab: strin
           <Field label="Public IPv4 address">{dash(instance.publicIpv4)}</Field>
           <Field label="Public IPv4 DNS">{dash(instance.publicDns)}</Field>
           <Field label="Private IPv4 addresses">{dash(instance.privateIpv4)}</Field>
+          <Field label="Private IP DNS name (IPv4 only)">{dash(instance.privateDns)}</Field>
           <Field label="VPC ID">{dash(instance.vpcId)}</Field>
           <Field label="Elastic IP addresses">{dash(instance.elasticIp)}</Field>
           <Field label="IPv6 address">{dash(instance.ipv6)}</Field>
