@@ -49,3 +49,6 @@ next-env.d.ts
 temp/
 agent-tools/
 assets/
+
+# Local AWS reference screenshots (never commit)
+docs/design-references/console/

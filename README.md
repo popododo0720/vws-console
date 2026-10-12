@@ -4,7 +4,7 @@ A local mock of a cloud operations console. It covers six screens: instances, th
 
 The on-screen product name is VWS. Service menus use the names from the reference console screens. The header mark is the VWS wordmark.
 
-The app was scaffolded from the MIT-licensed [ai-website-cloner-template](https://github.com/JCodesMore/ai-website-cloner-template). The clone workflow (map, observe, build, compare) is in `.agents/skills/clone-website/`. Reference screenshots are in `docs/design-references/console/`.
+The app was scaffolded from the MIT-licensed [ai-website-cloner-template](https://github.com/JCodesMore/ai-website-cloner-template). The clone workflow (map, observe, build, compare) is in `.agents/skills/clone-website/`. Reference screenshots are used locally only (`docs/design-references/console/`, gitignored) and are not committed to the repo.
 
 ## Run
 

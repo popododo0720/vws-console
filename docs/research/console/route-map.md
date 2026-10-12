@@ -1,6 +1,6 @@
 # Route map
 
-Source evidence is the attached console screenshots in `docs/design-references/console/`. The live console requires a signed-in account, so those images are the observation source. Routes below are local.
+Source evidence is a set of console screenshots kept locally only in `docs/design-references/console/` (gitignored, not committed to the repo). The live console requires a signed-in account, so those images were the observation source. Routes below are local.
 
 | Screenshot | Local route | Owner |
 | --- | --- | --- |
