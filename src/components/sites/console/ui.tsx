@@ -256,3 +256,7 @@ export function menuTriggerClass() {
 export function MenuChevron() {
   return <ChevronDown className="size-3.5 text-[#5f6b7a]" />;
 }
+
+export function blueMenuTriggerClass() {
+  return "inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#006ce0] bg-white px-3 text-[13px] font-semibold text-[#006ce0] hover:bg-[#f2f8fd]";
+}

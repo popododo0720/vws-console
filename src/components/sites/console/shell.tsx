@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { NavTree } from "@/types/console";
+import { TOGGLE_NAV_EVENT } from "@/components/sites/console/page-header";
 import { SideNav } from "@/components/sites/console/side-nav";
 import { TopBar } from "@/components/sites/console/top-bar";
 import { OutlineButton, PanelDialog } from "@/components/sites/console/ui";
@@ -30,6 +31,14 @@ export function Shell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    const toggle = () => {
+      if (window.matchMedia("(min-width: 1024px)").matches) setCollapsed((value) => !value);
+      else setMobileOpen((value) => !value);
+    };
+    window.addEventListener(TOGGLE_NAV_EVENT, toggle);
+    return () => window.removeEventListener(TOGGLE_NAV_EVENT, toggle);
+  }, []);
   const showDocked = tree && navMode === "docked" && !collapsed;
 
   return (
