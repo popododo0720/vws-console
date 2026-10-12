@@ -85,7 +85,7 @@ export const computeNav: NavTree = {
       label: "Network & Security",
       children: [
         { id: "sg", label: "Security Groups", href: "/network/security-groups" },
-        { id: "addresses", label: "Elastic IPs" },
+        { id: "addresses", label: "Elastic IPs", href: "/network/elastic-ips" },
         { id: "placement", label: "Placement Groups" },
         { id: "keys", label: "Key Pairs" },
         { id: "interfaces", label: "Network Interfaces" },
@@ -123,7 +123,7 @@ export const networkNav: NavTree = {
         { id: "eigw", label: "Egress-only internet gateways" },
         { id: "carrier", label: "Carrier gateways" },
         { id: "dhcp", label: "DHCP option sets" },
-        { id: "addresses", label: "Elastic IPs" },
+        { id: "addresses", label: "Elastic IPs", href: "/network/elastic-ips" },
         { id: "prefix", label: "Managed prefix lists" },
         { id: "nat", label: "NAT gateways" },
         { id: "peer", label: "Peering connections" },
