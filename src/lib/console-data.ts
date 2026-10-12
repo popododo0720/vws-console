@@ -1,13 +1,17 @@
 import type {
   Bucket,
   Dataset,
+  ElasticIp,
   Instance,
   InstanceTypeOption,
+  InternetGateway,
   KeyPair,
   MachineImage,
   NavNode,
   NavTree,
+  RouteTable,
   SecurityGroup,
+  Subnet,
   Volume,
   Snapshot,
   Vpc,
@@ -81,7 +85,7 @@ export const computeNav: NavTree = {
       label: "Network & Security",
       children: [
         { id: "sg", label: "Security Groups", href: "/network/security-groups" },
-        { id: "addresses", label: "Elastic IPs" },
+        { id: "addresses", label: "Elastic IPs", href: "/network/elastic-ips" },
         { id: "placement", label: "Placement Groups" },
         { id: "keys", label: "Key Pairs" },
         { id: "interfaces", label: "Network Interfaces" },
@@ -113,13 +117,13 @@ export const networkNav: NavTree = {
       label: "Virtual private cloud",
       children: [
         { id: "vpcs", label: "Your VPCs", href: "/network/vpcs" },
-        { id: "subnets", label: "Subnets" },
-        { id: "routes", label: "Route tables" },
-        { id: "igw", label: "Internet gateways" },
+        { id: "subnets", label: "Subnets", href: "/network/subnets" },
+        { id: "routes", label: "Route tables", href: "/network/route-tables" },
+        { id: "igw", label: "Internet gateways", href: "/network/internet-gateways" },
         { id: "eigw", label: "Egress-only internet gateways" },
         { id: "carrier", label: "Carrier gateways" },
         { id: "dhcp", label: "DHCP option sets" },
-        { id: "addresses", label: "Elastic IPs" },
+        { id: "addresses", label: "Elastic IPs", href: "/network/elastic-ips" },
         { id: "prefix", label: "Managed prefix lists" },
         { id: "nat", label: "NAT gateways" },
         { id: "peer", label: "Peering connections" },
@@ -380,6 +384,10 @@ export function createEmptyAccount(): Dataset {
     buckets: [],
     keyPairs: [],
     vpcs: [defaultVpc()],
+    subnets: [],
+    routeTables: [],
+    internetGateways: [],
+    elasticIps: [],
     securityGroups: [defaultGroup()],
   };
 }
@@ -544,9 +552,101 @@ export function createSampleAccount(): Dataset {
       region: HOME_REGION,
     },
   ];
+  // MOCK_SUBNETS: sample-only data, shown only when the console is switched to sample data.
+  const MOCK_SUBNETS: Subnet[] = [
+    {
+      id: "subnet-0a1b2c3d4e5f6071",
+      name: "sample-public-a",
+      vpcId: DEFAULT_VPC_ID,
+      state: "available",
+      ipv4Cidr: "172.31.0.0/20",
+      availableIps: 4091,
+      availabilityZone: "north-a",
+      routeTableId: "rtb-0a1b2c3d4e5f6071",
+      autoAssignPublicIp: true,
+      region: HOME_REGION,
+    },
+    {
+      id: "subnet-0b2c3d4e5f607182",
+      name: "sample-public-b",
+      vpcId: DEFAULT_VPC_ID,
+      state: "available",
+      ipv4Cidr: "172.31.16.0/20",
+      availableIps: 4091,
+      availabilityZone: "north-b",
+      routeTableId: "rtb-0a1b2c3d4e5f6071",
+      autoAssignPublicIp: true,
+      region: HOME_REGION,
+    },
+    {
+      id: "subnet-0c3d4e5f60718293",
+      name: "sample-private-a",
+      vpcId: "vpc-07c1e9aa22b4d310",
+      state: "available",
+      ipv4Cidr: "10.20.1.0/24",
+      availableIps: 251,
+      availabilityZone: "north-a",
+      routeTableId: "rtb-0b2c3d4e5f607182",
+      autoAssignPublicIp: false,
+      region: HOME_REGION,
+    },
+  ];
+  // MOCK_ROUTE_TABLES: sample-only data. Each VPC has one main table; "local" routes mirror the VPC CIDR.
+  const MOCK_ROUTE_TABLES: RouteTable[] = [
+    {
+      id: "rtb-0a1b2c3d4e5f6071",
+      name: "sample-main",
+      vpcId: DEFAULT_VPC_ID,
+      main: true,
+      subnetIds: ["subnet-0a1b2c3d4e5f6071", "subnet-0b2c3d4e5f607182"],
+      routes: [
+        { destination: "172.31.0.0/16", target: "local", status: "active" },
+        { destination: "0.0.0.0/0", target: "igw-0a1b2c3d4e5f6071", status: "active" },
+      ],
+      region: HOME_REGION,
+    },
+    {
+      id: "rtb-0b2c3d4e5f607182",
+      name: "sample-isolated-main",
+      vpcId: "vpc-07c1e9aa22b4d310",
+      main: true,
+      subnetIds: ["subnet-0c3d4e5f60718293"],
+      routes: [{ destination: "10.20.0.0/16", target: "local", status: "active" }],
+      region: HOME_REGION,
+    },
+  ];
+  // MOCK_INTERNET_GATEWAYS: sample-only data.
+  const MOCK_INTERNET_GATEWAYS: InternetGateway[] = [
+    {
+      id: "igw-0a1b2c3d4e5f6071",
+      name: "sample-igw",
+      state: "attached",
+      vpcId: DEFAULT_VPC_ID,
+      region: HOME_REGION,
+    },
+  ];
+  // MOCK_ELASTIC_IPS: sample-only data. Addresses come from the TEST-NET-3 documentation range, never a real allocation.
+  const MOCK_ELASTIC_IPS: ElasticIp[] = [
+    {
+      allocationId: "eipalloc-0a1b2c3d4e5f6071",
+      name: "sample-eip",
+      address: "203.0.113.50",
+      instanceId: "",
+      privateIp: "",
+      region: HOME_REGION,
+    },
+  ];
   const buckets: Bucket[] = [
     { name: "vws-logs", region: HOME_REGION, created: "Aug 2, 2026", kind: "general" },
     { name: "vws-media", region: "US East", created: "Sep 18, 2026", kind: "general" },
   ];
-  return { instances, volumes, snapshots: MOCK_SNAPSHOTS, securityGroups, vpcs, buckets, keyPairs };
+  return { instances, volumes, snapshots: MOCK_SNAPSHOTS, securityGroups,
+    vpcs,
+    subnets: MOCK_SUBNETS,
+    routeTables: MOCK_ROUTE_TABLES,
+    internetGateways: MOCK_INTERNET_GATEWAYS,
+    elasticIps: MOCK_ELASTIC_IPS,
+    buckets,
+    keyPairs,
+  };
 }

@@ -82,6 +82,52 @@ export type Vpc = {
   region: string;
 };
 
+export type Subnet = {
+  id: string;
+  name: string;
+  vpcId: string;
+  state: "available" | "pending";
+  ipv4Cidr: string;
+  availableIps: number;
+  availabilityZone: string;
+  routeTableId: string;
+  autoAssignPublicIp: boolean;
+  region: string;
+};
+
+export type Route = {
+  destination: string;
+  target: string;
+  status: "active" | "blackhole";
+};
+
+export type RouteTable = {
+  id: string;
+  name: string;
+  vpcId: string;
+  main: boolean;
+  subnetIds: string[];
+  routes: Route[];
+  region: string;
+};
+
+export type InternetGateway = {
+  id: string;
+  name: string;
+  state: "attached" | "detached";
+  vpcId: string;
+  region: string;
+};
+
+export type ElasticIp = {
+  allocationId: string;
+  name: string;
+  address: string;
+  instanceId: string;
+  privateIp: string;
+  region: string;
+};
+
 export type BucketKind = "general" | "directory";
 
 export type Bucket = {
@@ -102,6 +148,10 @@ export type Dataset = {
   snapshots: Snapshot[];
   securityGroups: SecurityGroup[];
   vpcs: Vpc[];
+  subnets: Subnet[];
+  routeTables: RouteTable[];
+  internetGateways: InternetGateway[];
+  elasticIps: ElasticIp[];
   buckets: Bucket[];
   keyPairs: KeyPair[];
 };

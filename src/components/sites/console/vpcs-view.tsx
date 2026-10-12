@@ -18,6 +18,7 @@ import {
   OrangeButton,
   OutlineButton,
   PanelDialog,
+  SampleBadge,
   dash,
   menuTriggerClass,
 } from "@/components/sites/console/ui";
@@ -88,7 +89,12 @@ export function VpcsView() {
         mark="N"
         crumbs={[{ label: "VPC", href: "/network/vpcs" }, { label: `Your VPCs (${rows.length})` }]}
         info="A VPC is an isolated network in the current region."
-        meta={updated}
+        meta={
+          <span className="inline-flex items-center gap-2">
+            {api.mode === "sample" ? <SampleBadge /> : null}
+            {updated}
+          </span>
+        }
         actions={
           <>
             <MenuButton
@@ -102,7 +108,10 @@ export function VpcsView() {
                 {
                   label: "Delete",
                   disabled: selected.length === 0,
-                  onSelect: () => api.deleteVpcs(selected.map((item) => item.id)),
+                  onSelect: () => {
+                    api.deleteVpcs(selected.map((item) => item.id));
+                    setSelectedIds([]);
+                  },
                 },
               ]}
             />
@@ -124,14 +133,29 @@ export function VpcsView() {
       />
       <DetailDock
         title={one ? one.name || one.id : "VPC"}
-        tabs={one ? [{ id: "details", label: "Details" }, { id: "cidrs", label: "CIDRs" }] : undefined}
+        tabs={one ? [{ id: "details", label: "Details" }, { id: "cidrs", label: "CIDRs" }, { id: "map", label: "Resource map" }] : undefined}
         tab={vpcTab}
         onTab={setVpcTab}
         height={dock}
         onHeight={setDock}
       >
         {one ? (
-          vpcTab === "cidrs" ? (
+          vpcTab === "map" ? (
+            <dl className="grid gap-3 text-[13px] sm:grid-cols-3">
+              <div>
+                <dt className="font-semibold text-[#5f6b7a]">Subnets</dt>
+                <dd>{api.subnets.filter((item) => item.vpcId === one.id).map((item) => item.id).join(", ") || "—"}</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-[#5f6b7a]">Route tables</dt>
+                <dd>{api.routeTables.filter((item) => item.vpcId === one.id).map((item) => item.id).join(", ") || "—"}</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-[#5f6b7a]">Internet gateways</dt>
+                <dd>{api.internetGateways.filter((item) => item.vpcId === one.id).map((item) => item.id).join(", ") || "—"}</dd>
+              </div>
+            </dl>
+          ) : vpcTab === "cidrs" ? (
             <p className="text-[13px]">IPv4 {one.ipv4Cidr} · IPv6 {dash(one.ipv6Cidr)}</p>
           ) : (
             <dl className="grid gap-3 text-[13px] sm:grid-cols-3">

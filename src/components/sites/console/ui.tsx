@@ -257,6 +257,27 @@ export function MenuChevron() {
   return <ChevronDown className="size-3.5 text-[#5f6b7a]" />;
 }
 
+export function SampleBadge() {
+  return (
+    <span className="rounded-full bg-[#f2f8fd] px-2 py-0.5 text-[11px] font-semibold text-[#006ce0]" title="Values on this screen come from the console's sample data set">
+      Sample data
+    </span>
+  );
+}
+
+export function DetailGrid({ items }: { items: [string, ReactNode][] }) {
+  return (
+    <dl className="grid gap-x-8 gap-y-3 text-[13px] sm:grid-cols-3">
+      {items.map(([key, value]) => (
+        <div key={key}>
+          <dt className="font-semibold text-[#5f6b7a]">{key}</dt>
+          <dd className="break-all">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function blueMenuTriggerClass() {
   return "inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#006ce0] bg-white px-3 text-[13px] font-semibold text-[#006ce0] hover:bg-[#f2f8fd]";
 }

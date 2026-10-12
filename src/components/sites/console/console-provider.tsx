@@ -23,8 +23,12 @@ import type {
   Dataset,
   Instance,
   InstanceState,
+  InternetGateway,
   LaunchDraft,
+  RouteTable,
   SecurityGroup,
+  Subnet,
+  ElasticIp,
   Volume,
   Snapshot,
   Vpc,
@@ -48,6 +52,10 @@ type ConsoleApi = {
   snapshots: Snapshot[];
   securityGroups: SecurityGroup[];
   vpcs: Vpc[];
+  subnets: Subnet[];
+  routeTables: RouteTable[];
+  internetGateways: InternetGateway[];
+  elasticIps: ElasticIp[];
   buckets: Bucket[];
   keyPairs: Dataset["keyPairs"];
   renameInstance: (id: string, name: string) => void;
@@ -63,6 +71,20 @@ type ConsoleApi = {
   deleteSecurityGroups: (ids: string[]) => void;
   createVpc: (input: { name: string; ipv4Cidr: string }) => void;
   deleteVpcs: (ids: string[]) => void;
+  createSubnet: (input: { name: string; vpcId: string; ipv4Cidr: string; availabilityZone: string }) => string | null;
+  deleteSubnets: (ids: string[]) => void;
+  createRouteTable: (input: { name: string; vpcId: string }) => void;
+  deleteRouteTables: (ids: string[]) => void;
+  addRoute: (tableId: string, destination: string, target: string) => string | null;
+  associateSubnet: (tableId: string, subnetId: string) => void;
+  createInternetGateway: (name: string) => void;
+  attachInternetGateway: (id: string, vpcId: string) => string | null;
+  detachInternetGateway: (id: string) => void;
+  deleteInternetGateways: (ids: string[]) => void;
+  allocateElasticIp: (name: string) => void;
+  associateElasticIp: (allocationId: string, instanceId: string) => void;
+  disassociateElasticIp: (allocationId: string) => void;
+  releaseElasticIps: (ids: string[]) => void;
   createBucket: (input: { name: string; kind: Bucket["kind"] }) => string | null;
   deleteBuckets: (names: string[]) => void;
   addKeyPair: (name: string) => void;
@@ -74,6 +96,40 @@ function newId(prefix: string) {
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   return `${prefix}-${hex}`;
+}
+
+function isCidr(value: string) {
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/.exec(value);
+  if (!match) return false;
+  return match.slice(1, 5).every((part) => Number(part) <= 255) && Number(match[5]) <= 32;
+}
+
+function ipToInt(ip: string) {
+  return ip.split(".").reduce((acc, part) => acc * 256 + Number(part), 0);
+}
+
+function validateSubnetCidr(cidr: string, vpc: Vpc | undefined) {
+  if (!vpc) return "Choose a VPC.";
+  if (!isCidr(cidr)) return "IPv4 CIDR must look like 10.0.1.0/24.";
+  const prefix = Number(cidr.split("/")[1]);
+  if (prefix < 16 || prefix > 28) return "Subnet size must be between /16 and /28.";
+  const [vpcBase, vpcPrefix] = vpc.ipv4Cidr.split("/");
+  const size = 2 ** (32 - prefix);
+  const start = ipToInt(cidr.split("/")[0]);
+  const vpcStart = ipToInt(vpcBase);
+  const vpcSize = 2 ** (32 - Number(vpcPrefix));
+  if (start % size !== 0) return "CIDR block must start on a boundary of its own size.";
+  if (start < vpcStart || start + size > vpcStart + vpcSize) return `CIDR block must be inside the VPC range ${vpc.ipv4Cidr}.`;
+  return null;
+}
+
+function nextTestAddress(existing: ElasticIp[]) {
+  const used = new Set(existing.map((item) => item.address));
+  for (let last = 50; last < 250; last += 1) {
+    const candidate = `203.0.113.${last}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return "203.0.113.250";
 }
 
 export function ConsoleProvider({ children }: { children: ReactNode }) {
@@ -88,6 +144,10 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     const snapshots = data.snapshots.filter((item) => item.region === region);
     const securityGroups = data.securityGroups.filter((item) => item.region === region);
     const vpcs = data.vpcs.filter((item) => item.region === region);
+    const subnets = data.subnets.filter((item) => item.region === region);
+    const routeTables = data.routeTables.filter((item) => item.region === region);
+    const internetGateways = data.internetGateways.filter((item) => item.region === region);
+    const elasticIps = data.elasticIps.filter((item) => item.region === region);
 
     return {
       account: ACCOUNT,
@@ -102,6 +162,10 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       snapshots,
       securityGroups,
       vpcs,
+      subnets,
+      routeTables,
+      internetGateways,
+      elasticIps,
       buckets: data.buckets,
       keyPairs: data.keyPairs,
       showEmpty: () => {
@@ -138,6 +202,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
           ...prev,
           instances: prev.instances.filter((item) => !ids.includes(item.id)),
           volumes: prev.volumes.filter((item) => !ids.includes(item.attachedTo)),
+          elasticIps: prev.elasticIps.map((item) => (ids.includes(item.instanceId) ? { ...item, instanceId: "" } : item)),
         }));
       },
       launch: (draft) => {
@@ -146,6 +211,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         const image = machineImages.find((item) => item.id === draft.imageId);
         setData((prev) => {
           const next: Dataset = {
+            ...prev,
             instances: [...prev.instances],
             volumes: [...prev.volumes],
             snapshots: [...prev.snapshots],
@@ -350,6 +416,201 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         setData((prev) => ({
           ...prev,
           vpcs: prev.vpcs.filter((item) => !ids.includes(item.id)),
+          subnets: prev.subnets.filter((item) => !ids.includes(item.vpcId)),
+          routeTables: prev.routeTables.filter((item) => !ids.includes(item.vpcId)),
+          internetGateways: prev.internetGateways.map((item) =>
+            ids.includes(item.vpcId) ? { ...item, state: "detached", vpcId: "" } : item,
+          ),
+        }));
+      },
+      createSubnet: (input) => {
+        const error = validateSubnetCidr(input.ipv4Cidr, data.vpcs.find((item) => item.id === input.vpcId));
+        if (error) return error;
+        const prefix = Number(input.ipv4Cidr.split("/")[1]);
+        setData((prev) => {
+          const main = prev.routeTables.find((item) => item.vpcId === input.vpcId && item.main);
+          const id = newId("subnet");
+          return {
+            ...prev,
+            subnets: [
+              {
+                id,
+                name: input.name,
+                vpcId: input.vpcId,
+                state: "available",
+                ipv4Cidr: input.ipv4Cidr,
+                availableIps: 2 ** (32 - prefix) - 5,
+                availabilityZone: input.availabilityZone,
+                routeTableId: main?.id ?? "",
+                autoAssignPublicIp: false,
+                region,
+              },
+              ...prev.subnets,
+            ],
+            routeTables: prev.routeTables.map((item) =>
+              main && item.id === main.id ? { ...item, subnetIds: [...item.subnetIds, id] } : item,
+            ),
+          };
+        });
+        return null;
+      },
+      deleteSubnets: (ids) => {
+        setData((prev) => ({
+          ...prev,
+          subnets: prev.subnets.filter((item) => !ids.includes(item.id)),
+          routeTables: prev.routeTables.map((item) => ({
+            ...item,
+            subnetIds: item.subnetIds.filter((subnetId) => !ids.includes(subnetId)),
+          })),
+        }));
+      },
+      createRouteTable: (input) => {
+        const vpc = data.vpcs.find((item) => item.id === input.vpcId);
+        if (!vpc) return;
+        setData((prev) => ({
+          ...prev,
+          routeTables: [
+            {
+              id: newId("rtb"),
+              name: input.name,
+              vpcId: vpc.id,
+              main: false,
+              subnetIds: [],
+              routes: [{ destination: vpc.ipv4Cidr, target: "local", status: "active" }],
+              region,
+            },
+            ...prev.routeTables,
+          ],
+        }));
+      },
+      deleteRouteTables: (ids) => {
+        setData((prev) => ({
+          ...prev,
+          routeTables: prev.routeTables.filter((item) => item.main || !ids.includes(item.id)),
+          subnets: prev.subnets.map((item) => {
+            const gone = prev.routeTables.some((table) => !table.main && ids.includes(table.id) && table.id === item.routeTableId);
+            if (!gone) return item;
+            const main = prev.routeTables.find((table) => table.vpcId === item.vpcId && table.main);
+            return { ...item, routeTableId: main?.id ?? "" };
+          }),
+        }));
+      },
+      addRoute: (tableId, destination, target) => {
+        if (!isCidr(destination)) return "Destination must be an IPv4 CIDR block such as 0.0.0.0/0.";
+        const table = data.routeTables.find((item) => item.id === tableId);
+        if (!table) return "Route table not found.";
+        if (table.routes.some((item) => item.destination === destination)) return "A route for that destination already exists.";
+        if (!target) return "Choose a target.";
+        setData((prev) => ({
+          ...prev,
+          routeTables: prev.routeTables.map((item) =>
+            item.id === tableId ? { ...item, routes: [...item.routes, { destination, target, status: "active" }] } : item,
+          ),
+        }));
+        return null;
+      },
+      associateSubnet: (tableId, subnetId) => {
+        setData((prev) => ({
+          ...prev,
+          subnets: prev.subnets.map((item) => (item.id === subnetId ? { ...item, routeTableId: tableId } : item)),
+          routeTables: prev.routeTables.map((item) => ({
+            ...item,
+            subnetIds:
+              item.id === tableId
+                ? [...item.subnetIds.filter((id) => id !== subnetId), subnetId]
+                : item.subnetIds.filter((id) => id !== subnetId),
+          })),
+        }));
+      },
+      createInternetGateway: (name) => {
+        setData((prev) => ({
+          ...prev,
+          internetGateways: [
+            { id: newId("igw"), name, state: "detached", vpcId: "", region },
+            ...prev.internetGateways,
+          ],
+        }));
+      },
+      attachInternetGateway: (id, vpcId) => {
+        if (data.internetGateways.some((item) => item.vpcId === vpcId)) {
+          return "That VPC already has an internet gateway attached.";
+        }
+        setData((prev) => ({
+          ...prev,
+          internetGateways: prev.internetGateways.map((item) =>
+            item.id === id ? { ...item, state: "attached", vpcId } : item,
+          ),
+        }));
+        return null;
+      },
+      detachInternetGateway: (id) => {
+        setData((prev) => ({
+          ...prev,
+          internetGateways: prev.internetGateways.map((item) =>
+            item.id === id ? { ...item, state: "detached", vpcId: "" } : item,
+          ),
+          routeTables: prev.routeTables.map((table) => ({
+            ...table,
+            routes: table.routes.map((route) => (route.target === id ? { ...route, status: "blackhole" } : route)),
+          })),
+        }));
+      },
+      deleteInternetGateways: (ids) => {
+        setData((prev) => ({
+          ...prev,
+          internetGateways: prev.internetGateways.filter((item) => item.state === "attached" || !ids.includes(item.id)),
+        }));
+      },
+      allocateElasticIp: (name) => {
+        setData((prev) => ({
+          ...prev,
+          elasticIps: [
+            {
+              allocationId: newId("eipalloc"),
+              name,
+              address: nextTestAddress(prev.elasticIps),
+              instanceId: "",
+              privateIp: "",
+              region,
+            },
+            ...prev.elasticIps,
+          ],
+        }));
+      },
+      associateElasticIp: (allocationId, instanceId) => {
+        setData((prev) => {
+          const eip = prev.elasticIps.find((item) => item.allocationId === allocationId);
+          if (!eip) return prev;
+          return {
+            ...prev,
+            elasticIps: prev.elasticIps.map((item) =>
+              item.allocationId === allocationId ? { ...item, instanceId } : item,
+            ),
+            instances: prev.instances.map((item) =>
+              item.id === instanceId ? { ...item, elasticIp: eip.address, publicIpv4: eip.address } : item,
+            ),
+          };
+        });
+      },
+      disassociateElasticIp: (allocationId) => {
+        setData((prev) => {
+          const eip = prev.elasticIps.find((item) => item.allocationId === allocationId);
+          if (!eip) return prev;
+          return {
+            ...prev,
+            elasticIps: prev.elasticIps.map((item) =>
+              item.allocationId === allocationId ? { ...item, instanceId: "" } : item,
+            ),
+            instances: prev.instances.map((item) =>
+              item.id === eip.instanceId ? { ...item, elasticIp: "", publicIpv4: "" } : item,
+            ),
+          };
+        });
+      },
+      releaseElasticIps: (ids) => {
+        setData((prev) => ({
+          ...prev,
+          elasticIps: prev.elasticIps.filter((item) => item.instanceId || !ids.includes(item.allocationId)),
         }));
       },
       createBucket: (input) => {
