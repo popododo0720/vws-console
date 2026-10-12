@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { NavTree } from "@/types/console";
+import { TOGGLE_NAV_EVENT } from "@/components/sites/console/page-header";
 import { SideNav } from "@/components/sites/console/side-nav";
 import { TopBar } from "@/components/sites/console/top-bar";
 import { OutlineButton, PanelDialog } from "@/components/sites/console/ui";
@@ -30,6 +31,14 @@ export function Shell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    const toggle = () => {
+      if (window.matchMedia("(min-width: 1024px)").matches) setCollapsed((value) => !value);
+      else setMobileOpen((value) => !value);
+    };
+    window.addEventListener(TOGGLE_NAV_EVENT, toggle);
+    return () => window.removeEventListener(TOGGLE_NAV_EVENT, toggle);
+  }, []);
   const showDocked = tree && navMode === "docked" && !collapsed;
 
   return (
@@ -37,14 +46,14 @@ export function Shell({
       <TopBar onMenu={() => setMobileOpen(true)} />
       <div className="flex min-h-0 flex-1">
         {showDocked ? (
-          <div className="relative hidden w-[244px] shrink-0 border-r border-[#e6e8eb] bg-white lg:block">
+          <div className="relative hidden w-[200px] shrink-0 border-r border-[#e6e8eb] bg-white lg:block">
             <button
               type="button"
               aria-label="Collapse navigation"
-              className="absolute -right-3 top-3 z-10 grid size-6 place-items-center rounded-full border border-[#c6c9ce] bg-white shadow-sm"
+              className="absolute right-2 top-3.5 z-10 grid size-6 place-items-center rounded text-[#5f6b7a] hover:bg-[#f4f5f6]"
               onClick={() => setCollapsed(true)}
             >
-              <ChevronLeft className="size-3.5" />
+              <ChevronLeft className="size-4" />
             </button>
             <Suspense fallback={null}>
               <SideNav tree={tree} header={navHeader} />

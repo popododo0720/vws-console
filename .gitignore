@@ -52,3 +52,7 @@ assets/
 
 # Local AWS reference screenshots (never commit)
 docs/design-references/console/
+
+# Reference captures (not committed; may contain third-party assets)
+docs/design-references/comparison.png
+docs/design-references/**/*.local.png

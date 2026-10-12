@@ -277,3 +277,7 @@ export function DetailGrid({ items }: { items: [string, ReactNode][] }) {
     </dl>
   );
 }
+
+export function blueMenuTriggerClass() {
+  return "inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#006ce0] bg-white px-3 text-[13px] font-semibold text-[#006ce0] hover:bg-[#f2f8fd]";
+}

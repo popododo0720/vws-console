@@ -2,42 +2,24 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CircleCheck, Info } from "lucide-react";
+import { CircleCheck, ExternalLink, Info, RefreshCw } from "lucide-react";
 import type { Instance } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
+import { InstanceLink, InstanceTab, StateDot, instanceTabs } from "@/components/sites/console/instance-detail";
 import { Shell } from "@/components/sites/console/shell";
 import {
-  CopyText,
   MenuButton,
-  MenuChevron,
   OrangeButton,
   OutlineButton,
   PanelDialog,
   dash,
-  menuTriggerClass,
+  blueMenuTriggerClass,
   orangeLinkClass,
 } from "@/components/sites/console/ui";
-
-const stateMeta: Record<Instance["state"], { label: string; color: string }> = {
-  running: { label: "Running", color: "#037f0c" },
-  stopped: { label: "Stopped", color: "#d13212" },
-  pending: { label: "Pending", color: "#006ce0" },
-  stopping: { label: "Stopping", color: "#d13212" },
-};
-
-function StateCell({ state }: { state: Instance["state"] }) {
-  const meta = stateMeta[state];
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="size-2 rounded-full" style={{ background: meta.color }} />
-      {meta.label}
-    </span>
-  );
-}
 
 function StatusCell({ row }: { row: Instance }) {
   if (row.status === "none") return <span>—</span>;
@@ -56,18 +38,9 @@ export function InstancesView() {
   const api = useConsole();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(300);
-  const [updated, setUpdated] = useState("Last updated less than a minute ago");
+  const [refreshKey, setRefreshKey] = useState(0);
   const [connectOpen, setConnectOpen] = useState(false);
   const [panel, setPanel] = useState("details");
-  const instanceTabs = [
-    { id: "details", label: "Details" },
-    { id: "alarms", label: "Status and alarms" },
-    { id: "monitoring", label: "Monitoring" },
-    { id: "security", label: "Security" },
-    { id: "networking", label: "Networking" },
-    { id: "storage", label: "Storage" },
-    { id: "tags", label: "Tags" },
-  ];
   const selected = api.instances.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
 
@@ -79,8 +52,8 @@ export function InstancesView() {
       sortValue: (row) => row.name,
       cell: (row) => <NameCell value={row.name} onRename={(name) => api.renameInstance(row.id, name)} />,
     },
-    { key: "id", header: "Instance ID", minWidth: 180, sortValue: (row) => row.id, cell: (row) => <CopyText value={row.id} /> },
-    { key: "state", header: "Instance state", minWidth: 140, sortValue: (row) => row.state, cell: (row) => <StateCell state={row.state} /> },
+    { key: "id", header: "Instance ID", minWidth: 180, sortValue: (row) => row.id, cell: (row) => <InstanceLink id={row.id} /> },
+    { key: "state", header: "Instance state", minWidth: 140, sortValue: (row) => row.state, cell: (row) => <StateDot state={row.state} /> },
     { key: "type", header: "Instance type", minWidth: 120, sortValue: (row) => row.type, cell: (row) => row.type },
     { key: "status", header: "Status check", minWidth: 170, sortValue: (row) => row.status, cell: (row) => <StatusCell row={row} /> },
     { key: "az", header: "Availability Zone", minWidth: 150, sortValue: (row) => row.availabilityZone, cell: (row) => row.availabilityZone },
@@ -99,17 +72,27 @@ export function InstancesView() {
           { label: "Instances" },
         ]}
         info="Instances are virtual machines in the current region. This list is local sample data."
-        meta={updated}
         actions={
           <>
+            <button
+              type="button"
+              aria-label="Refresh instances"
+              className="grid size-8 place-items-center rounded-full border border-[#006ce0] text-[#006ce0] hover:bg-[#f2f8fd]"
+              onClick={() => {
+                setSelectedIds([]);
+                setRefreshKey((value) => value + 1);
+              }}
+            >
+              <RefreshCw className="size-3.5" />
+            </button>
             <OutlineButton disabled={selected.length === 0} onClick={() => setConnectOpen(true)}>
-              Connect
+              Connect <ExternalLink className="size-3" />
             </OutlineButton>
             <MenuButton
-              className={menuTriggerClass()}
+              className={blueMenuTriggerClass()}
               label={
                 <>
-                  Instance state <MenuChevron />
+                  Instance state <span aria-hidden className="text-[9px]">▼</span>
                 </>
               }
               items={[
@@ -131,10 +114,10 @@ export function InstancesView() {
               ]}
             />
             <MenuButton
-              className={menuTriggerClass()}
+              className={blueMenuTriggerClass()}
               label={
                 <>
-                  Actions <MenuChevron />
+                  Actions <span aria-hidden className="text-[9px]">▼</span>
                 </>
               }
               items={[
@@ -146,18 +129,32 @@ export function InstancesView() {
                   },
                 },
                 {
-                  label: "Rename is on the name pencil",
-                  disabled: true,
+                  label: "View details",
+                  disabled: !one,
+                  href: one ? `/compute/instances/${one.id}` : undefined,
                 },
               ]}
             />
-            <Link href="/compute/launch" className={orangeLinkClass}>
-              Launch instances
-            </Link>
+            <div className="flex">
+              <Link href="/compute/launch" className={`${orangeLinkClass} rounded-r-none`}>
+                Launch instances
+              </Link>
+              <MenuButton
+                align="right"
+                className="inline-flex h-8 items-center rounded-r-lg border-l border-[#16191f]/30 bg-[#ff9900] px-2 text-[#16191f] hover:bg-[#ec7211]"
+                label={<span aria-label="More launch options" className="text-[9px]">▼</span>}
+                items={[
+                  { label: "Launch instances", href: "/compute/launch" },
+                  { label: "Launch instance from template", disabled: true },
+                ]}
+              />
+            </div>
           </>
         }
       />
       <ResourceTable
+        key={refreshKey}
+        hideRefresh
         rows={api.instances}
         getId={(row) => row.id}
         columns={columns}
@@ -171,10 +168,9 @@ export function InstancesView() {
           { id: "running", label: "Running", match: (row) => row.state === "running" },
           { id: "stopped", label: "Stopped", match: (row) => row.state === "stopped" },
         ]}
-        onRefresh={() => setUpdated("Last updated less than a minute ago")}
       />
       <DetailDock
-        title={one ? one.name || one.id : selected.length > 1 ? `${selected.length} instances` : "All instances"}
+        title={one ? (one.name ? `${one.id} (${one.name})` : one.id) : selected.length > 1 ? `${selected.length} instances` : "All instances"}
         info="Alarm, health, and event summaries for the current region."
         tabs={one ? instanceTabs : undefined}
         tab={panel}
@@ -183,28 +179,7 @@ export function InstancesView() {
         onHeight={setDock}
       >
         {one ? (
-          panel === "details" ? (
-            <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-3">
-              {[
-                ["Instance ID", one.id],
-                ["State", stateMeta[one.state].label],
-                ["Type", one.type],
-                ["Zone", one.availabilityZone],
-                ["Public IPv4", dash(one.publicIpv4)],
-                ["VPC", dash(one.vpcId)],
-                ["Key pair", dash(one.keyPair)],
-                ["Image", one.imageId],
-                ["Launched", one.launchedAt],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <dt className="text-[12px] text-[#5f6b7a]">{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <InstancePanel tab={panel} instance={one} />
-          )
+          <InstanceTab tab={panel} instance={one} />
         ) : selected.length > 1 ? (
           <p className="text-[13px] text-[#5f6b7a]">Select a single instance to see its details.</p>
         ) : (
@@ -226,19 +201,6 @@ export function InstancesView() {
       </PanelDialog>
     </Shell>
   );
-}
-
-function InstancePanel({ tab, instance }: { tab: string; instance: Instance }) {
-  if (tab === "alarms") {
-    return <p className="text-[13px]">Status check: {instance.status}. {instance.checksPassed}/{instance.checksTotal} checks passed.</p>;
-  }
-  if (tab === "monitoring") return <p className="text-[13px] text-[#5f6b7a]">No metric series is stored for this instance.</p>;
-  if (tab === "security") return <p className="text-[13px]">Security groups: {instance.securityGroupIds.join(", ") || "—"}</p>;
-  if (tab === "networking") {
-    return <p className="text-[13px]">Public DNS {dash(instance.publicDns)} · IPv4 {dash(instance.publicIpv4)} · VPC {dash(instance.vpcId)}</p>;
-  }
-  if (tab === "storage") return <p className="text-[13px] text-[#5f6b7a]">The root volume is listed on the Volumes page.</p>;
-  return <p className="text-[13px]">Name = {instance.name || "—"}</p>;
 }
 
 function StatusCard({ title, body, link }: { title: string; body: string; link: string }) {

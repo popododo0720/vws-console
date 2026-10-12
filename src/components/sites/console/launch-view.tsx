@@ -2,10 +2,11 @@
 
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronRight, Code } from "lucide-react";
+import { Check, Code, Search } from "lucide-react";
 import type { LaunchDraft } from "@/types/console";
 import { computeNav, instanceTypes, machineImages, volumeTypeOptions } from "@/lib/console-data";
 import { useConsole } from "@/components/sites/console/console-provider";
+import { BreadcrumbBar } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
 import {
   FieldLabel,
@@ -16,7 +17,7 @@ import {
 } from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
 
-type Section = "name" | "image" | "type" | "key" | "network" | "storage";
+type Section = "name" | "image" | "type" | "key" | "network" | "storage" | "advanced";
 
 function initialDraft(): LaunchDraft {
   return {
@@ -51,7 +52,9 @@ export function LaunchView() {
     key: true,
     network: true,
     storage: true,
+    advanced: false,
   });
+  const [advanced, setAdvanced] = useState({ shutdown: "Stop", protection: false, userData: "" });
   const [summaryOpen, setSummaryOpen] = useState(true);
   const [query, setQuery] = useState("");
   const [allGenerations, setAllGenerations] = useState(false);
@@ -93,37 +96,36 @@ export function LaunchView() {
         ? { mode: "create", ssh: draft.allowSsh ? draft.sshCidr : null, https: draft.allowHttps, http: draft.allowHttp }
         : { mode: "select", securityGroupId: groupId },
     storage: { volumeType: draft.volumeType, sizeGiB: draft.volumeGiB },
+    advanced: { shutdownBehavior: advanced.shutdown, terminationProtection: advanced.protection, userData: advanced.userData || null },
   };
 
   return (
     <Shell tree={computeNav} navMode="overlay-only">
+      <BreadcrumbBar
+        crumbs={[
+          { label: "EC2", href: "/compute/instances" },
+          { label: "Instances", href: "/compute/instances" },
+          { label: "Launch an instance" },
+        ]}
+      />
       <div className="flex min-h-0 flex-1 flex-col bg-white lg:flex-row">
         <div className="min-w-0 flex-1 overflow-auto px-5 py-4">
-          <p className="flex flex-wrap items-center gap-1 text-[13px] text-[#5f6b7a]">
-            <button type="button" className="text-[#006ce0] hover:underline" onClick={() => router.push("/compute/instances")}>
-              EC2
-            </button>
-            <ChevronRight className="size-3.5" />
-            <button type="button" className="text-[#006ce0] hover:underline" onClick={() => router.push("/compute/instances")}>
-              Instances
-            </button>
-            <ChevronRight className="size-3.5" />
-            <span>Launch an instance</span>
-          </p>
-          <div className="mt-1 flex items-center gap-2">
-            <h1 className="text-[22px] font-semibold">Launch an instance</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-[20px] font-bold">Launch an instance</h1>
             <InfoTip text="This form creates mock instances and volumes in the current region. Nothing is sent to a cloud provider." />
           </div>
-          <p className="mt-2 max-w-3xl text-[13px] text-[#5f6b7a]">
-            Start a virtual machine from an image. The summary on the right follows the choices below.
+          <p className="mt-1 max-w-3xl text-[13px] text-[#5f6b7a]">
+            Start a virtual machine from an image. It takes a few simple steps, and the summary on the right follows your choices.
           </p>
           <div className="mt-4 max-w-4xl space-y-4 pb-8">
             <Card title="Name and tags" info="The name is a label. It can be blank." open={open.name} onToggle={() => toggle(setOpen, "name")}>
               <FieldLabel>Name</FieldLabel>
-              <input className="field max-w-lg" placeholder="e.g. My Web Server" value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
-              <button type="button" className="mt-3 text-[13px] text-[#006ce0] hover:underline" onClick={() => setAddingTag((value) => !value)}>
-                Add additional tags
-              </button>
+              <div className="flex items-center gap-6">
+                <input className="field flex-1" placeholder="e.g. My Web Server" value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
+                <button type="button" className="shrink-0 text-[13px] font-semibold text-[#006ce0] hover:underline" onClick={() => setAddingTag((value) => !value)}>
+                  Add additional tags
+                </button>
+              </div>
               {addingTag ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   <input className="field max-w-40" placeholder="Key" value={tag.key} onChange={(event) => setTag({ ...tag, key: event.target.value })} />
@@ -149,9 +151,17 @@ export function LaunchView() {
             </Card>
 
             <Card title="Application and OS images" info="An image packages the operating system and software the instance starts with." open={open.image} onToggle={() => toggle(setOpen, "image")}>
-              <input className="field" placeholder="Search images by name" value={query} onChange={(event) => setQuery(event.target.value)} />
-              <p className="mb-2 mt-4 text-[13px] font-semibold text-[#006ce0]">Quick start</p>
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <p className="mb-3 max-w-3xl text-[13px]">
+                An image contains the operating system, application server, and applications for your instance. If you do not see a suitable image below, use the search field or browse more images.
+              </p>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6b7a]" />
+                <input className="field" style={{ paddingLeft: 32 }} placeholder="Search our full catalog of operating systems and applications" value={query} onChange={(event) => setQuery(event.target.value)} />
+              </div>
+              <div className="mt-4 border-b border-[#e6e8eb]">
+                <span className="inline-block border-b-2 border-[#006ce0] px-3 pb-1.5 text-[13px] font-semibold text-[#006ce0]">Quick Start</span>
+              </div>
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                 {images.map((item) => (
                   <button
                     key={item.id}
@@ -169,6 +179,15 @@ export function LaunchView() {
                   </button>
                 ))}
                 {images.length === 0 ? <p className="text-[13px] text-[#5f6b7a]">No images match.</p> : null}
+                <button
+                  type="button"
+                  className="ml-2 flex w-[110px] shrink-0 flex-col items-center justify-center gap-1 border-l border-[#e6e8eb] pl-3 text-center text-[12px] text-[#006ce0] hover:underline"
+                  onClick={() => setQuery("")}
+                >
+                  <Search className="size-6" />
+                  Browse more images
+                  <span className="text-[11px] text-[#5f6b7a]">Including images from the community</span>
+                </button>
               </div>
               <div className="mt-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -176,6 +195,7 @@ export function LaunchView() {
                     <p className="font-semibold">{image.name} {image.version}</p>
                     <p className="text-[12px] text-[#5f6b7a]">{image.id}</p>
                   </div>
+                  <span className="ml-auto self-center text-[12px] font-semibold text-[#5f6b7a]">{image.starter ? "Free tier eligible" : ""}</span>
                   <select className="field w-auto" value={image.id} onChange={(event) => patch({ imageId: event.target.value })}>
                     {machineImages.map((item) => (
                       <option key={item.id} value={item.id}>
@@ -351,13 +371,39 @@ export function LaunchView() {
                 </label>
               </div>
             </Card>
+            <Card title="Advanced details" info="Optional settings applied when the instance starts." open={open.advanced} onToggle={() => toggle(setOpen, "advanced")}>
+              <div className="space-y-3 text-[13px]">
+                <div>
+                  <FieldLabel>Shutdown behavior</FieldLabel>
+                  <select className="field max-w-xs" value={advanced.shutdown} onChange={(event) => setAdvanced({ ...advanced, shutdown: event.target.value })}>
+                    <option>Stop</option>
+                    <option>Terminate</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={advanced.protection} onChange={(event) => setAdvanced({ ...advanced, protection: event.target.checked })} />
+                  Termination protection
+                </label>
+                <div>
+                  <FieldLabel>User data</FieldLabel>
+                  <textarea
+                    className="field h-24 max-w-lg py-2"
+                    placeholder="Commands that run on first boot"
+                    value={advanced.userData}
+                    onChange={(event) => setAdvanced({ ...advanced, userData: event.target.value })}
+                  />
+                </div>
+              </div>
+            </Card>
           </div>
         </div>
         <aside className="w-full shrink-0 bg-white p-4 lg:w-[300px]">
           <div className="rounded-lg border border-[#d5dbdb] p-4 lg:sticky lg:top-4">
             <button type="button" className="flex w-full items-center justify-between" onClick={() => setSummaryOpen((value) => !value)}>
-              <span className="text-[16px] font-semibold">Summary</span>
-              <ChevronRight className={cn("size-4 transition", summaryOpen && "rotate-90")} />
+              <span className="flex items-center gap-2 text-[16px] font-bold">
+                <span aria-hidden className="text-[9px]">{summaryOpen ? "▼" : "▶"}</span>
+                Summary
+              </span>
             </button>
             {summaryOpen ? (
               <div className="mt-3 space-y-3 text-[13px]">
@@ -415,8 +461,8 @@ function Card({
     <section className="rounded-lg border border-[#d5dbdb] bg-white">
       <div className="flex items-center gap-2 px-4 py-3">
         <button type="button" className="flex items-center gap-2 text-left" onClick={onToggle} aria-expanded={open}>
-          <ChevronRight className={cn("size-4 transition", open && "rotate-90")} />
-          <span className="text-[16px] font-semibold">{title}</span>
+          <span aria-hidden className="w-3 text-[9px]">{open ? "▼" : "▶"}</span>
+          <span className="text-[16px] font-bold">{title}</span>
         </button>
         <InfoTip text={info} />
       </div>
