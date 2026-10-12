@@ -21,7 +21,8 @@ This project and every other VWS project use pstack for agent work.
 | Nontrivial design that crosses a function boundary goes through the architect skill before implementation. | Judgment. The skill lives in the pstack plugin. |
 | A contested design goes through the interrogate skill before it ships. | Judgment. Reviewers do not auto-apply changes. |
 | A repeated agent mistake goes through the correct skill. Fix it in architecture, then types, then lint, then a test. Write the rule here only after those levels cannot hold it. | This table. Add a row when the operator corrects a repeat. |
-| Visual parity is checked on the running app against the reference screenshots. | The operator compares the saved PNGs. |
+| Visual parity is checked on the running app against reference images. Reference images are local-only and never committed. No AWS screenshots, logos, or trademarks go in the repo. | Review of the diff. |
+| All coding and dev work follows pstack's poteto-mode style. Read the poteto-mode skill first. Subagents run with effort high. Cursor cloud agents are never used. Only Grok Bots do the work. | Judgment and review of the PR. |
 | The header shows the VWS wordmark and substitute icons. Do not add an AWS logo, an AWS wordmark, or original icon files. Service menu names stay EC2, EBS, S3, VPC, and the other reference labels. | Review of the diff and the screenshots. |
 
 # Website Reverse-Engineer Template
@@ -71,7 +72,7 @@ public/
   sites/<site>/     # Source-specific images, fonts, video, and other assets
 docs/
   research/<site>/  # Page brief, asset map, and inspection evidence
-  design-references/ # Screenshots and visual references
+  design-references/ # Local-only reference images, never committed
 scripts/            # Asset download scripts
 .agents/
   skills/
