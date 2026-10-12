@@ -1,6 +1,6 @@
 # Page brief
 
-Measured from the 1024×594 reference screenshots.
+Measured from the 1024×594 reference screenshots. Reference screenshots are used locally only and are not committed to the repo.
 
 ## Tokens
 
