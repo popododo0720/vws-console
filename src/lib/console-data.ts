@@ -112,7 +112,7 @@ export const networkNav: NavTree = {
   id: "network",
   title: "VPC",
   sections: [
-    { id: "global", label: "AWS Global View" },
+    { id: "global", label: "Global view" },
     {
       id: "vpc-group",
       label: "Virtual private cloud",
@@ -200,7 +200,7 @@ export const storageNav: NavTree = {
       ],
     },
     { id: "account-settings", label: "Account and organization settings" },
-    { id: "marketplace", label: "AWS Marketplace for S3" },
+    { id: "marketplace", label: "Marketplace for S3" },
   ],
 };
 
