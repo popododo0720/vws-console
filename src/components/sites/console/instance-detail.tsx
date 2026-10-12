@@ -115,7 +115,7 @@ export function InstanceDetails({ instance }: { instance: Instance }) {
   );
 }
 
-export function InstanceTab({ tab, instance }: { tab: string; instance: Instance }) {
+export function InstanceTab({ tab, instance, hideSummary = false }: { tab: string; instance: Instance; hideSummary?: boolean }) {
   const api = useConsole();
   if (tab === "alarms") {
     return (
@@ -175,6 +175,20 @@ export function InstanceTab({ tab, instance }: { tab: string; instance: Instance
     return (
       <Section title="Tags">
         <SimpleTable head={["Key", "Value"]} empty="No tags" rows={instance.name ? [["Name", instance.name]] : []} />
+      </Section>
+    );
+  }
+  if (hideSummary) {
+    return (
+      <Section title="Instance details">
+        <Fields>
+          <Field label="AMI ID">{instance.imageId}</Field>
+          <Field label="Key pair assigned at launch">{dash(instance.keyPair)}</Field>
+          <Field label="Launch time">{instance.launchedAt}</Field>
+          <Field label="Monitoring">Disabled</Field>
+          <Field label="Termination protection">Disabled</Field>
+          <Field label="Shutdown behavior">Stop</Field>
+        </Fields>
       </Section>
     );
   }

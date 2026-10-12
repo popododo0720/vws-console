@@ -81,7 +81,7 @@ export function InstanceDetailView({ id }: { id: string }) {
           ))}
         </div>
         <div className="pt-3">
-          <InstanceTab tab={tab} instance={instance} />
+          <InstanceTab tab={tab} instance={instance} hideSummary />
         </div>
       </div>
     </Shell>

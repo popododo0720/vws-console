@@ -5,22 +5,9 @@ import { InfoTip } from "@/components/sites/console/ui";
 
 export const TOGGLE_NAV_EVENT = "console:toggle-nav";
 
-export function PageHeader({
-  crumbs,
-  info,
-  actions,
-  meta,
-}: {
-  mark?: string;
-  crumbs: { label: string; href?: string }[];
-  info?: string;
-  actions?: ReactNode;
-  meta?: ReactNode;
-}) {
-  const title = crumbs[crumbs.length - 1]?.label ?? "";
+export function BreadcrumbBar({ crumbs }: { crumbs: { label: string; href?: string }[] }) {
   return (
-    <>
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[#e6e8eb] px-4 text-[12px]">
+    <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[#e6e8eb] px-4 text-[12px]">
         <button
           type="button"
           aria-label="Toggle navigation"
@@ -44,6 +31,25 @@ export function PageHeader({
           ))}
         </nav>
       </div>
+  );
+}
+
+export function PageHeader({
+  crumbs,
+  info,
+  actions,
+  meta,
+}: {
+  mark?: string;
+  crumbs: { label: string; href?: string }[];
+  info?: string;
+  actions?: ReactNode;
+  meta?: ReactNode;
+}) {
+  const title = crumbs[crumbs.length - 1]?.label ?? "";
+  return (
+    <>
+      <BreadcrumbBar crumbs={crumbs} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-2 pt-3">
         <div className="flex min-w-0 items-center gap-2">
           <h1 className="text-[20px] font-bold leading-7">{title}</h1>
