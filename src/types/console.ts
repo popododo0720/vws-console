@@ -14,6 +14,8 @@ export type Instance = {
   publicDns: string;
   publicIpv4: string;
   privateIpv4: string;
+  /** Server-provided private DNS name; empty when the API does not supply one. */
+  privateDns: string;
   elasticIp: string;
   ipv6: string;
   region: string;

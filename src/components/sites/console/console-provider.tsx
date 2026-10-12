@@ -196,6 +196,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
               publicDns: draft.publicIp ? `${id}.north.example.net` : "",
               publicIpv4: draft.publicIp ? `203.0.113.${(index + 20) % 200}` : "",
               privateIpv4: "",
+              privateDns: "",
               elasticIp: "",
               ipv6: "",
               region,
