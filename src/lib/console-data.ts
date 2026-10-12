@@ -1,6 +1,7 @@
 import { makeRule } from "@/lib/security-group-rules";
 import type {
   Bucket,
+  BucketObject,
   Dataset,
   ElasticIp,
   Instance,
@@ -383,6 +384,7 @@ export function createEmptyAccount(): Dataset {
     volumes: [],
     snapshots: [],
     buckets: [],
+    objects: [],
     keyPairs: [],
     vpcs: [defaultVpc()],
     subnets: [],
@@ -641,8 +643,14 @@ export function createSampleAccount(): Dataset {
     },
   ];
   const buckets: Bucket[] = [
-    { name: "vws-logs", region: HOME_REGION, created: "Aug 2, 2026", kind: "general" },
-    { name: "vws-media", region: "US East", created: "Sep 18, 2026", kind: "general" },
+    { name: "vws-logs", region: HOME_REGION, created: "Aug 2, 2026", kind: "general", versioning: false, blockPublicAccess: true },
+    { name: "vws-media", region: "US East", created: "Sep 18, 2026", kind: "general", versioning: true, blockPublicAccess: true },
+  ];
+  // MOCK_OBJECTS: sample-only objects for the sample buckets. Sizes and dates are invented.
+  const MOCK_OBJECTS: BucketObject[] = [
+    { bucket: "vws-logs", key: "2026/", sizeBytes: 0, modified: "", storageClass: "" },
+    { bucket: "vws-logs", key: "2026/access-sample.log", sizeBytes: 18432, modified: "Aug 3, 2026", storageClass: "Standard" },
+    { bucket: "vws-logs", key: "readme-sample.txt", sizeBytes: 512, modified: "Aug 2, 2026", storageClass: "Standard" },
   ];
   return { instances, volumes, snapshots: MOCK_SNAPSHOTS, securityGroups,
     vpcs,
@@ -651,6 +659,7 @@ export function createSampleAccount(): Dataset {
     internetGateways: MOCK_INTERNET_GATEWAYS,
     elasticIps: MOCK_ELASTIC_IPS,
     buckets,
+    objects: MOCK_OBJECTS,
     keyPairs,
   };
 }

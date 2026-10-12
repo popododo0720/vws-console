@@ -139,6 +139,17 @@ export type Bucket = {
   region: string;
   created: string;
   kind: BucketKind;
+  versioning: boolean;
+  blockPublicAccess: boolean;
+};
+
+export type BucketObject = {
+  bucket: string;
+  /** Full key, using "/" as the folder delimiter. Folders end with "/". */
+  key: string;
+  sizeBytes: number;
+  modified: string;
+  storageClass: string;
 };
 
 export type KeyPair = {
@@ -157,6 +168,7 @@ export type Dataset = {
   internetGateways: InternetGateway[];
   elasticIps: ElasticIp[];
   buckets: Bucket[];
+  objects: BucketObject[];
   keyPairs: KeyPair[];
 };
 
