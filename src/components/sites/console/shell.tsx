@@ -37,14 +37,14 @@ export function Shell({
       <TopBar onMenu={() => setMobileOpen(true)} />
       <div className="flex min-h-0 flex-1">
         {showDocked ? (
-          <div className="relative hidden w-[244px] shrink-0 border-r border-[#e6e8eb] bg-white lg:block">
+          <div className="relative hidden w-[200px] shrink-0 border-r border-[#e6e8eb] bg-white lg:block">
             <button
               type="button"
               aria-label="Collapse navigation"
-              className="absolute -right-3 top-3 z-10 grid size-6 place-items-center rounded-full border border-[#c6c9ce] bg-white shadow-sm"
+              className="absolute right-2 top-3.5 z-10 grid size-6 place-items-center rounded text-[#5f6b7a] hover:bg-[#f4f5f6]"
               onClick={() => setCollapsed(true)}
             >
-              <ChevronLeft className="size-3.5" />
+              <ChevronLeft className="size-4" />
             </button>
             <Suspense fallback={null}>
               <SideNav tree={tree} header={navHeader} />
