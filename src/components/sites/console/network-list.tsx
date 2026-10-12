@@ -136,7 +136,7 @@ export function NetworkList<T>({
         onRefresh={() => setUpdated("Last updated less than a minute ago")}
       />
       <DetailDock
-        title={one ? detailTitle(one) : `Select a ${title.toLowerCase().replace(/s$/, "")}`}
+        title={one ? detailTitle(one) : "Select a resource"}
         tabs={one ? detailTabs : undefined}
         tab={tab}
         onTab={setTab}
