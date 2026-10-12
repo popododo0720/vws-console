@@ -119,7 +119,7 @@ export const networkNav: NavTree = {
         { id: "vpcs", label: "Your VPCs", href: "/network/vpcs" },
         { id: "subnets", label: "Subnets", href: "/network/subnets" },
         { id: "routes", label: "Route tables", href: "/network/route-tables" },
-        { id: "igw", label: "Internet gateways" },
+        { id: "igw", label: "Internet gateways", href: "/network/internet-gateways" },
         { id: "eigw", label: "Egress-only internet gateways" },
         { id: "carrier", label: "Carrier gateways" },
         { id: "dhcp", label: "DHCP option sets" },
