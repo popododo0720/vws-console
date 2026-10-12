@@ -39,6 +39,18 @@ export type Volume = {
   attachedTo: string;
 };
 
+export type Snapshot = {
+  id: string;
+  name: string;
+  volumeId: string;
+  sizeGiB: number;
+  description: string;
+  state: "completed" | "pending";
+  started: string;
+  owner: string;
+  region: string;
+};
+
 export type SecurityGroupRule = {
   direction: "in" | "out";
   protocol: string;
@@ -86,6 +98,7 @@ export type KeyPair = {
 export type Dataset = {
   instances: Instance[];
   volumes: Volume[];
+  snapshots: Snapshot[];
   securityGroups: SecurityGroup[];
   vpcs: Vpc[];
   buckets: Bucket[];
