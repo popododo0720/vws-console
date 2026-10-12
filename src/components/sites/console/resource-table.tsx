@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, RefreshCw, Settings } from "lucide-react";
+import { ChevronDown, ChevronUp, RefreshCw, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { MenuButton, MenuChevron } from "@/components/sites/console/ui";
@@ -34,6 +34,7 @@ export function ResourceTable<T,>({
   filterPlaceholder,
   initialSort = null,
   onRefresh,
+  hideRefresh = false,
   className,
   bodyClassName,
 }: {
@@ -49,6 +50,7 @@ export function ResourceTable<T,>({
   filterPlaceholder: string;
   initialSort?: { key: string; dir: "asc" | "desc" } | null;
   onRefresh?: () => void;
+  hideRefresh?: boolean;
   className?: string;
   bodyClassName?: string;
 }) {
@@ -100,7 +102,7 @@ export function ResourceTable<T,>({
       <div className="mb-2 flex flex-wrap items-center gap-2">
         {presets.length > 0 ? (
           <label className="relative">
-            <span className="sr-only">Saved filter sets</span>
+            <span className="absolute -top-2 left-2 z-[1] bg-white px-1 text-[10.5px] font-semibold leading-none text-[#5f6b7a]">Saved filter sets</span>
             <select
               className="field fit appearance-none pr-8"
               value={preset}
@@ -119,8 +121,10 @@ export function ResourceTable<T,>({
             <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6b7a]" />
           </label>
         ) : null}
+        <div className="relative min-w-48 flex-1">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6b7a]" />
         <input
-          className="field min-w-48 flex-1"
+          className="field w-full" style={{ paddingLeft: 32 }}
           value={query}
           placeholder={filterPlaceholder}
           aria-label={filterPlaceholder}
@@ -129,7 +133,8 @@ export function ResourceTable<T,>({
             setPage(0);
           }}
         />
-        <button
+        </div>
+        {hideRefresh ? null : <button
           type="button"
           aria-label="Refresh"
           className="grid size-8 place-items-center rounded-lg border border-[#c6c9ce] bg-white hover:bg-[#f7f8f8]"
@@ -142,7 +147,7 @@ export function ResourceTable<T,>({
           }}
         >
           <RefreshCw className="size-3.5" />
-        </button>
+        </button>}
         <div className="flex items-center gap-1 text-[13px]">
           <button
             type="button"
@@ -181,7 +186,7 @@ export function ResourceTable<T,>({
       <div className={cn("relative flex min-h-0 flex-1 flex-col", bodyClassName)}>
         <div className={cn("overflow-auto rounded-md border border-[#e6e8eb]", filtered.length === 0 ? "shrink-0" : "min-h-0 flex-1")}>
           <table className="w-max min-w-full border-collapse text-left text-[13px]">
-            <thead className="sticky top-0 z-[1] bg-[#fafafa]">
+            <thead className="sticky top-0 z-[1] bg-white">
               <tr className="border-b border-[#e6e8eb] text-[12px] text-[#5f6b7a]">
                 <th className="w-10 px-2 py-2">
                   <input
@@ -196,7 +201,7 @@ export function ResourceTable<T,>({
                   />
                 </th>
                 {columns.map((column) => (
-                  <th key={column.key} className="px-2 py-2 font-semibold" style={{ minWidth: column.minWidth }}>
+                  <th key={column.key} className="border-l border-[#e6e8eb] px-2 py-2 font-semibold first:border-l-0" style={{ minWidth: column.minWidth }}>
                     <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort(column.key)}>
                       {column.header}
                       {sort?.key === column.key ? (

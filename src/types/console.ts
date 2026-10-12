@@ -13,6 +13,7 @@ export type Instance = {
   availabilityZone: string;
   publicDns: string;
   publicIpv4: string;
+  privateIpv4: string;
   elasticIp: string;
   ipv6: string;
   region: string;

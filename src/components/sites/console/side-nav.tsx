@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight } from "lucide-react";
 import type { NavNode, NavTree } from "@/types/console";
 import { cn } from "@/lib/utils";
 import { OutlineButton, PanelDialog } from "@/components/sites/console/ui";
@@ -47,12 +46,12 @@ export function SideNav({
           <div key={node.id}>
             <button
               type="button"
-              className="flex w-full items-center gap-1 rounded px-2 py-0.5 text-left text-[13px] font-bold hover:bg-[#f4f5f6]"
-              style={{ paddingLeft: 4 + depth * 14 }}
+              className="flex w-full items-center gap-1 rounded px-1 py-1 text-left text-[13px] font-bold hover:bg-[#f4f5f6]"
+              style={{ paddingLeft: 4 + depth * 12 }}
               aria-expanded={expanded}
               onClick={() => setOpen((prev) => ({ ...prev, [node.id]: !expanded }))}
             >
-              {expanded ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
+              <span aria-hidden className="w-3 shrink-0 text-[9px] leading-none">{expanded ? "▼" : "▶"}</span>
               <span className="truncate">{node.label}</span>
             </button>
             {expanded ? renderNodes(node.children, depth + 1) : null}
@@ -61,10 +60,10 @@ export function SideNav({
       }
       const active = node.href ? isActive(node.href, pathname, tab) : false;
       const className = cn(
-        "flex w-full items-center rounded py-0.5 pr-2 text-left text-[13px] hover:bg-[#f4f5f6]",
+        "flex w-full items-center rounded py-[5px] pr-2 text-left text-[12.5px] hover:bg-[#f4f5f6]",
         active && "font-semibold text-[#006ce0]",
       );
-      const style = { paddingLeft: 22 + depth * 14 };
+      const style = { paddingLeft: 20 + depth * 12 };
       const inner = (
         <>
           <span className="truncate">{node.label}</span>
@@ -88,7 +87,7 @@ export function SideNav({
   return (
     <div className="flex h-full flex-col">
       {header ? <div className="px-3 pt-3">{header}</div> : null}
-      <div className="px-3 pb-1 pt-2 text-[18px] font-bold leading-6">{tree.title}</div>
+      <div className="px-4 pb-2 pt-3 text-[18px] font-bold leading-6">{tree.title}</div>
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" aria-label={tree.title}>
         {renderNodes(tree.sections, 0)}
       </nav>
