@@ -642,8 +642,8 @@ export function createSampleAccount(): Dataset {
     },
   ];
   const buckets: Bucket[] = [
-    { name: "vws-logs", region: HOME_REGION, created: "Aug 2, 2026", kind: "general" },
-    { name: "vws-media", region: "US East", created: "Sep 18, 2026", kind: "general" },
+    { name: "vws-logs", region: HOME_REGION, created: "Aug 2, 2026", kind: "general", versioning: false, blockPublicAccess: true },
+    { name: "vws-media", region: "US East", created: "Sep 18, 2026", kind: "general", versioning: true, blockPublicAccess: true },
   ];
   // MOCK_OBJECTS: sample-only objects for the sample buckets. Sizes and dates are invented.
   const MOCK_OBJECTS: BucketObject[] = [

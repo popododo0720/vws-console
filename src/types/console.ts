@@ -137,6 +137,8 @@ export type Bucket = {
   region: string;
   created: string;
   kind: BucketKind;
+  versioning: boolean;
+  blockPublicAccess: boolean;
 };
 
 export type BucketObject = {

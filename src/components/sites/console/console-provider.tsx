@@ -87,7 +87,7 @@ type ConsoleApi = {
   associateElasticIp: (allocationId: string, instanceId: string) => void;
   disassociateElasticIp: (allocationId: string) => void;
   releaseElasticIps: (ids: string[]) => void;
-  createBucket: (input: { name: string; kind: Bucket["kind"] }) => string | null;
+  createBucket: (input: { name: string; kind: Bucket["kind"]; versioning: boolean; blockPublicAccess: boolean }) => string | null;
   deleteBuckets: (names: string[]) => void;
   emptyBucket: (name: string) => void;
   addObjects: (bucket: string, items: { key: string; sizeBytes: number }[]) => void;
@@ -632,7 +632,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
           ...prev,
           buckets: [
             ...prev.buckets,
-            { name, region, created: "Just now", kind: input.kind },
+            { name, region, created: "Just now", kind: input.kind, versioning: input.versioning, blockPublicAccess: input.blockPublicAccess },
           ],
         }));
         return null;
