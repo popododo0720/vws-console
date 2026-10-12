@@ -9,14 +9,13 @@ import { useConsole } from "@/components/sites/console/console-provider";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
+import { RulesTable } from "@/components/sites/console/sg-rules-table";
 import { Shell } from "@/components/sites/console/shell";
 import {
-  CopyText,
   MenuButton,
   MenuChevron,
   OrangeButton,
   OutlineButton,
-  dash,
   menuTriggerClass,
 } from "@/components/sites/console/ui";
 
@@ -32,7 +31,12 @@ export function SecurityGroupsView() {
 
   const columns: Column<SecurityGroup>[] = [
     { key: "name", header: "Name", minWidth: 120, sortValue: (row) => row.name, cell: (row) => <NameCell value={row.name} /> },
-    { key: "id", header: "Security group ID", minWidth: 190, sortValue: (row) => row.id, cell: (row) => <CopyText value={row.id} /> },
+    { key: "id", header: "Security group ID", minWidth: 190, sortValue: (row) => row.id, cell: (row) => (
+        <Link href={`/network/security-groups/${row.id}`} className="text-[#006ce0] hover:underline" onClick={(event) => event.stopPropagation()}>
+          {row.id}
+        </Link>
+      ),
+    },
     { key: "group", header: "Security group name", minWidth: 180, sortValue: (row) => row.groupName, cell: (row) => row.groupName },
     {
       key: "vpc",
@@ -49,6 +53,8 @@ export function SecurityGroupsView() {
         ),
     },
     { key: "description", header: "Description", minWidth: 220, sortValue: (row) => row.description, cell: (row) => row.description },
+    { key: "in", header: "Inbound rules count", minWidth: 150, sortValue: (row) => String(row.rules.filter((rule) => rule.direction === "in").length).padStart(4, "0"), cell: (row) => `${row.rules.filter((rule) => rule.direction === "in").length} Permission entries` },
+    { key: "out", header: "Outbound rules count", minWidth: 160, sortValue: (row) => String(row.rules.filter((rule) => rule.direction === "out").length).padStart(4, "0"), cell: (row) => `${row.rules.filter((rule) => rule.direction === "out").length} Permission entries` },
     { key: "owner", header: "Owner", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => row.owner },
   ];
 
@@ -69,9 +75,12 @@ export function SecurityGroupsView() {
                 </>
               }
               items={[
+                { label: "View details", disabled: !one, onSelect: () => one && router.push(`/network/security-groups/${one.id}`) },
+                { label: "Edit inbound rules", disabled: !one, onSelect: () => one && router.push(`/network/security-groups/${one.id}/edit/inbound`) },
+                { label: "Edit outbound rules", disabled: !one, onSelect: () => one && router.push(`/network/security-groups/${one.id}/edit/outbound`) },
                 {
-                  label: "Delete",
-                  disabled: selected.length === 0,
+                  label: "Delete security groups",
+                  disabled: selected.length === 0 || selected.some((item) => item.groupName === "default"),
                   onSelect: () => api.deleteSecurityGroups(selected.map((item) => item.id)),
                 },
               ]}
@@ -109,24 +118,7 @@ export function SecurityGroupsView() {
         onHeight={setDock}
       >
         {one ? (
-          <table className="w-full text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-[#e6e8eb] text-[#5f6b7a]">
-                <th className="py-1 pr-3 font-semibold">Protocol</th>
-                <th className="py-1 pr-3 font-semibold">Port</th>
-                <th className="py-1 font-semibold">Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {one.rules.filter((rule) => rule.direction === ruleTab).map((rule, index) => (
-                <tr key={`${rule.direction}-${rule.port}-${index}`} className="border-b border-[#f2f3f3]">
-                  <td className="py-1 pr-3">{rule.protocol}</td>
-                  <td className="py-1 pr-3">{rule.port}</td>
-                  <td className="py-1">{dash(rule.source)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <RulesTable rules={one.rules} direction={ruleTab === "out" ? "out" : "in"} />
         ) : (
           <p className="py-8 text-center text-[14px] text-[#5f6b7a]">Select a security group</p>
         )}
