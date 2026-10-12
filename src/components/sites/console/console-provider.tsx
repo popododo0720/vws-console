@@ -20,6 +20,7 @@ import {
 } from "@/lib/console-data";
 import type {
   Bucket,
+  BucketObject,
   Dataset,
   Instance,
   InstanceState,
@@ -57,6 +58,7 @@ type ConsoleApi = {
   internetGateways: InternetGateway[];
   elasticIps: ElasticIp[];
   buckets: Bucket[];
+  objects: BucketObject[];
   keyPairs: Dataset["keyPairs"];
   renameInstance: (id: string, name: string) => void;
   setInstanceState: (ids: string[], state: InstanceState) => void;
@@ -87,6 +89,10 @@ type ConsoleApi = {
   releaseElasticIps: (ids: string[]) => void;
   createBucket: (input: { name: string; kind: Bucket["kind"] }) => string | null;
   deleteBuckets: (names: string[]) => void;
+  emptyBucket: (name: string) => void;
+  addObjects: (bucket: string, items: { key: string; sizeBytes: number }[]) => void;
+  createFolder: (bucket: string, key: string) => void;
+  deleteObjects: (bucket: string, keys: string[]) => void;
   addKeyPair: (name: string) => void;
 };
 
@@ -167,6 +173,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       internetGateways,
       elasticIps,
       buckets: data.buckets,
+      objects: data.objects,
       keyPairs: data.keyPairs,
       showEmpty: () => {
         setMode("empty");
@@ -218,6 +225,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
             securityGroups: [...prev.securityGroups],
             vpcs: [...prev.vpcs],
             buckets: [...prev.buckets],
+            objects: [...prev.objects],
             keyPairs: [...prev.keyPairs],
           };
           let groupId = draft.securityGroupId || DEFAULT_SG_ID;
@@ -633,6 +641,42 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         setData((prev) => ({
           ...prev,
           buckets: prev.buckets.filter((item) => !names.includes(item.name)),
+          objects: prev.objects.filter((item) => !names.includes(item.bucket)),
+        }));
+      },
+      emptyBucket: (name) => {
+        setData((prev) => ({ ...prev, objects: prev.objects.filter((item) => item.bucket !== name) }));
+      },
+      addObjects: (bucket, items) => {
+        setData((prev) => {
+          const keys = items.map((item) => item.key);
+          const added: BucketObject[] = items.map((item) => ({
+            bucket,
+            key: item.key,
+            sizeBytes: item.sizeBytes,
+            modified: "Just now",
+            storageClass: "Standard",
+          }));
+          return {
+            ...prev,
+            objects: [...prev.objects.filter((item) => item.bucket !== bucket || !keys.includes(item.key)), ...added],
+          };
+        });
+      },
+      createFolder: (bucket, key) => {
+        setData((prev) =>
+          prev.objects.some((item) => item.bucket === bucket && item.key === key)
+            ? prev
+            : { ...prev, objects: [...prev.objects, { bucket, key, sizeBytes: 0, modified: "", storageClass: "" }] },
+        );
+      },
+      deleteObjects: (bucket, keys) => {
+        // A folder key removes everything under it.
+        setData((prev) => ({
+          ...prev,
+          objects: prev.objects.filter(
+            (item) => item.bucket !== bucket || !keys.some((key) => (key.endsWith("/") ? item.key.startsWith(key) : item.key === key)),
+          ),
         }));
       },
       addKeyPair: (name) => {
