@@ -9,6 +9,7 @@ import type {
   NavTree,
   SecurityGroup,
   Volume,
+  Snapshot,
   Vpc,
 } from "@/types/console";
 
@@ -71,7 +72,7 @@ export const computeNav: NavTree = {
       label: "EBS",
       children: [
         { id: "volumes", label: "Volumes", href: "/storage/volumes" },
-        { id: "snapshots", label: "Snapshots" },
+        { id: "snapshots", label: "Snapshots", href: "/storage/snapshots" },
         { id: "lifecycle", label: "Lifecycle Manager" },
       ],
     },
@@ -375,6 +376,7 @@ export function createEmptyAccount(): Dataset {
   return {
     instances: [],
     volumes: [],
+    snapshots: [],
     buckets: [],
     keyPairs: [],
     vpcs: [defaultVpc()],
@@ -525,9 +527,23 @@ export function createSampleAccount(): Dataset {
       attachedTo: "",
     },
   ];
+  // MOCK_SNAPSHOTS: sample-only data. Shown only when the console is switched to sample data.
+  const MOCK_SNAPSHOTS: Snapshot[] = [
+    {
+      id: "snap-0aa11",
+      name: "web-root-backup",
+      volumeId: "blk-0123abcd90ef4567",
+      sizeGiB: 8,
+      description: "Sample snapshot",
+      state: "completed",
+      started: "Oct 1, 2026",
+      owner: ACCOUNT.id,
+      region: HOME_REGION,
+    },
+  ];
   const buckets: Bucket[] = [
     { name: "vws-logs", region: HOME_REGION, created: "Aug 2, 2026", kind: "general" },
     { name: "vws-media", region: "US East", created: "Sep 18, 2026", kind: "general" },
   ];
-  return { instances, volumes, securityGroups, vpcs, buckets, keyPairs };
+  return { instances, volumes, snapshots: MOCK_SNAPSHOTS, securityGroups, vpcs, buckets, keyPairs };
 }

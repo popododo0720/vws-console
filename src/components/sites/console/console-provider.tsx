@@ -26,6 +26,7 @@ import type {
   LaunchDraft,
   SecurityGroup,
   Volume,
+  Snapshot,
   Vpc,
 } from "@/types/console";
 
@@ -44,6 +45,7 @@ type ConsoleApi = {
   setDensity: (density: Density) => void;
   instances: Instance[];
   volumes: Volume[];
+  snapshots: Snapshot[];
   securityGroups: SecurityGroup[];
   vpcs: Vpc[];
   buckets: Bucket[];
@@ -54,6 +56,9 @@ type ConsoleApi = {
   launch: (draft: LaunchDraft) => void;
   createVolume: (input: { name: string; volumeType: string; sizeGiB: number; availabilityZone: string }) => void;
   deleteVolumes: (ids: string[]) => void;
+  modifyVolume: (id: string, input: { volumeType: string; sizeGiB: number }) => void;
+  createSnapshot: (input: { volumeId: string; name: string; description: string }) => void;
+  deleteSnapshots: (ids: string[]) => void;
   createSecurityGroup: (input: { name: string; groupName: string; description: string; vpcId: string; allowSsh: boolean }) => void;
   deleteSecurityGroups: (ids: string[]) => void;
   createVpc: (input: { name: string; ipv4Cidr: string }) => void;
@@ -80,6 +85,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const api = useMemo<ConsoleApi>(() => {
     const instances = data.instances.filter((item) => item.region === region);
     const volumes = data.volumes.filter((item) => item.region === region);
+    const snapshots = data.snapshots.filter((item) => item.region === region);
     const securityGroups = data.securityGroups.filter((item) => item.region === region);
     const vpcs = data.vpcs.filter((item) => item.region === region);
 
@@ -93,6 +99,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       setDensity,
       instances,
       volumes,
+      snapshots,
       securityGroups,
       vpcs,
       buckets: data.buckets,
@@ -141,6 +148,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
           const next: Dataset = {
             instances: [...prev.instances],
             volumes: [...prev.volumes],
+            snapshots: [...prev.snapshots],
             securityGroups: [...prev.securityGroups],
             vpcs: [...prev.vpcs],
             buckets: [...prev.buckets],
@@ -243,6 +251,50 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         setData((prev) => ({
           ...prev,
           volumes: prev.volumes.filter((item) => !ids.includes(item.id)),
+        }));
+      },
+      modifyVolume: (id, input) => {
+        const spec = volumeTypeOptions.find((item) => item.id === input.volumeType);
+        if (!spec) return;
+        setData((prev) => ({
+          ...prev,
+          volumes: prev.volumes.map((item) =>
+            item.id === id
+              ? { ...item, volumeType: spec.id, sizeGiB: Math.max(item.sizeGiB, input.sizeGiB), iops: spec.iops, throughput: spec.throughput }
+              : item,
+          ),
+        }));
+      },
+      createSnapshot: (input) => {
+        setData((prev) => {
+          const volume = prev.volumes.find((item) => item.id === input.volumeId);
+          if (!volume) return prev;
+          const id = newId("snap");
+          return {
+            ...prev,
+            volumes: prev.volumes.map((item) => (item.id === volume.id ? { ...item, snapshotId: id } : item)),
+            snapshots: [
+              {
+                id,
+                name: input.name,
+                volumeId: volume.id,
+                sizeGiB: volume.sizeGiB,
+                description: input.description,
+                state: "completed",
+                started: "Just now",
+                owner: ACCOUNT.id,
+                region: volume.region,
+              },
+              ...prev.snapshots,
+            ],
+          };
+        });
+      },
+      deleteSnapshots: (ids) => {
+        setData((prev) => ({
+          ...prev,
+          snapshots: prev.snapshots.filter((item) => !ids.includes(item.id)),
+          volumes: prev.volumes.map((item) => (ids.includes(item.snapshotId) ? { ...item, snapshotId: "" } : item)),
         }));
       },
       createSecurityGroup: (input) => {
