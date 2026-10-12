@@ -18,6 +18,7 @@ import {
   volumeTypeOptions,
   zonesFor,
 } from "@/lib/console-data";
+import { makeRule } from "@/lib/security-group-rules";
 import type {
   Bucket,
   Dataset,
@@ -234,15 +235,15 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
               region,
               rules: [
                 ...(draft.allowSsh
-                  ? [{ direction: "in" as const, protocol: "TCP", port: "22", source: draft.sshCidr }]
+                  ? [makeRule("in", "TCP", "22", draft.sshCidr)]
                   : []),
                 ...(draft.allowHttps
-                  ? [{ direction: "in" as const, protocol: "TCP", port: "443", source: "0.0.0.0/0" }]
+                  ? [makeRule("in", "TCP", "443", "0.0.0.0/0")]
                   : []),
                 ...(draft.allowHttp
-                  ? [{ direction: "in" as const, protocol: "TCP", port: "80", source: "0.0.0.0/0" }]
+                  ? [makeRule("in", "TCP", "80", "0.0.0.0/0")]
                   : []),
-                { direction: "out", protocol: "All", port: "All", source: "0.0.0.0/0" },
+                makeRule("out", "All", "All", "0.0.0.0/0"),
               ],
             });
           }
@@ -379,9 +380,9 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
               region,
               rules: [
                 ...(input.allowSsh
-                  ? [{ direction: "in" as const, protocol: "TCP", port: "22", source: "0.0.0.0/0" }]
+                  ? [makeRule("in", "TCP", "22", "0.0.0.0/0")]
                   : []),
-                { direction: "out", protocol: "All", port: "All", source: "0.0.0.0/0" },
+                makeRule("out", "All", "All", "0.0.0.0/0"),
               ],
             },
             ...prev.securityGroups,

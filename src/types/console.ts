@@ -55,6 +55,8 @@ export type Snapshot = {
 };
 
 export type SecurityGroupRule = {
+  id: string;
+  description: string;
   direction: "in" | "out";
   protocol: string;
   port: string;

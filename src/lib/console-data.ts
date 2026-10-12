@@ -1,3 +1,4 @@
+import { makeRule } from "@/lib/security-group-rules";
 import type {
   Bucket,
   Dataset,
@@ -370,8 +371,8 @@ function defaultGroup(): SecurityGroup {
     owner: ACCOUNT.id,
     region: HOME_REGION,
     rules: [
-      { direction: "in", protocol: "All", port: "All", source: DEFAULT_SG_ID },
-      { direction: "out", protocol: "All", port: "All", source: "0.0.0.0/0" },
+      makeRule("in", "All", "All", DEFAULT_SG_ID, "sgr-default-in"),
+      makeRule("out", "All", "All", "0.0.0.0/0", "sgr-default-out"),
     ],
   };
 }
@@ -420,9 +421,9 @@ export function createSampleAccount(): Dataset {
       owner: ACCOUNT.id,
       region: HOME_REGION,
       rules: [
-        { direction: "in", protocol: "TCP", port: "22", source: "0.0.0.0/0" },
-        { direction: "in", protocol: "TCP", port: "443", source: "0.0.0.0/0" },
-        { direction: "out", protocol: "All", port: "All", source: "0.0.0.0/0" },
+        makeRule("in", "TCP", "22", "0.0.0.0/0", "sgr-sample-ssh", "SSH from anywhere (sample)"),
+        makeRule("in", "TCP", "443", "0.0.0.0/0", "sgr-sample-https", "HTTPS (sample)"),
+        makeRule("out", "All", "All", "0.0.0.0/0", "sgr-sample-out"),
       ],
     },
   ];
