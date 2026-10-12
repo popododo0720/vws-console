@@ -118,7 +118,7 @@ export const networkNav: NavTree = {
       children: [
         { id: "vpcs", label: "Your VPCs", href: "/network/vpcs" },
         { id: "subnets", label: "Subnets", href: "/network/subnets" },
-        { id: "routes", label: "Route tables" },
+        { id: "routes", label: "Route tables", href: "/network/route-tables" },
         { id: "igw", label: "Internet gateways" },
         { id: "eigw", label: "Egress-only internet gateways" },
         { id: "carrier", label: "Carrier gateways" },
