@@ -117,7 +117,7 @@ export const networkNav: NavTree = {
       label: "Virtual private cloud",
       children: [
         { id: "vpcs", label: "Your VPCs", href: "/network/vpcs" },
-        { id: "subnets", label: "Subnets" },
+        { id: "subnets", label: "Subnets", href: "/network/subnets" },
         { id: "routes", label: "Route tables" },
         { id: "igw", label: "Internet gateways" },
         { id: "eigw", label: "Egress-only internet gateways" },
