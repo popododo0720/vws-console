@@ -16,7 +16,7 @@ export const instanceTabs = [
   { id: "tags", label: "Tags" },
 ];
 
-export const stateMeta: Record<Instance["state"], { label: string; color: string }> = {
+const stateMeta: Record<Instance["state"], { label: string; color: string }> = {
   running: { label: "Running", color: "#037f0c" },
   stopped: { label: "Stopped", color: "#d13212" },
   pending: { label: "Pending", color: "#006ce0" },

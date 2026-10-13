@@ -33,7 +33,7 @@ export const REGIONS = [
 
 export const HOME_REGION = REGIONS[0];
 
-export const DEFAULT_VPC_ID = "vpc-0d4e5f6a7b8c9012";
+const DEFAULT_VPC_ID = "vpc-0d4e5f6a7b8c9012";
 export const DEFAULT_SG_ID = "sg-0a1b2c3d4e5f6071";
 
 export function zonesFor(region: string) {

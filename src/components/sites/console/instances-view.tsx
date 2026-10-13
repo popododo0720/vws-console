@@ -1,5 +1,6 @@
 "use client";
 
+import { copyToClipboard } from "@/lib/clipboard";
 import { useState } from "react";
 import Link from "next/link";
 import { CircleCheck, ExternalLink, Info, RefreshCw } from "lucide-react";
@@ -125,7 +126,7 @@ export function InstancesView() {
                   label: "Copy instance ID",
                   disabled: !one,
                   onSelect: () => {
-                    if (one) void navigator.clipboard.writeText(one.id);
+                    if (one) void copyToClipboard(one.id, "instances-view");
                   },
                 },
                 {

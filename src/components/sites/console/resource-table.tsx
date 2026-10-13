@@ -15,7 +15,7 @@ export type Column<T> = {
   cell: (row: T) => ReactNode;
 };
 
-export type Preset<T> = {
+type Preset<T> = {
   id: string;
   label: string;
   match: (row: T) => boolean;

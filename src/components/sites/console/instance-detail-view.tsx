@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
 import { MenuButton, OutlineButton, blueMenuTriggerClass } from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/clipboard";
 
 export function InstanceDetailView({ id }: { id: string }) {
   const api = useConsole();
@@ -55,7 +56,7 @@ export function InstanceDetailView({ id }: { id: string }) {
             <MenuButton
               className={blueMenuTriggerClass()}
               label={<>Actions <span aria-hidden className="text-[9px]">▼</span></>}
-              items={[{ label: "Copy instance ID", onSelect: () => void navigator.clipboard.writeText(instance.id) }]}
+              items={[{ label: "Copy instance ID", onSelect: () => void copyToClipboard(instance.id, "instance-detail-view") }]}
             />
           </>
         }

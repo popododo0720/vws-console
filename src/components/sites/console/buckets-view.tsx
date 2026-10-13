@@ -19,6 +19,7 @@ import {
   SampleBadge,
 } from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/clipboard";
 
 export function BucketsView() {
   const api = useConsole();
@@ -103,7 +104,7 @@ export function BucketsView() {
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <OutlineButton
                   disabled={selected.length === 0}
-                  onClick={() => void navigator.clipboard.writeText(selected.map((item) => item.name).join("\n"))}
+                  onClick={() => void copyToClipboard(selected.map((item) => item.name).join("\n"), "buckets-view")}
                 >
                   Copy name
                 </OutlineButton>

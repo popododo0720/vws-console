@@ -4,7 +4,7 @@ import type { SecurityGroupRule } from "@/types/console";
 import { RULE_TYPES, makeRule, newRuleId, ruleTypeOf, validateRule } from "@/lib/security-group-rules";
 import { OutlineButton } from "@/components/sites/console/ui";
 
-export function newDraftRule(direction: SecurityGroupRule["direction"]): SecurityGroupRule {
+function newDraftRule(direction: SecurityGroupRule["direction"]): SecurityGroupRule {
   return makeRule(direction, "TCP", "22", "0.0.0.0/0", `new-${newRuleId()}`);
 }
 
