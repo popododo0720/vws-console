@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/clipboard";
 
 export function Mark({ className }: { className?: string }) {
   return (
@@ -223,7 +224,7 @@ export function PanelDialog({
 }
 
 export function CopyText({ value }: { value: string }) {
-  const [done, setDone] = useState(false);
+  const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
   if (!value) return <span>—</span>;
   return (
     <button
@@ -231,16 +232,11 @@ export function CopyText({ value }: { value: string }) {
       className="text-left text-[#006ce0] hover:underline"
       onClick={async (event) => {
         event.stopPropagation();
-        try {
-          await navigator.clipboard.writeText(value);
-          setDone(true);
-          window.setTimeout(() => setDone(false), 900);
-        } catch {
-          setDone(false);
-        }
+        setStatus((await copyToClipboard(value, "copy-text")) ? "copied" : "failed");
+        window.setTimeout(() => setStatus("idle"), 900);
       }}
     >
-      {done ? "Copied" : value}
+      {status === "copied" ? "Copied" : status === "failed" ? "Copy failed" : value}
     </button>
   );
 }

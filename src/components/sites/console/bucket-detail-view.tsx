@@ -12,6 +12,7 @@ import { Column, ResourceTable } from "@/components/sites/console/resource-table
 import { Shell } from "@/components/sites/console/shell";
 import { FieldLabel, OrangeButton, OutlineButton, PanelDialog, SampleBadge, dash } from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/clipboard";
 
 const CONFIRM_WORD = "permanently delete";
 
@@ -136,7 +137,7 @@ export function BucketDetailView({ name }: { name: string }) {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <OutlineButton
                 disabled={selectedRows.length === 0}
-                onClick={() => void navigator.clipboard.writeText(selectedRows.map((row) => `s3://${name}/${row.key}`).join("\n"))}
+                onClick={() => void copyToClipboard(selectedRows.map((row) => `s3://${name}/${row.key}`).join("\n"), "bucket-detail-view")}
               >
                 Copy S3 URI
               </OutlineButton>

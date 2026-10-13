@@ -1,5 +1,6 @@
 "use client";
 
+import { copyToClipboard } from "@/lib/clipboard";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -88,7 +89,7 @@ export function SecurityGroupsView() {
             <OutlineButton
               onClick={() => {
                 const lines = api.securityGroups.map((item) => [item.id, item.groupName, item.vpcId, item.description].join(","));
-                void navigator.clipboard.writeText(["id,name,vpc,description", ...lines].join("\n"));
+                void copyToClipboard(["id,name,vpc,description", ...lines].join("\n"), "security-groups-view");
               }}
             >
               Export security groups to CSV

@@ -10,6 +10,7 @@ import { Shell } from "@/components/sites/console/shell";
 import { RulesTable } from "@/components/sites/console/sg-rules-table";
 import { CopyText, DetailGrid, MenuButton, MenuChevron, OutlineButton, SampleBadge, dash, menuTriggerClass } from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/clipboard";
 
 const crumbBase = [{ label: "EC2", href: "/compute/instances" }, { label: "Security Groups", href: "/network/security-groups" }];
 
@@ -54,7 +55,7 @@ export function SecurityGroupDetailView({ id }: { id: string }) {
             items={[
               { label: "Edit inbound rules", onSelect: () => router.push(`/network/security-groups/${group.id}/edit/inbound`) },
               { label: "Edit outbound rules", onSelect: () => router.push(`/network/security-groups/${group.id}/edit/outbound`) },
-              { label: "Copy security group ID", onSelect: () => void navigator.clipboard.writeText(group.id) },
+              { label: "Copy security group ID", onSelect: () => void copyToClipboard(group.id, "security-group-detail-view") },
               {
                 label: "Delete security groups",
                 disabled: isDefault,
