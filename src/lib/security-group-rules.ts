@@ -1,8 +1,8 @@
 import type { SecurityGroupRule } from "@/types/console";
 
-export type RuleTypeId = "all" | "ssh" | "http" | "https" | "tcp" | "udp" | "icmp";
+type RuleTypeId = "all" | "ssh" | "http" | "https" | "tcp" | "udp" | "icmp";
 
-export type RuleType = {
+type RuleType = {
   id: RuleTypeId;
   label: string;
   protocol: string;

@@ -1,4 +1,4 @@
-export type ClientError = {
+type ClientError = {
   code: string;
   message: string;
   requestId: string | null;

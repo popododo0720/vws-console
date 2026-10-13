@@ -17,7 +17,7 @@ import {
   type MenuEntry,
 } from "@/components/sites/console/ui";
 
-export type ListAction<T> = {
+type ListAction<T> = {
   label: string;
   disabled?: (selected: T[]) => boolean;
   onSelect: (selected: T[]) => void;
