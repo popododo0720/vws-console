@@ -10,6 +10,8 @@ import {
   nextPageToken,
   parseApiError,
   parseImages,
+  parseInstanceTypes,
+  type InstanceType,
   parseInstances,
   parseOperation,
   parseSubnets,
@@ -176,6 +178,10 @@ export const createVpc = (cidrBlock: string) => mutate("/vpcs", { cidrBlock });
 export const deleteVpc = (id: string) => mutate(`/vpcs/${seg(id)}/delete`);
 export const createSubnet = (vpcId: string, cidrBlock: string) => mutate("/subnets", { vpcId, cidrBlock });
 export const deleteSubnet = (id: string) => mutate(`/subnets/${seg(id)}/delete`);
+
+export const listInstanceTypes = (): Promise<ApiResult<InstanceType[]>> => listAll("/instance-types", parseInstanceTypes);
+/** console-api only grows a volume; it refuses a smaller size. */
+export const modifyVolume = (id: string, size: number) => mutate(`/volumes/${seg(id)}/modify`, { size });
 
 export const listSecurityGroups = (): Promise<ApiResult<SecurityGroup[]>> => listAll("/security-groups", parseSecurityGroups);
 

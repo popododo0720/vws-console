@@ -66,6 +66,8 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
     { key: "type", header: "Instance type", minWidth: 120, sortValue: (row) => row.type, cell: (row) => row.type },
     { key: "status", header: "Status check", minWidth: 170, sortValue: (row) => row.status, cell: (row) => <StatusCell row={row} /> },
     { key: "az", header: "Availability Zone", minWidth: 150, sortValue: (row) => row.availabilityZone, cell: (row) => row.availabilityZone },
+    { key: "vpc", header: "VPC ID", minWidth: 190, sortValue: (row) => row.vpcId, cell: (row) => dash(row.vpcId) },
+    { key: "launch", header: "Launch time", minWidth: 200, sortValue: (row) => row.launchedAt, cell: (row) => dash(row.launchedAt) },
     { key: "dns", header: "Public IPv4 DNS", minWidth: 200, sortValue: (row) => row.publicDns, cell: (row) => dash(row.publicDns) },
     { key: "ip", header: "Public IPv4 address", minWidth: 150, sortValue: (row) => row.publicIpv4, cell: (row) => dash(row.publicIpv4) },
     { key: "eip", header: "Elastic IP", minWidth: 120, sortValue: (row) => row.elasticIp, cell: (row) => dash(row.elasticIp) },

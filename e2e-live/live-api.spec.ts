@@ -287,6 +287,7 @@ test("opens VPC and volume detail pages from their lists", async ({ page, reques
   await expect(page).toHaveURL(new RegExp(`/network/vpcs/${vpcId}$`));
   await expect(page.getByText("10.57.0.0/16")).toBeVisible();
   await expect(page.getByText(subnetId)).toBeVisible();
+  await expect(page.locator("dt", { hasText: /^Default VPC$/ }).locator("..")).toContainText("No");
 
   await page.goto("/storage/volumes");
   await page.getByRole("link", { name: volumeId }).click();
@@ -295,4 +296,56 @@ test("opens VPC and volume detail pages from their lists", async ({ page, reques
 
   await page.goto("/storage/volumes/vol-0000000000000000f");
   await expect(page.getByText("Volume not found")).toBeVisible();
+});
+
+const liveApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
+const liveHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+
+test("grows a volume and will not shrink it", async ({ page, request }) => {
+  const created = await (await request.post(`${liveApi()}/volumes`, { headers: liveHeaders("grow-vol"), data: { size: 5 } })).json();
+  const volumeId = created.items[0].volumeId;
+  await expect.poll(async () => (await (await request.get(`${liveApi()}/volumes`, { headers: liveHeaders("x") })).json()).items.find((v: { volumeId: string }) => v.volumeId === volumeId).state).toBe("available");
+
+  await page.goto("/storage/volumes");
+  const row = page.getByRole("row").filter({ hasText: volumeId });
+  await row.getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Modify volume" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("New size (GiB)").fill("4");
+  await expect(dialog.getByRole("button", { name: "Modify" })).toBeDisabled();
+  await dialog.getByLabel("New size (GiB)").fill("12");
+  await dialog.getByRole("button", { name: "Modify" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(row).toContainText("12 GiB");
+});
+
+test("shows instance VPC and launch time, subnet zone and public IP setting, and the default VPC flag", async ({ page, request }) => {
+  const vpc = await (await request.post(`${liveApi()}/vpcs`, { headers: liveHeaders("fields-vpc"), data: { cidrBlock: "10.66.0.0/16" } })).json();
+  const vpcId = vpc.items[0].vpcId;
+  await expect.poll(async () => (await (await request.get(`${liveApi()}/vpcs`, { headers: liveHeaders("x") })).json()).items.find((v: { vpcId: string }) => v.vpcId === vpcId).state).toBe("available");
+  const subnet = await (await request.post(`${liveApi()}/subnets`, { headers: liveHeaders("fields-subnet"), data: { vpcId, cidrBlock: "10.66.1.0/24" } })).json();
+  const subnetId = subnet.items[0].subnetId;
+  const run = await (await request.post(`${liveApi()}/instances`, {
+    headers: liveHeaders("fields-run"),
+    data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId, count: 1 },
+  })).json();
+  const instanceId = run.items[0].instanceId;
+  const launchTime: string = run.items[0].launchTime;
+
+  await page.goto("/compute/instances");
+  const instanceRow = page.getByRole("row").filter({ hasText: instanceId });
+  await expect(instanceRow).toContainText(vpcId);
+  await expect(instanceRow).toContainText(launchTime);
+
+  await page.goto("/network/subnets");
+  const subnetRow = page.getByRole("row").filter({ hasText: subnetId });
+  await expect(subnetRow).toContainText("vws-1a");
+  await subnetRow.getByRole("checkbox").check();
+  await expect(page.getByText("Auto-assign public IPv4 address").locator("..")).toContainText("No");
+
+  await page.goto("/network/vpcs");
+  const vpcRow = page.getByRole("row").filter({ hasText: vpcId });
+  await vpcRow.getByRole("checkbox").check();
+  await expect(page.locator("dt", { hasText: /^Default VPC$/ }).locator("..")).toContainText("No");
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createInstanceTags, createSecurityGroup, createVpc, getVolume, getVpc, instanceBatch, launchInstances, listVpcs } from "./client";
+import { createInstanceTags, createSecurityGroup, createVpc, getVolume, getVpc, instanceBatch, launchInstances, listVpcs, modifyVolume } from "./client";
 
 type Call = { url: string; init: RequestInit };
 
@@ -132,7 +132,15 @@ describe("console-api client", () => {
     );
     const vpc = await getVpc("vpc-1");
     expect(vpc.ok && vpc.value?.ipv4Cidr).toBe("10.0.0.0/16");
+    expect(vpc.ok && vpc.value?.isDefault).toBe(true);
     expect(await getVolume("vol-x")).toEqual({ ok: true, value: null });
     expect(calls.map((c) => c.url)).toEqual(["http://api.test/api/v1/vpcs/vpc-1", "http://api.test/api/v1/volumes/vol-x"]);
+  });
+
+  it("sends the new size to the modify endpoint", async () => {
+    serve(respond(202, { operation: { id: "op-5", state: "running" }, items: [] }), respond(200, { id: "op-5", state: "succeeded" }));
+    expect(await modifyVolume("vol-1", 9)).toEqual({ ok: true, value: undefined });
+    expect(calls[0].url).toBe("http://api.test/api/v1/volumes/vol-1/modify");
+    expect(calls[0].init.body).toBe('{"size":9}');
   });
 });

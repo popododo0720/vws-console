@@ -67,6 +67,10 @@ export async function deleteSubnetsAction(ids: string[]) {
   return each(ids, vws.deleteSubnet);
 }
 
+export async function modifyVolumeAction(id: string, sizeGiB: number) {
+  return errorOf(vws.modifyVolume(id, sizeGiB));
+}
+
 export async function createSecurityGroupAction(groupName: string, vpcId: string, inbound: IngressPermission[]) {
   const created = await vws.createSecurityGroup(groupName, vpcId);
   if (!created.ok) return created.error;
