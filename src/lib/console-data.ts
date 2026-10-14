@@ -1,17 +1,13 @@
-import { makeRule } from "@/lib/security-group-rules";
 import type {
   Bucket,
   BucketObject,
   Dataset,
-  ElasticIp,
   InternetGateway,
   KeyPair,
   NavNode,
   NavTree,
   RouteTable,
-  SecurityGroup,
   Subnet,
-  Snapshot,
   Vpc,
 } from "@/types/console";
 
@@ -30,7 +26,6 @@ export const REGIONS = [
 export const HOME_REGION = REGIONS[0];
 
 const DEFAULT_VPC_ID = "vpc-0d4e5f6a7b8c9012";
-export const DEFAULT_SG_ID = "sg-0a1b2c3d4e5f6071";
 
 export const computeNav: NavTree = {
   id: "compute",
@@ -224,27 +219,10 @@ function defaultVpc(): Vpc {
   };
 }
 
-function defaultGroup(): SecurityGroup {
-  return {
-    id: DEFAULT_SG_ID,
-    name: "",
-    groupName: "default",
-    vpcId: DEFAULT_VPC_ID,
-    description: "Default network security group",
-    owner: ACCOUNT.id,
-    region: HOME_REGION,
-    rules: [
-      makeRule("in", "All", "All", DEFAULT_SG_ID, "sgr-default-in"),
-      makeRule("out", "All", "All", "0.0.0.0/0", "sgr-default-out"),
-    ],
-  };
-}
-
 export function createEmptyAccount(): Dataset {
   return {
     instances: [],
     volumes: [],
-    snapshots: [],
     buckets: [],
     objects: [],
     keyPairs: [],
@@ -252,8 +230,6 @@ export function createEmptyAccount(): Dataset {
     subnets: [],
     routeTables: [],
     internetGateways: [],
-    elasticIps: [],
-    securityGroups: [defaultGroup()],
   };
 }
 
@@ -273,37 +249,6 @@ export function createSampleAccount(): Dataset {
       ipv6Cidr: "",
       owner: ACCOUNT.id,
       isDefault: false,
-      region: HOME_REGION,
-    },
-  ];
-  const securityGroups: SecurityGroup[] = [
-    ...base.securityGroups,
-    {
-      id: "sg-09e21c44ab8810f3",
-      name: "web",
-      groupName: "web",
-      vpcId: DEFAULT_VPC_ID,
-      description: "Web tier",
-      owner: ACCOUNT.id,
-      region: HOME_REGION,
-      rules: [
-        makeRule("in", "TCP", "22", "0.0.0.0/0", "sgr-sample-ssh", "SSH from anywhere (sample)"),
-        makeRule("in", "TCP", "443", "0.0.0.0/0", "sgr-sample-https", "HTTPS (sample)"),
-        makeRule("out", "All", "All", "0.0.0.0/0", "sgr-sample-out"),
-      ],
-    },
-  ];
-  // MOCK_SNAPSHOTS: sample-only data. Shown only when the console is switched to sample data.
-  const MOCK_SNAPSHOTS: Snapshot[] = [
-    {
-      id: "snap-0aa11",
-      name: "web-root-backup",
-      volumeId: "blk-0123abcd90ef4567",
-      sizeGiB: 8,
-      description: "Sample snapshot",
-      state: "completed",
-      started: "Oct 1, 2026",
-      owner: ACCOUNT.id,
       region: HOME_REGION,
     },
   ];
@@ -380,17 +325,6 @@ export function createSampleAccount(): Dataset {
       region: HOME_REGION,
     },
   ];
-  // MOCK_ELASTIC_IPS: sample-only data. Addresses come from the TEST-NET-3 documentation range, never a real allocation.
-  const MOCK_ELASTIC_IPS: ElasticIp[] = [
-    {
-      allocationId: "eipalloc-0a1b2c3d4e5f6071",
-      name: "sample-eip",
-      address: "203.0.113.50",
-      instanceId: "",
-      privateIp: "",
-      region: HOME_REGION,
-    },
-  ];
   const buckets: Bucket[] = [
     { name: "vws-logs", region: HOME_REGION, created: "Aug 2, 2026", kind: "general", versioning: false, blockPublicAccess: true },
     { name: "vws-media", region: "US East", created: "Sep 18, 2026", kind: "general", versioning: true, blockPublicAccess: true },
@@ -401,12 +335,11 @@ export function createSampleAccount(): Dataset {
     { bucket: "vws-logs", key: "2026/access-sample.log", sizeBytes: 18432, modified: "Aug 3, 2026", storageClass: "Standard" },
     { bucket: "vws-logs", key: "readme-sample.txt", sizeBytes: 512, modified: "Aug 2, 2026", storageClass: "Standard" },
   ];
-  return { instances: [], volumes: [], snapshots: MOCK_SNAPSHOTS, securityGroups,
+  return { instances: [], volumes: [],
     vpcs,
     subnets: MOCK_SUBNETS,
     routeTables: MOCK_ROUTE_TABLES,
     internetGateways: MOCK_INTERNET_GATEWAYS,
-    elasticIps: MOCK_ELASTIC_IPS,
     buckets,
     objects: MOCK_OBJECTS,
     keyPairs,

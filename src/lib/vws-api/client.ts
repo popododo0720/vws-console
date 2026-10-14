@@ -1,7 +1,12 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import type { Instance, Subnet, Volume, Vpc } from "@/types/console";
+import type { ElasticIp, Instance, SecurityGroup, Snapshot, Subnet, Volume, Vpc } from "@/types/console";
 import {
+  firstItem,
+  parseAddresses,
+  parseSecurityGroups,
+  parseSnapshots,
+  type IngressPermission,
   nextPageToken,
   parseApiError,
   parseImages,
@@ -87,9 +92,15 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Sends a mutation. A 202 carries an operation, which is polled until it finishes. */
 async function mutate(path: string, body?: unknown): Promise<ApiResult<void>> {
+  const result = await mutateReturning(path, body);
+  return result.ok ? { ok: true, value: undefined } : result;
+}
+
+/** Like mutate, but returns the body of the accepted request, which names the new resource. */
+async function mutateReturning(path: string, body?: unknown): Promise<ApiResult<unknown>> {
   const sent = await request("POST", path, body);
   if (!sent.ok) return sent;
-  if (sent.value.status !== 202) return { ok: true, value: undefined };
+  if (sent.value.status !== 202) return { ok: true, value: sent.value.json };
   let op;
   try {
     op = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
@@ -113,7 +124,7 @@ async function mutate(path: string, body?: unknown): Promise<ApiResult<void>> {
   if (op.state === "failed") {
     return { ok: false, error: op.error ?? { code: "OperationFailed", message: `Operation ${op.id} failed.`, requestId: null } };
   }
-  return { ok: true, value: undefined };
+  return { ok: true, value: sent.value.json };
 }
 
 const seg = encodeURIComponent;
@@ -147,3 +158,26 @@ export const createVpc = (cidrBlock: string) => mutate("/vpcs", { cidrBlock });
 export const deleteVpc = (id: string) => mutate(`/vpcs/${seg(id)}/delete`);
 export const createSubnet = (vpcId: string, cidrBlock: string) => mutate("/subnets", { vpcId, cidrBlock });
 export const deleteSubnet = (id: string) => mutate(`/subnets/${seg(id)}/delete`);
+
+export const listSecurityGroups = (): Promise<ApiResult<SecurityGroup[]>> => listAll("/security-groups", parseSecurityGroups);
+
+export async function createSecurityGroup(groupName: string, vpcId: string): Promise<ApiResult<string>> {
+  const result = await mutateReturning("/security-groups", { groupName, vpcId });
+  if (!result.ok) return result;
+  const id = firstItem(result.value, "groupId");
+  return id ? { ok: true, value: id } : { ok: false, error: malformed("/security-groups") };
+}
+
+export const authorizeIngress = (groupId: string, ipPermissions: IngressPermission) =>
+  mutate(`/security-groups/${seg(groupId)}/authorize-ingress`, { ipPermissions });
+export const deleteSecurityGroup = (id: string) => mutate(`/security-groups/${seg(id)}/delete`);
+
+export const listAddresses = (): Promise<ApiResult<ElasticIp[]>> => listAll("/addresses", parseAddresses);
+export const allocateAddress = () => mutate("/addresses", {});
+export const associateAddress = (allocationId: string, instanceId: string) =>
+  mutate(`/addresses/${seg(allocationId)}/associate`, { instanceId });
+export const disassociateAddress = (allocationId: string) => mutate(`/addresses/${seg(allocationId)}/disassociate`);
+export const releaseAddress = (allocationId: string) => mutate(`/addresses/${seg(allocationId)}/release`);
+
+export const listSnapshots = (): Promise<ApiResult<Snapshot[]>> => listAll("/snapshots", parseSnapshots);
+export const deleteSnapshot = (id: string) => mutate(`/snapshots/${seg(id)}/delete`);

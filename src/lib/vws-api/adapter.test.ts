@@ -8,8 +8,13 @@ import {
   parseSubnets,
   parseVolumes,
   parseVpcs,
+  parseAddresses,
+  parseSecurityGroups,
+  parseSnapshots,
+  toIngressPermission,
   withVpcIds,
 } from "./adapter";
+import { makeRule } from "@/lib/security-group-rules";
 
 const instance = {
   instanceId: "i-72a10f87b54bdd869",
@@ -115,6 +120,59 @@ describe("console-api adapter", () => {
       error: { code: "Conflict", message: "busy", requestId: null },
     });
     expect(() => parseOperation({ id: "op-3", state: "queued" })).toThrow("unknown operation state queued");
+  });
+
+  it("maps security groups and their ingress rules, leaving what the API lacks empty", () => {
+    const [group] = parseSecurityGroups({
+      items: [
+        {
+          groupId: "sg-1",
+          ownerId: "123456789012",
+          groupName: "web",
+          vpcId: "vpc-1",
+          ipPermissions: [
+            { ipProtocol: "tcp", fromPort: 22, toPort: 22, cidrIp: "0.0.0.0/0" },
+            { ipProtocol: "udp", fromPort: 1000, toPort: 2000, cidrIp: "10.0.0.0/8" },
+            { ipProtocol: "-1", fromPort: 0, toPort: 0, cidrIp: "10.0.0.0/8" },
+            { ipProtocol: "icmp", fromPort: 0, toPort: 0, cidrIp: "0.0.0.0/0" },
+          ],
+        },
+      ],
+    });
+    expect(group).toMatchObject({ id: "sg-1", groupName: "web", vpcId: "vpc-1", owner: "123456789012", description: "", name: "" });
+    expect(group.rules.map((rule) => [rule.id, rule.direction, rule.protocol, rule.port, rule.source])).toEqual([
+      ["", "in", "TCP", "22", "0.0.0.0/0"],
+      ["", "in", "UDP", "1000-2000", "10.0.0.0/8"],
+      ["", "in", "All", "All", "10.0.0.0/8"],
+      ["", "in", "ICMP", "All", "0.0.0.0/0"],
+    ]);
+    expect(parseSecurityGroups({ items: [{ groupId: "sg-2" }] })[0].rules).toEqual([]);
+  });
+
+  it("turns console rules into authorize-ingress bodies and refuses what the API cannot take", () => {
+    expect(toIngressPermission(makeRule("in", "TCP", "8000-8080", "10.0.0.0/16"))).toEqual({
+      ok: true,
+      value: { ipProtocol: "tcp", fromPort: 8000, toPort: 8080, cidrIp: "10.0.0.0/16" },
+    });
+    expect(toIngressPermission(makeRule("in", "All", "All", "0.0.0.0/0"))).toEqual({
+      ok: true,
+      value: { ipProtocol: "-1", fromPort: 0, toPort: 0, cidrIp: "0.0.0.0/0" },
+    });
+    expect(toIngressPermission(makeRule("in", "ICMP", "All", "0.0.0.0/0"))).toMatchObject({ value: { ipProtocol: "icmp", fromPort: 0, toPort: 0 } });
+    expect(toIngressPermission(makeRule("in", "TCP", "22", "sg-0123456789abcdef"))).toEqual({
+      ok: false,
+      error: "The VWS API only takes CIDR sources, not security group IDs.",
+    });
+  });
+
+  it("maps addresses and snapshots", () => {
+    expect(parseAddresses({ items: [{ allocationId: "eipalloc-1", ownerId: "1", publicIp: "203.0.113.2", domain: "vpc" }] })).toEqual([
+      { allocationId: "eipalloc-1", name: "", address: "203.0.113.2", instanceId: "", privateIp: "", owner: "1", region: "vws-1" },
+    ]);
+    expect(
+      parseSnapshots({ items: [{ snapshotId: "snap-1", ownerId: "1", volumeId: "vol-1", volumeSize: 4, state: "completed", description: "d" }] }),
+    ).toEqual([{ id: "snap-1", name: "", volumeId: "vol-1", sizeGiB: 4, description: "d", state: "completed", started: "", owner: "1", region: "vws-1" }]);
+    expect(parseAddresses({ items: null })).toEqual([]);
   });
 
   it("maps images", () => {

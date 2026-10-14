@@ -21,12 +21,8 @@ import type {
   Instance,
   InternetGateway,
   RouteTable,
-  SecurityGroup,
-  SecurityGroupRule,
   Subnet,
-  ElasticIp,
   Volume,
-  Snapshot,
   Vpc,
 } from "@/types/console";
 
@@ -45,28 +41,13 @@ type ConsoleApi = {
   setDensity: (density: Density) => void;
   instances: Instance[];
   volumes: Volume[];
-  snapshots: Snapshot[];
-  securityGroups: SecurityGroup[];
   vpcs: Vpc[];
   subnets: Subnet[];
   routeTables: RouteTable[];
   internetGateways: InternetGateway[];
-  elasticIps: ElasticIp[];
   buckets: Bucket[];
   objects: BucketObject[];
   keyPairs: Dataset["keyPairs"];
-  createSnapshot: (input: { volumeId: string; name: string; description: string }) => void;
-  deleteSnapshots: (ids: string[]) => void;
-  createSecurityGroup: (input: {
-    name: string;
-    groupName: string;
-    description: string;
-    vpcId: string;
-    inbound: SecurityGroupRule[];
-    outbound: SecurityGroupRule[];
-  }) => string;
-  updateSecurityGroupRules: (id: string, direction: SecurityGroupRule["direction"], rules: SecurityGroupRule[]) => void;
-  deleteSecurityGroups: (ids: string[]) => void;
   createRouteTable: (input: { name: string; vpcId: string }) => void;
   deleteRouteTables: (ids: string[]) => void;
   addRoute: (tableId: string, destination: string, target: string) => string | null;
@@ -75,10 +56,6 @@ type ConsoleApi = {
   attachInternetGateway: (id: string, vpcId: string) => string | null;
   detachInternetGateway: (id: string) => void;
   deleteInternetGateways: (ids: string[]) => void;
-  allocateElasticIp: (name: string) => void;
-  associateElasticIp: (allocationId: string, instanceId: string) => void;
-  disassociateElasticIp: (allocationId: string) => void;
-  releaseElasticIps: (ids: string[]) => void;
   createBucket: (input: { name: string; kind: Bucket["kind"]; versioning: boolean; blockPublicAccess: boolean }) => string | null;
   deleteBuckets: (names: string[]) => void;
   emptyBucket: (name: string) => void;
@@ -103,15 +80,6 @@ function isCidr(value: string) {
 }
 
 
-function nextTestAddress(existing: ElasticIp[]) {
-  const used = new Set(existing.map((item) => item.address));
-  for (let last = 50; last < 250; last += 1) {
-    const candidate = `203.0.113.${last}`;
-    if (!used.has(candidate)) return candidate;
-  }
-  return "203.0.113.250";
-}
-
 export function ConsoleProvider({ children }: { children: ReactNode }) {
   const [region, setRegion] = useState<string>(HOME_REGION);
   const [mode, setMode] = useState<Mode>("empty");
@@ -121,13 +89,10 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const api = useMemo<ConsoleApi>(() => {
     const instances = data.instances.filter((item) => item.region === region);
     const volumes = data.volumes.filter((item) => item.region === region);
-    const snapshots = data.snapshots.filter((item) => item.region === region);
-    const securityGroups = data.securityGroups.filter((item) => item.region === region);
     const vpcs = data.vpcs.filter((item) => item.region === region);
     const subnets = data.subnets.filter((item) => item.region === region);
     const routeTables = data.routeTables.filter((item) => item.region === region);
     const internetGateways = data.internetGateways.filter((item) => item.region === region);
-    const elasticIps = data.elasticIps.filter((item) => item.region === region);
 
     return {
       account: ACCOUNT,
@@ -139,13 +104,10 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       setDensity,
       instances,
       volumes,
-      snapshots,
-      securityGroups,
       vpcs,
       subnets,
       routeTables,
       internetGateways,
-      elasticIps,
       buckets: data.buckets,
       objects: data.objects,
       keyPairs: data.keyPairs,
@@ -156,80 +118,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       showSample: () => {
         setMode("sample");
         setData(createSampleAccount());
-      },
-      createSnapshot: (input) => {
-        setData((prev) => {
-          const volume = prev.volumes.find((item) => item.id === input.volumeId);
-          if (!volume) return prev;
-          const id = newId("snap");
-          return {
-            ...prev,
-            volumes: prev.volumes.map((item) => (item.id === volume.id ? { ...item, snapshotId: id } : item)),
-            snapshots: [
-              {
-                id,
-                name: input.name,
-                volumeId: volume.id,
-                sizeGiB: volume.sizeGiB,
-                description: input.description,
-                state: "completed",
-                started: "Just now",
-                owner: ACCOUNT.id,
-                region: volume.region,
-              },
-              ...prev.snapshots,
-            ],
-          };
-        });
-      },
-      deleteSnapshots: (ids) => {
-        setData((prev) => ({
-          ...prev,
-          snapshots: prev.snapshots.filter((item) => !ids.includes(item.id)),
-          volumes: prev.volumes.map((item) => (ids.includes(item.snapshotId) ? { ...item, snapshotId: "" } : item)),
-        }));
-      },
-      createSecurityGroup: (input) => {
-        const id = newId("sg");
-        setData((prev) => ({
-          ...prev,
-          securityGroups: [
-            {
-              id,
-              name: input.name,
-              groupName: input.groupName || input.name || "unnamed",
-              vpcId: input.vpcId,
-              description: input.description,
-              owner: ACCOUNT.id,
-              region,
-              rules: [
-                ...input.inbound.map((rule) => ({ ...rule, direction: "in" as const })),
-                ...input.outbound.map((rule) => ({ ...rule, direction: "out" as const })),
-              ],
-            },
-            ...prev.securityGroups,
-          ],
-        }));
-        return id;
-      },
-      updateSecurityGroupRules: (id, direction, rules) => {
-        setData((prev) => ({
-          ...prev,
-          securityGroups: prev.securityGroups.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  rules: [...item.rules.filter((rule) => rule.direction !== direction), ...rules.map((rule) => ({ ...rule, direction }))],
-                }
-              : item,
-          ),
-        }));
-      },
-      deleteSecurityGroups: (ids) => {
-        setData((prev) => ({
-          ...prev,
-          securityGroups: prev.securityGroups.filter((item) => !ids.includes(item.id)),
-        }));
       },
       createRouteTable: (input) => {
         const vpc = data.vpcs.find((item) => item.id === input.vpcId);
@@ -326,58 +214,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         setData((prev) => ({
           ...prev,
           internetGateways: prev.internetGateways.filter((item) => item.state === "attached" || !ids.includes(item.id)),
-        }));
-      },
-      allocateElasticIp: (name) => {
-        setData((prev) => ({
-          ...prev,
-          elasticIps: [
-            {
-              allocationId: newId("eipalloc"),
-              name,
-              address: nextTestAddress(prev.elasticIps),
-              instanceId: "",
-              privateIp: "",
-              region,
-            },
-            ...prev.elasticIps,
-          ],
-        }));
-      },
-      associateElasticIp: (allocationId, instanceId) => {
-        setData((prev) => {
-          const eip = prev.elasticIps.find((item) => item.allocationId === allocationId);
-          if (!eip) return prev;
-          return {
-            ...prev,
-            elasticIps: prev.elasticIps.map((item) =>
-              item.allocationId === allocationId ? { ...item, instanceId } : item,
-            ),
-            instances: prev.instances.map((item) =>
-              item.id === instanceId ? { ...item, elasticIp: eip.address, publicIpv4: eip.address } : item,
-            ),
-          };
-        });
-      },
-      disassociateElasticIp: (allocationId) => {
-        setData((prev) => {
-          const eip = prev.elasticIps.find((item) => item.allocationId === allocationId);
-          if (!eip) return prev;
-          return {
-            ...prev,
-            elasticIps: prev.elasticIps.map((item) =>
-              item.allocationId === allocationId ? { ...item, instanceId: "" } : item,
-            ),
-            instances: prev.instances.map((item) =>
-              item.id === eip.instanceId ? { ...item, elasticIp: "", publicIpv4: "" } : item,
-            ),
-          };
-        });
-      },
-      releaseElasticIps: (ids) => {
-        setData((prev) => ({
-          ...prev,
-          elasticIps: prev.elasticIps.filter((item) => item.instanceId || !ids.includes(item.allocationId)),
         }));
       },
       createBucket: (input) => {

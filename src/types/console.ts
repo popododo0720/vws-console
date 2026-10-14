@@ -21,7 +21,6 @@ export type Instance = {
   region: string;
   vpcId: string;
   subnetId: string;
-  securityGroupIds: string[];
   keyPair: string;
   imageId: string;
   launchedAt: string;
@@ -51,7 +50,7 @@ export type Snapshot = {
   volumeId: string;
   sizeGiB: number;
   description: string;
-  state: "completed" | "pending";
+  state: string;
   started: string;
   owner: string;
   region: string;
@@ -134,6 +133,7 @@ export type ElasticIp = {
   address: string;
   instanceId: string;
   privateIp: string;
+  owner: string;
   region: string;
 };
 
@@ -165,13 +165,10 @@ export type KeyPair = {
 export type Dataset = {
   instances: Instance[];
   volumes: Volume[];
-  snapshots: Snapshot[];
-  securityGroups: SecurityGroup[];
   vpcs: Vpc[];
   subnets: Subnet[];
   routeTables: RouteTable[];
   internetGateways: InternetGateway[];
-  elasticIps: ElasticIp[];
   buckets: Bucket[];
   objects: BucketObject[];
   keyPairs: KeyPair[];
