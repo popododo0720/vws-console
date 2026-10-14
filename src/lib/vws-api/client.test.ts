@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createSecurityGroup, createVpc, launchInstances, listVpcs } from "./client";
+import { createSecurityGroup, createVpc, launchInstances, listVpcs, modifyVolume } from "./client";
 
 type Call = { url: string; init: RequestInit };
 
@@ -90,5 +90,12 @@ describe("console-api client", () => {
       ["http://api.test/api/v1/instances", '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2,"tags":{"Name":"web"}}'],
       ["http://api.test/api/v1/instances", '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2}'],
     ]);
+  });
+
+  it("sends the new size to the modify endpoint", async () => {
+    serve(respond(202, { operation: { id: "op-5", state: "running" }, items: [] }), respond(200, { id: "op-5", state: "succeeded" }));
+    expect(await modifyVolume("vol-1", 9)).toEqual({ ok: true, value: undefined });
+    expect(calls[0].url).toBe("http://api.test/api/v1/volumes/vol-1/modify");
+    expect(calls[0].init.body).toBe('{"size":9}');
   });
 });

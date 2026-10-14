@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Subnet, Vpc } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
-import { VWS_INSTANCE_TYPES, type ApiError, type Image } from "@/lib/vws-api/adapter";
+import type { ApiError, Image, InstanceType } from "@/lib/vws-api/adapter";
 import { launchInstancesAction } from "@/app/actions/resources";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
 import { BreadcrumbBar } from "@/components/sites/console/page-header";
@@ -13,15 +13,21 @@ import { FieldLabel, InfoTip, OrangeButton, OutlineButton } from "@/components/s
 
 type Section = "name" | "image" | "type" | "key" | "network" | "storage";
 
+function formatMemory(mib: number) {
+  return mib % 1024 === 0 ? `${mib / 1024} GiB` : `${mib} MiB`;
+}
+
 const NOT_SUPPORTED = "The VWS API does not take this setting yet.";
 
 export function LaunchView({
   images,
+  instanceTypes,
   vpcs,
   subnets,
   loadError,
 }: {
   images: Image[];
+  instanceTypes: InstanceType[];
   vpcs: Vpc[];
   subnets: Subnet[];
   loadError: ApiError | null;
@@ -33,16 +39,16 @@ export function LaunchView({
   const [tags, setTags] = useState<{ key: string; value: string }[]>([]);
   const [tag, setTag] = useState({ key: "", value: "" });
   const [imageId, setImageId] = useState(images[0]?.id ?? "");
-  const [instanceType, setInstanceType] = useState<string>(VWS_INSTANCE_TYPES[0].id);
+  const [instanceType, setInstanceType] = useState(instanceTypes[0]?.id ?? "");
   const [vpcId, setVpcId] = useState(vpcs[0]?.id ?? "");
   const vpcSubnets = subnets.filter((subnet) => subnet.vpcId === vpcId);
   const [subnetChoice, setSubnetChoice] = useState("");
   const subnetId = vpcSubnets.some((subnet) => subnet.id === subnetChoice) ? subnetChoice : (vpcSubnets[0]?.id ?? "");
   const [count, setCount] = useState(1);
   const image = images.find((item) => item.id === imageId) ?? null;
-  const type = VWS_INSTANCE_TYPES.find((item) => item.id === instanceType) ?? VWS_INSTANCE_TYPES[0];
+  const type = instanceTypes.find((item) => item.id === instanceType) ?? null;
   const toggle = (key: Section) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-  const ready = Boolean(image && subnetId) && count >= 1 && !action.pending;
+  const ready = Boolean(image && type && subnetId) && count >= 1 && !action.pending;
 
   const launch = () =>
     action.run(
@@ -129,13 +135,13 @@ export function LaunchView({
             </Card>
 
             <Card title="Instance type" info="Machine types the VWS compute service runs." open={open.type} onToggle={() => toggle("type")}>
-              <select className="field max-w-xs" aria-label="Instance type" value={type.id} onChange={(event) => setInstanceType(event.target.value)}>
-                {VWS_INSTANCE_TYPES.map((item) => (
+              <select className="field max-w-xs" aria-label="Instance type" value={instanceType} onChange={(event) => setInstanceType(event.target.value)}>
+                {instanceTypes.map((item) => (
                   <option key={item.id} value={item.id}>{item.id}</option>
                 ))}
               </select>
               <p className="mt-2 text-[13px] text-[#5f6b7a]">
-                {type.vcpu} vCPU · {type.memoryGiB} GiB memory
+                {type ? `${type.vcpus} vCPU · ${formatMemory(type.memoryMiB)} memory` : "No instance types are available."}
               </p>
             </Card>
 
@@ -184,7 +190,7 @@ export function LaunchView({
               <input className="field" aria-label="Number of instances" type="number" min={1} max={20} value={count} onChange={(event) => setCount(Number(event.target.value))} />
             </div>
             <SummaryRow label="Software Image (AMI)" value={image ? image.name || image.id : "—"} detail={image?.id} />
-            <SummaryRow label="Virtual server type (instance type)" value={type.id} />
+            <SummaryRow label="Virtual server type (instance type)" value={type?.id ?? "—"} />
             <SummaryRow label="Subnet" value={subnetId || "—"} />
             <ApiErrorAlert error={action.error} title="The instance could not be launched" />
             <div className="flex items-center justify-between pt-2">
