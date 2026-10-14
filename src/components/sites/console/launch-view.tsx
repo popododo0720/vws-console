@@ -205,13 +205,17 @@ export function LaunchView() {
                   </select>
                 </div>
                 <p className="mt-3 max-w-3xl text-[13px] leading-5">{image.description}</p>
-                <dl className="mt-4 grid gap-3 text-[13px] sm:grid-cols-3">
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-[13px] sm:grid-cols-3 xl:grid-cols-6">
                   <Fact label="Architecture" value={image.arch} />
                   <Fact label="Boot mode" value={image.boot} />
                   <Fact label="Image ID" value={image.id} />
                   <Fact label="Creation date" value={image.created} />
                   <Fact label="Username" value={image.username} />
-                  <Fact label="Provider" value="Verified provider" />
+                  <div className="self-end">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#e7f6e9] px-2 py-0.5 text-[12px] font-medium text-[#037f0c]">
+                      <Check className="size-3" /> Verified provider
+                    </span>
+                  </div>
                 </dl>
               </div>
             </Card>
@@ -355,7 +359,7 @@ export function LaunchView() {
               </div>
             </Card>
 
-            <Card title="Storage" info="Each instance gets one root volume." open={open.storage} onToggle={() => toggle(setOpen, "storage")}>
+            <Card title="Configure storage" info="Each instance gets one root volume. File systems are optional." open={open.storage} onToggle={() => toggle(setOpen, "storage")}>
               <div className="flex flex-wrap gap-3">
                 <label className="text-[13px]">
                   Size (GiB)
@@ -369,6 +373,10 @@ export function LaunchView() {
                     ))}
                   </select>
                 </label>
+              </div>
+              <div className="mt-4 border-t border-[#e6e8eb] pt-3 text-[13px]">
+                <p className="font-semibold">File systems</p>
+                <p className="mt-1 text-[#5f6b7a]">No file systems are attached. Shared file systems are not available in this console yet.</p>
               </div>
             </Card>
             <Card title="Advanced details" info="Optional settings applied when the instance starts." open={open.advanced} onToggle={() => toggle(setOpen, "advanced")}>
@@ -413,10 +421,10 @@ export function LaunchView() {
                   </div>
                   <input className="field" type="number" min={1} max={20} value={draft.count} onChange={(event) => patch({ count: Number(event.target.value) })} />
                 </div>
-                <SummaryRow label="Software image" value={`${image.name} ${image.version}`} detail={image.id} />
-                <SummaryRow label="Virtual server type" value={type.id} />
-                <SummaryRow label="Firewall" value={draft.firewall === "create" ? "New security group" : groupId || "None"} />
-                <SummaryRow label="Storage" value={`${draft.count} volume(s) - ${draft.volumeGiB} GiB`} />
+                <SummaryRow label="Software Image (AMI)" value={`${image.name} ${image.version}`} detail={image.id} />
+                <SummaryRow label="Virtual server type (instance type)" value={type.id} />
+                <SummaryRow label="Firewall (security group)" value={draft.firewall === "create" ? "New security group" : groupId || "None"} />
+                <SummaryRow label="Storage (volumes)" value={`${draft.count} volume(s) - ${draft.volumeGiB} GiB`} />
                 <div className="flex items-center justify-between pt-2">
                   <button type="button" className="text-[13px] text-[#16191f] hover:underline" onClick={() => router.push("/compute/instances")}>
                     Cancel
@@ -475,15 +483,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-[#5f6b7a]">{label}</dt>
-      <dd className="font-medium">
-        {label === "Provider" ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#e7f6e9] px-2 py-0.5 text-[12px] text-[#037f0c]">
-            <Check className="size-3" /> {value}
-          </span>
-        ) : (
-          value
-        )}
-      </dd>
+      <dd className="break-all font-medium">{value}</dd>
     </div>
   );
 }
