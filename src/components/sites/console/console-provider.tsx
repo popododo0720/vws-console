@@ -29,7 +29,6 @@ import type {
   RouteTable,
   SecurityGroup,
   Subnet,
-  ElasticIp,
   Volume,
   Snapshot,
   Vpc,
@@ -56,7 +55,6 @@ type ConsoleApi = {
   subnets: Subnet[];
   routeTables: RouteTable[];
   internetGateways: InternetGateway[];
-  elasticIps: ElasticIp[];
   buckets: Bucket[];
   objects: BucketObject[];
   keyPairs: Dataset["keyPairs"];
@@ -71,10 +69,6 @@ type ConsoleApi = {
   attachInternetGateway: (id: string, vpcId: string) => string | null;
   detachInternetGateway: (id: string) => void;
   deleteInternetGateways: (ids: string[]) => void;
-  allocateElasticIp: (name: string) => void;
-  associateElasticIp: (allocationId: string, instanceId: string) => void;
-  disassociateElasticIp: (allocationId: string) => void;
-  releaseElasticIps: (ids: string[]) => void;
   createBucket: (input: { name: string; kind: Bucket["kind"]; versioning: boolean; blockPublicAccess: boolean }) => string | null;
   deleteBuckets: (names: string[]) => void;
   emptyBucket: (name: string) => void;
@@ -99,15 +93,6 @@ function isCidr(value: string) {
 }
 
 
-function nextTestAddress(existing: ElasticIp[]) {
-  const used = new Set(existing.map((item) => item.address));
-  for (let last = 50; last < 250; last += 1) {
-    const candidate = `203.0.113.${last}`;
-    if (!used.has(candidate)) return candidate;
-  }
-  return "203.0.113.250";
-}
-
 export function ConsoleProvider({ children }: { children: ReactNode }) {
   const [region, setRegion] = useState<string>(HOME_REGION);
   const [mode, setMode] = useState<Mode>("empty");
@@ -123,7 +108,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     const subnets = data.subnets.filter((item) => item.region === region);
     const routeTables = data.routeTables.filter((item) => item.region === region);
     const internetGateways = data.internetGateways.filter((item) => item.region === region);
-    const elasticIps = data.elasticIps.filter((item) => item.region === region);
 
     return {
       account: ACCOUNT,
@@ -141,7 +125,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       subnets,
       routeTables,
       internetGateways,
-      elasticIps,
       buckets: data.buckets,
       objects: data.objects,
       keyPairs: data.keyPairs,
@@ -369,58 +352,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         setData((prev) => ({
           ...prev,
           internetGateways: prev.internetGateways.filter((item) => item.state === "attached" || !ids.includes(item.id)),
-        }));
-      },
-      allocateElasticIp: (name) => {
-        setData((prev) => ({
-          ...prev,
-          elasticIps: [
-            {
-              allocationId: newId("eipalloc"),
-              name,
-              address: nextTestAddress(prev.elasticIps),
-              instanceId: "",
-              privateIp: "",
-              region,
-            },
-            ...prev.elasticIps,
-          ],
-        }));
-      },
-      associateElasticIp: (allocationId, instanceId) => {
-        setData((prev) => {
-          const eip = prev.elasticIps.find((item) => item.allocationId === allocationId);
-          if (!eip) return prev;
-          return {
-            ...prev,
-            elasticIps: prev.elasticIps.map((item) =>
-              item.allocationId === allocationId ? { ...item, instanceId } : item,
-            ),
-            instances: prev.instances.map((item) =>
-              item.id === instanceId ? { ...item, elasticIp: eip.address, publicIpv4: eip.address } : item,
-            ),
-          };
-        });
-      },
-      disassociateElasticIp: (allocationId) => {
-        setData((prev) => {
-          const eip = prev.elasticIps.find((item) => item.allocationId === allocationId);
-          if (!eip) return prev;
-          return {
-            ...prev,
-            elasticIps: prev.elasticIps.map((item) =>
-              item.allocationId === allocationId ? { ...item, instanceId: "" } : item,
-            ),
-            instances: prev.instances.map((item) =>
-              item.id === eip.instanceId ? { ...item, elasticIp: "", publicIpv4: "" } : item,
-            ),
-          };
-        });
-      },
-      releaseElasticIps: (ids) => {
-        setData((prev) => ({
-          ...prev,
-          elasticIps: prev.elasticIps.filter((item) => item.instanceId || !ids.includes(item.allocationId)),
         }));
       },
       createBucket: (input) => {

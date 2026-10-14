@@ -165,8 +165,8 @@ describe("console-api adapter", () => {
   });
 
   it("maps addresses and snapshots", () => {
-    expect(parseAddresses({ items: [{ allocationId: "eipalloc-1", publicIp: "203.0.113.2", domain: "vpc" }] })).toEqual([
-      { allocationId: "eipalloc-1", name: "", address: "203.0.113.2", instanceId: "", privateIp: "", region: "vws-1" },
+    expect(parseAddresses({ items: [{ allocationId: "eipalloc-1", ownerId: "1", publicIp: "203.0.113.2", domain: "vpc" }] })).toEqual([
+      { allocationId: "eipalloc-1", name: "", address: "203.0.113.2", instanceId: "", privateIp: "", owner: "1", region: "vws-1" },
     ]);
     expect(
       parseSnapshots({ items: [{ snapshotId: "snap-1", ownerId: "1", volumeId: "vol-1", volumeSize: 4, state: "completed", description: "d" }] }),

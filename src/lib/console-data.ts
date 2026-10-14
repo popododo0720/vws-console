@@ -3,7 +3,6 @@ import type {
   Bucket,
   BucketObject,
   Dataset,
-  ElasticIp,
   InstanceTypeOption,
   InternetGateway,
   KeyPair,
@@ -390,7 +389,6 @@ export function createEmptyAccount(): Dataset {
     subnets: [],
     routeTables: [],
     internetGateways: [],
-    elasticIps: [],
     securityGroups: [defaultGroup()],
   };
 }
@@ -518,17 +516,6 @@ export function createSampleAccount(): Dataset {
       region: HOME_REGION,
     },
   ];
-  // MOCK_ELASTIC_IPS: sample-only data. Addresses come from the TEST-NET-3 documentation range, never a real allocation.
-  const MOCK_ELASTIC_IPS: ElasticIp[] = [
-    {
-      allocationId: "eipalloc-0a1b2c3d4e5f6071",
-      name: "sample-eip",
-      address: "203.0.113.50",
-      instanceId: "",
-      privateIp: "",
-      region: HOME_REGION,
-    },
-  ];
   const buckets: Bucket[] = [
     { name: "vws-logs", region: HOME_REGION, created: "Aug 2, 2026", kind: "general", versioning: false, blockPublicAccess: true },
     { name: "vws-media", region: "US East", created: "Sep 18, 2026", kind: "general", versioning: true, blockPublicAccess: true },
@@ -544,7 +531,6 @@ export function createSampleAccount(): Dataset {
     subnets: MOCK_SUBNETS,
     routeTables: MOCK_ROUTE_TABLES,
     internetGateways: MOCK_INTERNET_GATEWAYS,
-    elasticIps: MOCK_ELASTIC_IPS,
     buckets,
     objects: MOCK_OBJECTS,
     keyPairs,

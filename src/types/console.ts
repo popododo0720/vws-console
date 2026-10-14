@@ -134,6 +134,7 @@ export type ElasticIp = {
   address: string;
   instanceId: string;
   privateIp: string;
+  owner: string;
   region: string;
 };
 
@@ -171,7 +172,6 @@ export type Dataset = {
   subnets: Subnet[];
   routeTables: RouteTable[];
   internetGateways: InternetGateway[];
-  elasticIps: ElasticIp[];
   buckets: Bucket[];
   objects: BucketObject[];
   keyPairs: KeyPair[];

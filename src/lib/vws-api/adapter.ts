@@ -202,6 +202,7 @@ export function toAddress(item: Json): ElasticIp {
     address: str(item.publicIp),
     instanceId: str(item.instanceId),
     privateIp: "",
+    owner: str(item.ownerId),
     region: REGION,
   };
 }
