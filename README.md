@@ -29,14 +29,12 @@ Check it is up: `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:43123
 
 ## Connect to console-api
 
-The Instances, Volumes, VPCs and Subnets screens read and change resources through the vws-console-api EC2 Query endpoint. The console server signs each call with SigV4. Credentials stay on the server and never reach the browser.
+The Instances, Volumes, VPCs and Subnets screens read and change resources through the vws-console-api JSON surface (`/api/v1`). Only the console server calls it, with a bearer token that never reaches the browser. Mutations send an `Idempotency-Key` and wait for the returned operation to finish.
 
 | Variable | Meaning |
 | --- | --- |
-| `VWS_API_URL` | EC2 Query endpoint, for example `http://127.0.0.1:8081/` |
-| `VWS_ACCESS_KEY_ID` | Access key the API accepts |
-| `VWS_SECRET_ACCESS_KEY` | Secret for that key |
-| `VWS_REGION` | Signing region, default `vws-1` |
+| `VWS_CONSOLE_API_URL` | Base URL of the console surface, for example `http://127.0.0.1:8080` |
+| `VWS_CONSOLE_API_TOKEN` | The same value as console-api's `-console-token` |
 
 Without them those screens show a `ConsoleNotConfigured` error. The other screens still use local data.
 

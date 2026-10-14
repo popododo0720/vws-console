@@ -3,8 +3,8 @@
 import { useState } from "react";
 import type { Subnet, Vpc } from "@/types/console";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { createSubnetAction, deleteSubnetsAction } from "@/app/actions/ec2";
-import type { ApiError } from "@/lib/vws-api/ec2";
+import { createSubnetAction, deleteSubnetsAction } from "@/app/actions/resources";
+import type { ApiError } from "@/lib/vws-api/adapter";
 import { NetworkList } from "@/components/sites/console/network-list";
 import { Column } from "@/components/sites/console/resource-table";
 import {

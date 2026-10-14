@@ -6,8 +6,8 @@ import { CircleCheck } from "lucide-react";
 import type { Subnet, Vpc } from "@/types/console";
 import { networkNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { createVpcAction, deleteVpcsAction } from "@/app/actions/ec2";
-import type { ApiError } from "@/lib/vws-api/ec2";
+import { createVpcAction, deleteVpcsAction } from "@/app/actions/resources";
+import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
@@ -129,7 +129,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
         emptyTitle="No VPCs"
         emptyMessage="You do not have any VPCs in this region"
         filterPlaceholder="Filter VPCs by attribute or tag"
-        presets={[{ id: "default", label: "Default VPC", match: (row) => row.isDefault }]}
+        presets={[{ id: "default", label: "Default VPC", match: (row) => row.isDefault === true }]}
         onRefresh={action.refresh}
       />
       <DetailDock
@@ -155,7 +155,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
               <div><dt className="text-[#5f6b7a]">VPC ID</dt><dd>{one.id}</dd></div>
               <div><dt className="text-[#5f6b7a]">IPv4 CIDR</dt><dd>{one.ipv4Cidr}</dd></div>
               <div><dt className="text-[#5f6b7a]">Owner ID</dt><dd>{dash(one.owner)}</dd></div>
-              <div><dt className="text-[#5f6b7a]">Default VPC</dt><dd>{one.isDefault ? "Yes" : "No"}</dd></div>
+              <div><dt className="text-[#5f6b7a]">Default VPC</dt><dd>{one.isDefault === null ? "—" : one.isDefault ? "Yes" : "No"}</dd></div>
             </dl>
           )
         ) : null}

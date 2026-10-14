@@ -87,7 +87,7 @@ export type Vpc = {
   ipv4Cidr: string;
   ipv6Cidr: string;
   owner: string;
-  isDefault: boolean;
+  isDefault: boolean | null;
   region: string;
 };
 

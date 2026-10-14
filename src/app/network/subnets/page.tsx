@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { SubnetsView } from "@/components/sites/console/subnets-view";
-import { describeSubnets, describeVpcs } from "@/lib/vws-api/client";
+import { listSubnets, listVpcs } from "@/lib/vws-api/client";
 
 export const metadata: Metadata = { title: "Subnets · VWS" };
 
 export default async function Page() {
   await connection();
-  const [subnets, vpcs] = await Promise.all([describeSubnets(), describeVpcs()]);
+  const [subnets, vpcs] = await Promise.all([listSubnets(), listVpcs()]);
   const loadError = !subnets.ok ? subnets.error : !vpcs.ok ? vpcs.error : null;
   return (
     <Suspense>

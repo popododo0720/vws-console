@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { ApiError } from "@/lib/vws-api/ec2";
+import type { ApiError } from "@/lib/vws-api/adapter";
 
 export function useApiAction() {
   const router = useRouter();

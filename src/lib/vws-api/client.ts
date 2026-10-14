@@ -2,91 +2,142 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { Instance, Subnet, Volume, Vpc } from "@/types/console";
 import {
-  EC2_VERSION,
-  expectResponse,
-  parseDescribeInstances,
-  parseDescribeSubnets,
-  parseDescribeVolumes,
-  parseDescribeVpcs,
-  parseEc2Error,
-  type Ec2Result,
-} from "./ec2";
-import { signRequest } from "./sigv4";
+  nextPageToken,
+  parseApiError,
+  parseInstances,
+  parseOperation,
+  parseSubnets,
+  parseVolumes,
+  parseVpcs,
+  toInstance,
+  type ApiError,
+  type ApiResult,
+} from "./adapter";
 
-type Config = { url: URL; region: string; accessKeyId: string; secretAccessKey: string };
+const POLL_INTERVAL_MS = 500;
+const POLL_TIMEOUT_MS = 60_000;
 
-function config(): Config | string {
-  const url = process.env.VWS_API_URL;
-  const accessKeyId = process.env.VWS_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.VWS_SECRET_ACCESS_KEY;
-  const missing = [!url && "VWS_API_URL", !accessKeyId && "VWS_ACCESS_KEY_ID", !secretAccessKey && "VWS_SECRET_ACCESS_KEY"].filter(Boolean);
-  if (missing.length > 0 || !url || !accessKeyId || !secretAccessKey) return `Set ${missing.join(", ")} on the console server.`;
-  return { url: new URL(url), region: process.env.VWS_REGION || "vws-1", accessKeyId, secretAccessKey };
+type Config = { base: string; token: string };
+
+function config(): Config | ApiError {
+  const base = process.env.VWS_CONSOLE_API_URL;
+  const token = process.env.VWS_CONSOLE_API_TOKEN;
+  if (base && token) return { base: base.replace(/\/+$/, ""), token };
+  const missing = [!base && "VWS_CONSOLE_API_URL", !token && "VWS_CONSOLE_API_TOKEN"].filter(Boolean).join(", ");
+  return { code: "ConsoleNotConfigured", message: `Set ${missing} on the console server.`, requestId: null };
 }
 
-async function call<T>(action: string, params: Record<string, string>, parse: (xml: string) => T): Promise<Ec2Result<T>> {
+const unavailable: ApiError = { code: "ServiceUnavailable", message: "The VWS console API did not answer.", requestId: null };
+
+async function request(method: "GET" | "POST", path: string, body?: unknown): Promise<ApiResult<{ status: number; json: unknown }>> {
   const cfg = config();
-  if (typeof cfg === "string") return { ok: false, error: { code: "ConsoleNotConfigured", message: cfg, requestId: null } };
-  const body = new URLSearchParams({ Action: action, Version: EC2_VERSION, ...params }).toString();
-  const headers = signRequest(
-    {
-      method: "POST",
-      url: cfg.url,
-      headers: { "content-type": "application/x-www-form-urlencoded; charset=utf-8" },
-      body,
-      service: "ec2",
-      region: cfg.region,
-      now: new Date(),
-    },
-    cfg,
-  );
+  if ("code" in cfg) return { ok: false, error: cfg };
+  const headers: Record<string, string> = { authorization: `Bearer ${cfg.token}`, accept: "application/json" };
+  if (method === "POST") {
+    headers["idempotency-key"] = randomUUID();
+    headers["content-type"] = "application/json";
+  }
   let response: Response;
-  let xml: string;
+  let json: unknown;
   try {
-    response = await fetch(cfg.url, { method: "POST", headers, body, cache: "no-store" });
-    xml = await response.text();
+    response = await fetch(`${cfg.base}/api/v1${path}`, {
+      method,
+      headers,
+      body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
+      cache: "no-store",
+    });
+    const text = await response.text();
+    json = text ? JSON.parse(text) : null;
   } catch {
-    return { ok: false, error: { code: "ServiceUnavailable", message: "The VWS API did not answer.", requestId: null } };
+    return { ok: false, error: unavailable };
   }
   if (!response.ok) {
     return {
       ok: false,
-      error: parseEc2Error(xml) ?? { code: "InternalError", message: `The VWS API answered HTTP ${response.status}.`, requestId: null },
+      error: parseApiError(json) ?? { code: "InternalError", message: `The VWS console API answered HTTP ${response.status}.`, requestId: null },
     };
   }
+  return { ok: true, value: { status: response.status, json } };
+}
+
+function malformed(path: string): ApiError {
+  return { code: "MalformedResponse", message: `The VWS console API sent an unreadable response for ${path}.`, requestId: null };
+}
+
+async function listAll<T>(path: string, parse: (page: unknown) => T[]): Promise<ApiResult<T[]>> {
+  const out: T[] = [];
+  let token = "";
+  do {
+    const result = await request("GET", token ? `${path}?pageToken=${encodeURIComponent(token)}` : path);
+    if (!result.ok) return result;
+    try {
+      out.push(...parse(result.value.json));
+    } catch {
+      return { ok: false, error: malformed(path) };
+    }
+    token = nextPageToken(result.value.json);
+  } while (token);
+  return { ok: true, value: out };
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Sends a mutation. A 202 carries an operation, which is polled until it finishes. */
+async function mutate(path: string, body?: unknown): Promise<ApiResult<void>> {
+  const sent = await request("POST", path, body);
+  if (!sent.ok) return sent;
+  if (sent.value.status !== 202) return { ok: true, value: undefined };
+  let op;
   try {
-    return { ok: true, value: parse(xml) };
+    op = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
   } catch {
-    return { ok: false, error: { code: "MalformedResponse", message: `The VWS API sent an unreadable ${action} response.`, requestId: null } };
+    return { ok: false, error: malformed(path) };
+  }
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  while (op.state === "running") {
+    if (Date.now() > deadline) {
+      return { ok: false, error: { code: "OperationTimeout", message: `Operation ${op.id} is still running.`, requestId: null } };
+    }
+    await sleep(POLL_INTERVAL_MS);
+    const polled = await request("GET", `/operations/${encodeURIComponent(op.id)}`);
+    if (!polled.ok) return polled;
+    try {
+      op = parseOperation(polled.value.json);
+    } catch {
+      return { ok: false, error: malformed(`/operations/${op.id}`) };
+    }
+  }
+  if (op.state === "failed") {
+    return { ok: false, error: op.error ?? { code: "OperationFailed", message: `Operation ${op.id} failed.`, requestId: null } };
+  }
+  return { ok: true, value: undefined };
+}
+
+const seg = encodeURIComponent;
+
+export const listInstances = (): Promise<ApiResult<Instance[]>> => listAll("/instances", parseInstances);
+export const listVolumes = (): Promise<ApiResult<Volume[]>> => listAll("/volumes", parseVolumes);
+export const listVpcs = (): Promise<ApiResult<Vpc[]>> => listAll("/vpcs", parseVpcs);
+export const listSubnets = (): Promise<ApiResult<Subnet[]>> => listAll("/subnets", parseSubnets);
+
+export async function getInstance(id: string): Promise<ApiResult<Instance | null>> {
+  const result = await request("GET", `/instances/${seg(id)}`);
+  if (!result.ok) return result.error.code === "NotFound" ? { ok: true, value: null } : result;
+  try {
+    return { ok: true, value: toInstance(result.value.json as Record<string, unknown>) };
+  } catch {
+    return { ok: false, error: malformed(`/instances/${id}`) };
   }
 }
 
-function indexed(name: string, values: string[]) {
-  return Object.fromEntries(values.map((value, index) => [`${name}.${index + 1}`, value]));
-}
-
-function token() {
-  return { ClientToken: randomUUID() };
-}
-
-const done = (response: string) => (xml: string) => expectResponse(xml, response);
-
-export const describeInstances = (ids: string[] = []): Promise<Ec2Result<Instance[]>> =>
-  call("DescribeInstances", indexed("InstanceId", ids), parseDescribeInstances);
-export const describeVolumes = (): Promise<Ec2Result<Volume[]>> => call("DescribeVolumes", {}, parseDescribeVolumes);
-export const describeVpcs = (): Promise<Ec2Result<Vpc[]>> => call("DescribeVpcs", {}, parseDescribeVpcs);
-export const describeSubnets = (): Promise<Ec2Result<Subnet[]>> => call("DescribeSubnets", {}, parseDescribeSubnets);
-
-export const startInstances = (ids: string[]) => call("StartInstances", { ...token(), ...indexed("InstanceId", ids) }, done("StartInstancesResponse"));
-export const stopInstances = (ids: string[]) => call("StopInstances", { ...token(), ...indexed("InstanceId", ids) }, done("StopInstancesResponse"));
-export const terminateInstances = (ids: string[]) =>
-  call("TerminateInstances", { ...token(), ...indexed("InstanceId", ids) }, done("TerminateInstancesResponse"));
-export const createVolume = (sizeGiB: number, volumeType: string) =>
-  call("CreateVolume", { ...token(), Size: String(sizeGiB), VolumeType: volumeType }, done("CreateVolumeResponse"));
-export const deleteVolume = (id: string) => call("DeleteVolume", { ...token(), VolumeId: id }, done("DeleteVolumeResponse"));
+export const startInstance = (id: string) => mutate(`/instances/${seg(id)}/start`);
+export const stopInstance = (id: string) => mutate(`/instances/${seg(id)}/stop`);
+export const terminateInstance = (id: string) => mutate(`/instances/${seg(id)}/terminate`);
+export const createVolume = (size: number, volumeType: string) => mutate("/volumes", { size, volumeType });
+export const deleteVolume = (id: string) => mutate(`/volumes/${seg(id)}/delete`);
 export const createSnapshot = (volumeId: string, description: string) =>
-  call("CreateSnapshot", { ...token(), VolumeId: volumeId, ...(description ? { Description: description } : {}) }, done("CreateSnapshotResponse"));
-export const createVpc = (cidr: string) => call("CreateVpc", { ...token(), CidrBlock: cidr }, done("CreateVpcResponse"));
-export const deleteVpc = (id: string) => call("DeleteVpc", { ...token(), VpcId: id }, done("DeleteVpcResponse"));
-export const createSubnet = (vpcId: string, cidr: string) => call("CreateSubnet", { ...token(), VpcId: vpcId, CidrBlock: cidr }, done("CreateSubnetResponse"));
-export const deleteSubnet = (id: string) => call("DeleteSubnet", { ...token(), SubnetId: id }, done("DeleteSubnetResponse"));
+  mutate("/snapshots", description ? { volumeId, description } : { volumeId });
+export const createVpc = (cidrBlock: string) => mutate("/vpcs", { cidrBlock });
+export const deleteVpc = (id: string) => mutate(`/vpcs/${seg(id)}/delete`);
+export const createSubnet = (vpcId: string, cidrBlock: string) => mutate("/subnets", { vpcId, cidrBlock });
+export const deleteSubnet = (id: string) => mutate(`/subnets/${seg(id)}/delete`);
