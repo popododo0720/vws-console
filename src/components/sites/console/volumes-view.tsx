@@ -5,7 +5,7 @@ import { RefreshCw } from "lucide-react";
 import type { Volume } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { createSnapshotAction, createVolumeAction, deleteVolumesAction } from "@/app/actions/resources";
+import { createSnapshotAction, createVolumeAction, deleteVolumesAction, modifyVolumeAction } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
@@ -39,6 +39,8 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
   const [recycleOpen, setRecycleOpen] = useState(false);
   const [snapOpen, setSnapOpen] = useState(false);
   const [snapDescription, setSnapDescription] = useState("");
+  const [modifyOpen, setModifyOpen] = useState(false);
+  const [modifySize, setModifySize] = useState(0);
   const [form, setForm] = useState({ volumeType: VOLUME_TYPES[0], sizeGiB: 8 });
   const selected = volumes.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
@@ -92,6 +94,15 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
                   onSelect: () => {
                     setSnapDescription("");
                     setSnapOpen(true);
+                  },
+                },
+                {
+                  label: "Modify volume",
+                  disabled: !one,
+                  onSelect: () => {
+                    if (!one) return;
+                    setModifySize(one.sizeGiB + 1);
+                    setModifyOpen(true);
                   },
                 },
                 {
@@ -187,6 +198,45 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
         footer={<OutlineButton onClick={() => setRecycleOpen(false)}>Close</OutlineButton>}
       >
         <p>The recycle bin is empty. Deleted volumes are removed immediately.</p>
+      </PanelDialog>
+      <PanelDialog
+        open={modifyOpen}
+        title="Modify volume"
+        onClose={() => setModifyOpen(false)}
+        footer={
+          <>
+            <OutlineButton onClick={() => setModifyOpen(false)}>Cancel</OutlineButton>
+            <OrangeButton
+              disabled={action.pending || !one || modifySize <= one.sizeGiB}
+              onClick={() => {
+                if (one) action.run(() => modifyVolumeAction(one.id, modifySize), () => setModifyOpen(false));
+              }}
+            >
+              Modify
+            </OrangeButton>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <FieldLabel>Volume ID</FieldLabel>
+            <p className="text-[13px]">{one?.id ?? "—"}</p>
+          </div>
+          <div>
+            <FieldLabel>Size (GiB)</FieldLabel>
+            <input
+              className="field"
+              type="number"
+              aria-label="New size (GiB)"
+              min={(one?.sizeGiB ?? 0) + 1}
+              value={modifySize}
+              onChange={(event) => setModifySize(Number(event.target.value))}
+            />
+            <p className="mt-1 text-[12px] text-[#5f6b7a]">
+              A volume can only grow. Current size: {one ? `${one.sizeGiB} GiB` : "—"}. Volume type, IOPS and throughput cannot be changed.
+            </p>
+          </div>
+        </div>
       </PanelDialog>
       <PanelDialog
         open={snapOpen}

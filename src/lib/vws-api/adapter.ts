@@ -11,12 +11,7 @@ export type OperationState = "running" | "succeeded" | "failed";
 export type Image = { id: string; name: string; state: string; owner: string };
 
 /** Machine types vws-compute accepts (console-api resource/instance.go). The API has no list endpoint. */
-export const VWS_INSTANCE_TYPES = [
-  { id: "vws.small", vcpu: 1, memoryGiB: 1 },
-  { id: "vws.medium", vcpu: 2, memoryGiB: 4 },
-  { id: "vws.large", vcpu: 4, memoryGiB: 8 },
-  { id: "vws.xlarge", vcpu: 8, memoryGiB: 16 },
-] as const;
+export type InstanceType = { id: string; vcpus: number; memoryMiB: number };
 
 export type LaunchRequest = { imageId: string; instanceType: string; subnetId: string; count: number; tags: Record<string, string> };
 
@@ -28,14 +23,17 @@ function obj(value: unknown): Json {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Json) : {};
 }
 
+/** A missing flag stays null so the console shows a dash. */
+function bool(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
 function list(page: unknown): Json[] {
   const items = obj(page).items;
-  // console-api encodes an empty list as null.
-  if (items === null) return [];
   if (!Array.isArray(items)) throw new Error("expected items");
   return items.map(obj);
 }
@@ -89,12 +87,12 @@ export function toInstance(item: Json): Instance {
     elasticIp: "",
     ipv6: "",
     region: REGION,
-    vpcId: "",
+    vpcId: str(item.vpcId),
     subnetId: str(item.subnetId),
     securityGroupIds: [],
     keyPair: "",
     imageId: str(item.imageId),
-    launchedAt: "",
+    launchedAt: str(item.launchTime),
   };
 }
 
@@ -128,7 +126,7 @@ export function toVpc(item: Json): Vpc {
     ipv4Cidr: str(item.cidrBlock),
     ipv6Cidr: "",
     owner: str(item.ownerId),
-    isDefault: null,
+    isDefault: bool(item.isDefault),
     region: REGION,
   };
 }
@@ -141,9 +139,9 @@ export function toSubnet(item: Json): Subnet {
     state: str(item.state) === "available" ? "available" : "pending",
     ipv4Cidr: str(item.cidrBlock),
     availableIps: null,
-    availabilityZone: "",
+    availabilityZone: str(item.availabilityZone),
     routeTableId: "",
-    autoAssignPublicIp: null,
+    autoAssignPublicIp: bool(item.mapPublicIpOnLaunch),
     region: REGION,
   };
 }
@@ -158,8 +156,8 @@ export const parseVolumes = (page: unknown) => list(page).map(toVolume);
 export const parseVpcs = (page: unknown) => list(page).map(toVpc);
 export const parseSubnets = (page: unknown) => list(page).map(toSubnet);
 
-/** Joins each instance's subnet to its VPC, since the API returns only subnetId. */
-export function withVpcIds(instances: Instance[], subnets: Subnet[]): Instance[] {
-  const vpcOf = new Map(subnets.map((subnet) => [subnet.id, subnet.vpcId]));
-  return instances.map((instance) => ({ ...instance, vpcId: vpcOf.get(instance.subnetId) ?? "" }));
+export function toInstanceType(item: Json): InstanceType {
+  return { id: str(item.instanceType), vcpus: typeof item.vcpus === "number" ? item.vcpus : 0, memoryMiB: typeof item.memoryMiB === "number" ? item.memoryMiB : 0 };
 }
+
+export const parseInstanceTypes = (page: unknown) => list(page).map(toInstanceType);

@@ -8,7 +8,7 @@ import {
   parseSubnets,
   parseVolumes,
   parseVpcs,
-  withVpcIds,
+  parseInstanceTypes,
 } from "./adapter";
 
 const instance = {
@@ -19,7 +19,9 @@ const instance = {
   imageId: "ami-0123456789abcdef0",
   instanceType: "vws.small",
   subnetId: "subnet-27c341ab7a6719423",
+  vpcId: "vpc-9",
   availabilityZone: "vws-1a",
+  launchTime: "2026-10-14T06:00:32Z",
   privateIpAddress: "10.0.0.2",
   tags: { Name: "web" },
 };
@@ -37,8 +39,8 @@ describe("console-api adapter", () => {
       subnetId: "subnet-27c341ab7a6719423",
       imageId: "ami-0123456789abcdef0",
       region: "vws-1",
-      vpcId: "",
-      launchedAt: "",
+      vpcId: "vpc-9",
+      launchedAt: "2026-10-14T06:00:32Z",
       publicIpv4: "",
       status: "none",
     });
@@ -63,7 +65,8 @@ describe("console-api adapter", () => {
 
   it("rejects a page without items", () => {
     expect(() => parseVpcs({ vpcs: [] })).toThrow("expected items");
-    expect(parseVpcs({ items: null })).toEqual([]);
+    expect(() => parseVpcs({ items: null })).toThrow("expected items");
+    expect(parseVpcs({ items: [] })).toEqual([]);
   });
 
   it("maps volumes and treats an empty instanceId as unattached", () => {
@@ -80,20 +83,26 @@ describe("console-api adapter", () => {
   });
 
   it("maps VPCs and subnets, leaving fields the API lacks empty", () => {
-    const [vpc] = parseVpcs({ items: [{ vpcId: "vpc-1", ownerId: "123456789012", cidrBlock: "10.0.0.0/16", state: "available" }] });
+    const [vpc, older] = parseVpcs({
+      items: [
+        { vpcId: "vpc-1", ownerId: "123456789012", cidrBlock: "10.0.0.0/16", state: "available", isDefault: false },
+        { vpcId: "vpc-2", cidrBlock: "10.1.0.0/16", state: "available" },
+      ],
+    });
     expect([vpc.id, vpc.state, vpc.ipv4Cidr, vpc.owner, vpc.isDefault, vpc.blockPublicAccess, vpc.name]).toEqual([
-      "vpc-1", "available", "10.0.0.0/16", "123456789012", null, "", "",
+      "vpc-1", "available", "10.0.0.0/16", "123456789012", false, "", "",
     ]);
-    const [subnet] = parseSubnets({ items: [{ subnetId: "subnet-1", ownerId: "123456789012", vpcId: "vpc-1", cidrBlock: "10.0.1.0/24", state: "pending" }] });
-    expect([subnet.id, subnet.vpcId, subnet.ipv4Cidr, subnet.state, subnet.availabilityZone, subnet.availableIps]).toEqual([
-      "subnet-1", "vpc-1", "10.0.1.0/24", "pending", "", null,
+    expect(older.isDefault).toBeNull();
+    const [subnet] = parseSubnets({
+      items: [{ subnetId: "subnet-1", ownerId: "123456789012", vpcId: "vpc-1", cidrBlock: "10.0.1.0/24", state: "pending", availabilityZone: "vws-1a", mapPublicIpOnLaunch: true }],
+    });
+    expect([subnet.id, subnet.vpcId, subnet.ipv4Cidr, subnet.state, subnet.availabilityZone, subnet.autoAssignPublicIp, subnet.availableIps]).toEqual([
+      "subnet-1", "vpc-1", "10.0.1.0/24", "pending", "vws-1a", true, null,
     ]);
   });
 
-  it("joins an instance to its VPC through its subnet", () => {
-    const [subnet] = parseSubnets({ items: [{ subnetId: "subnet-27c341ab7a6719423", vpcId: "vpc-9", cidrBlock: "10.0.1.0/24", state: "available" }] });
-    expect(withVpcIds(parseInstances({ items: [instance] }), [subnet])[0].vpcId).toBe("vpc-9");
-    expect(withVpcIds(parseInstances({ items: [instance] }), [])[0].vpcId).toBe("");
+  it("maps instance types from the catalog", () => {
+    expect(parseInstanceTypes({ items: [{ instanceType: "vws.medium", vcpus: 2, memoryMiB: 4096 }] })).toEqual([{ id: "vws.medium", vcpus: 2, memoryMiB: 4096 }]);
   });
 
   it("reads the error envelope and the page token", () => {

@@ -102,7 +102,7 @@ export function InstanceDetails({ instance }: { instance: Instance }) {
       <Field label="VPC ID">{dash(instance.vpcId)}</Field>
       <Field label="AMI ID">{instance.imageId}</Field>
       <Field label="Key pair assigned at launch">{dash(instance.keyPair)}</Field>
-      <Field label="Launch time">{instance.launchedAt}</Field>
+      <Field label="Launch time">{dash(instance.launchedAt)}</Field>
     </Fields>
   );
 }
@@ -177,7 +177,7 @@ export function InstanceTab({ tab, instance, hideSummary = false }: { tab: strin
         <Fields>
           <Field label="AMI ID">{instance.imageId}</Field>
           <Field label="Key pair assigned at launch">{dash(instance.keyPair)}</Field>
-          <Field label="Launch time">{instance.launchedAt}</Field>
+          <Field label="Launch time">{dash(instance.launchedAt)}</Field>
           <Field label="Monitoring">Disabled</Field>
           <Field label="Termination protection">Disabled</Field>
           <Field label="Shutdown behavior">Stop</Field>

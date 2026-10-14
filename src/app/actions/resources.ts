@@ -59,3 +59,7 @@ export async function createSubnetAction(vpcId: string, cidr: string) {
 export async function deleteSubnetsAction(ids: string[]) {
   return each(ids, vws.deleteSubnet);
 }
+
+export async function modifyVolumeAction(id: string, sizeGiB: number) {
+  return errorOf(vws.modifyVolume(id, sizeGiB));
+}
