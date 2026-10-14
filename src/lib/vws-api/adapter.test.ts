@@ -13,6 +13,7 @@ import {
   parseSecurityGroups,
   parseSnapshots,
   toIngressPermission,
+  identityFromSession,
 } from "./adapter";
 import { makeRule } from "@/lib/security-group-rules";
 
@@ -206,5 +207,26 @@ describe("console-api adapter", () => {
     });
     expect([withEip.publicIpv4, withEip.elasticIp, withEip.publicIpAllocationId]).toEqual(["203.0.113.5", "203.0.113.5", "eipalloc-1"]);
     expect([plain.publicIpv4, plain.elasticIp, plain.publicIpAllocationId]).toEqual(["", "", ""]);
+  });
+});
+
+describe("identityFromSession", () => {
+  it("shows the root user and account", () => {
+    expect(identityFromSession({ principal: "arn:vws:iam::123456789012:root", account: "123456789012" })).toEqual({ userName: "root", accountId: "123456789012" });
+  });
+  it("takes the user name from an IAM user ARN with a path", () => {
+    expect(identityFromSession({ principal: "arn:vws:iam::123456789012:user/ops/alice", account: "123456789012" })).toEqual({ userName: "alice", accountId: "123456789012" });
+  });
+  it("shows a dash for a missing field or session", () => {
+    expect(identityFromSession({ principal: "", account: "123456789012" })).toEqual({ userName: "—", accountId: "123456789012" });
+    expect(identityFromSession({ principal: "arn:vws:iam::1:root" })).toEqual({ userName: "root", accountId: "—" });
+    expect(identityFromSession(null)).toEqual({ userName: "—", accountId: "—" });
+  });
+});
+
+describe("identityFromSession with IAM off", () => {
+  it("names the bearer root and keeps the account", () => {
+    expect(identityFromSession({ principal: "arn:vws:iam::123456789012:root", account: "123456789012" }, { iam: false })).toEqual({ userName: "root (IAM off)", accountId: "123456789012" });
+    expect(identityFromSession(null, { iam: false })).toEqual({ userName: "root (IAM off)", accountId: "—" });
   });
 });

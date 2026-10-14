@@ -1,5 +1,12 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import { headers as requestHeaders } from "next/headers";
+import { redirect } from "next/navigation";
+import { currentSession } from "./session";
+import { logAuth } from "./log";
+import { iamMode, iamState, IamUnavailableError, noteLoginEnabled, type IamMode } from "./mode";
+import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
+import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type { ElasticIp, Instance, SecurityGroup, Snapshot, Subnet, Volume, Vpc } from "@/types/console";
 import {
   firstItem,
@@ -29,44 +36,117 @@ import {
 const POLL_INTERVAL_MS = 500;
 const POLL_TIMEOUT_MS = 60_000;
 
-type Config = { base: string; token: string };
-
-function config(): Config | ApiError {
-  const base = process.env.VWS_CONSOLE_API_URL;
+/** IAM off: the server-side bearer token, as before sign-in existed. It never reaches the browser. */
+function bearer(): string | ApiError {
   const token = process.env.VWS_CONSOLE_API_TOKEN;
-  if (base && token) return { base: base.replace(/\/+$/, ""), token };
-  const missing = [!base && "VWS_CONSOLE_API_URL", !token && "VWS_CONSOLE_API_TOKEN"].filter(Boolean).join(", ");
-  return { code: "ConsoleNotConfigured", message: `Set ${missing} on the console server.`, requestId: null };
+  if (token) return token;
+  return { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_TOKEN on the console server.", requestId: null };
+}
+
+/** The IAM mode, or the error to show when it is unknown or misconfigured. Never falls back to the token. */
+async function modeOrError(): Promise<IamMode | ApiError> {
+  try {
+    return await iamMode();
+  } catch (error) {
+    if (error instanceof IamUnavailableError && error.state === "invalid") {
+      return { code: "ConsoleNotConfigured", message: error.message, requestId: null };
+    }
+    return { code: "ServiceUnavailable", message: "The console could not tell whether sign-in is on; try again shortly.", requestId: null };
+  }
+}
+
+function apiBase(): string | ApiError {
+  const base = process.env.VWS_CONSOLE_API_URL;
+  if (base) return base.replace(/\/+$/, "");
+  return { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_URL on the console server.", requestId: null };
 }
 
 const unavailable: ApiError = { code: "ServiceUnavailable", message: "The VWS console API did not answer.", requestId: null };
 
+function transportError(error: unknown): ApiError {
+  if (error instanceof ApiTransportError) {
+    return {
+      code: error.kind === "timeout" ? "RequestTimeout" : "ServiceUnavailable",
+      message: error.kind === "timeout" ? "The VWS console API did not answer in time." : unavailable.message,
+      requestId: error.requestId,
+    };
+  }
+  return unavailable;
+}
+
+function parseJson(text: string): unknown {
+  return text ? JSON.parse(text) : null;
+}
+
+/** Where a request with no session, or one console-api answers 401, is sent. */
+export const LOGIN_PATH = "/login";
+
+/** Header the proxy sets with the page being rendered, so a 401 can come back to it after sign-in. */
+export const PATH_HEADER = "x-vws-path";
+
+/**
+ * The browser's Origin for a write. console-api (PR #137) refuses cookie writes and sign-in without an
+ * allowed Origin, so the console forwards the one the browser sent; Next has already checked it against
+ * the console host for server actions. Run console-api with -console-origins set to the console origin.
+ */
+async function browserOrigin(): Promise<Record<string, string>> {
+  const origin = (await requestHeaders()).get("origin");
+  return origin ? { origin } : {};
+}
+
+async function toLogin(reason: "signin" | "expired"): Promise<never> {
+  const path = (await requestHeaders()).get(PATH_HEADER);
+  const query = new URLSearchParams({ ...(reason === "expired" ? { reason } : {}), ...(path ? { next: path } : {}) }).toString();
+  redirect(query ? `${LOGIN_PATH}?${query}` : LOGIN_PATH);
+}
+
+/**
+ * Calls console-api as the signed-in user. The session cookie is forwarded from this server only,
+ * and every write carries X-CSRF-Token. A missing session or a 401 redirects to the login screen.
+ */
 async function request(method: "GET" | "POST", path: string, body?: unknown): Promise<ApiResult<{ status: number; json: unknown }>> {
-  const cfg = config();
-  if ("code" in cfg) return { ok: false, error: cfg };
-  const headers: Record<string, string> = { authorization: `Bearer ${cfg.token}`, accept: "application/json" };
+  const base = apiBase();
+  if (typeof base !== "string") return { ok: false, error: base };
+  const mode = await modeOrError();
+  if (typeof mode !== "string") return { ok: false, error: mode };
+  const iam = mode === "on";
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (iam) {
+    const session = await currentSession();
+    if (!session) return toLogin("signin");
+    headers.cookie = `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`;
+    if (method === "POST") {
+      headers["x-csrf-token"] = session.csrf;
+      Object.assign(headers, await browserOrigin());
+    }
+  } else {
+    const token = bearer();
+    if (typeof token !== "string") return { ok: false, error: token };
+    headers.authorization = `Bearer ${token}`;
+  }
   if (method === "POST") {
     headers["idempotency-key"] = randomUUID();
     headers["content-type"] = "application/json";
   }
-  let response: Response;
+  let response: ApiReply;
   let json: unknown;
   try {
-    response = await fetch(`${cfg.base}/api/v1${path}`, {
-      method,
-      headers,
-      body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
-      cache: "no-store",
-    });
-    const text = await response.text();
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    return { ok: false, error: unavailable };
+    // apiFetch retries a GET on transient failures and sends a POST exactly once.
+    response = await apiFetch(`${base}/api/v1${path}`, { method, headers, body: method === "POST" ? JSON.stringify(body ?? {}) : undefined });
+  } catch (error) {
+    return { ok: false, error: transportError(error) };
   }
-  if (!response.ok) {
+  try {
+    json = parseJson(response.text);
+  } catch {
+    return { ok: false, error: { ...malformed(path), requestId: response.requestId } };
+  }
+  // With IAM off a 401 means a wrong token, which signing in cannot fix, so it is shown as an error.
+  if (response.status === 401 && iam) return toLogin("expired");
+  if (response.status < 200 || response.status > 299) {
     return {
       ok: false,
-      error: parseApiError(json) ?? { code: "InternalError", message: `The VWS console API answered HTTP ${response.status}.`, requestId: null },
+      error: parseApiError(json) ?? { code: "InternalError", message: `The VWS console API answered HTTP ${response.status}.`, requestId: response.requestId },
     };
   }
   return { ok: true, value: { status: response.status, json } };
@@ -211,3 +291,132 @@ export const releaseAddress = (allocationId: string) => mutate(`/addresses/${seg
 
 export const listSnapshots = (): Promise<ApiResult<Snapshot[]>> => listAll("/snapshots", parseSnapshots);
 export const deleteSnapshot = (id: string) => mutate(`/snapshots/${seg(id)}/delete`);
+
+export type LoginInput = { account: string; userName: string; password: string; mfaCode?: string };
+
+/** Signs in with POST /auth/login and returns the session cookies console-api set. Never retried. */
+export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
+  const mode = await modeOrError();
+  if (typeof mode !== "string") return { ok: false, error: mode };
+  if (mode === "off") return { ok: false, error: { code: "SignInDisabled", message: "Sign-in is off on this console.", requestId: null } };
+  const base = apiBase();
+  if (typeof base !== "string") return { ok: false, error: base };
+  const started = performance.now();
+  const done = (outcome: "success" | "failure" | "error", status: number | null, requestId: string | null, code?: string | null) =>
+    logAuth({ event: "auth.login", outcome, status, requestId, code, durationMs: performance.now() - started });
+  let reply: ApiReply;
+  try {
+    reply = await apiFetch(`${base}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json", ...(await browserOrigin()) },
+      body: JSON.stringify(input.mfaCode ? input : { account: input.account, userName: input.userName, password: input.password }),
+    });
+  } catch (error) {
+    const apiError = transportError(error);
+    done("error", null, apiError.requestId, apiError.code);
+    return { ok: false, error: apiError };
+  }
+  let json: unknown = null;
+  try {
+    json = parseJson(reply.text);
+  } catch {
+    json = null;
+  }
+  if (reply.status < 200 || reply.status > 299) {
+    const apiError = parseApiError(json) ?? { code: "InternalError", message: `Sign-in answered HTTP ${reply.status}.`, requestId: reply.requestId };
+    done(reply.status >= 500 ? "error" : "failure", reply.status, reply.requestId, apiError.code);
+    return { ok: false, error: apiError };
+  }
+  const session = sessionFromSetCookie(reply.headers.getSetCookie());
+  if (!session) {
+    done("error", reply.status, reply.requestId, "MalformedResponse");
+    return { ok: false, error: malformed("/auth/login") };
+  }
+  noteLoginEnabled(json);
+  done("success", reply.status, reply.requestId);
+  return { ok: true, value: session };
+}
+
+/** Revokes the session with POST /auth/logout. A missing or expired session is already signed out. Never retried. */
+export async function logout(): Promise<void> {
+  const base = apiBase();
+  const session = (await iamState()) === "on" ? await currentSession() : null;
+  const started = performance.now();
+  if (typeof base !== "string" || !session) {
+    logAuth({ event: "auth.logout", outcome: "skipped", status: null, requestId: null, durationMs: performance.now() - started });
+    return;
+  }
+  try {
+    const reply = await apiFetch(`${base}/api/v1/auth/logout`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`,
+        "x-csrf-token": session.csrf,
+        ...(await browserOrigin()),
+      },
+      body: "{}",
+    });
+    const ok = reply.status >= 200 && reply.status <= 299;
+    logAuth({ event: "auth.logout", outcome: ok ? "success" : "failure", status: reply.status, requestId: reply.requestId, durationMs: performance.now() - started });
+  } catch (error) {
+    // The console still drops its cookies; the API session then expires on its own.
+    const apiError = transportError(error);
+    logAuth({ event: "auth.logout", outcome: "error", status: null, requestId: apiError.requestId, code: apiError.code, durationMs: performance.now() - started });
+  }
+}
+
+export type SessionInfo = { principal: string; account: string; root: boolean; expiresAt: string };
+
+export async function getSession(): Promise<ApiResult<SessionInfo>> {
+  const result = await request("GET", "/auth/session");
+  if (!result.ok) return result;
+  const body = (result.value.json ?? {}) as Record<string, unknown>;
+  const text = (value: unknown) => (typeof value === "string" ? value : "");
+  return { ok: true, value: { principal: text(body.principal), account: text(body.account), root: body.root === true, expiresAt: text(body.expiresAt) } };
+}
+
+/**
+ * The signed-in session for display, without redirecting: null when console-api is not configured,
+ * there is no session, or it no longer answers. Pages still redirect through their own calls.
+ */
+export async function signedInSession(): Promise<SessionInfo | null> {
+  const state = await iamState();
+  if (state !== "on" && state !== "off") return null;
+  const iam = state === "on";
+  const base = apiBase();
+  if (typeof base !== "string") return null;
+  let credentials: Record<string, string>;
+  if (iam) {
+    const session = await currentSession();
+    if (!session) return null;
+    credentials = { cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}` };
+  } else {
+    // IAM off: the bearer is the account root; console-api reports its account the same way.
+    const token = bearer();
+    if (typeof token !== "string") return null;
+    credentials = { authorization: `Bearer ${token}` };
+  }
+  const started = performance.now();
+  try {
+    const reply = await apiFetch(`${base}/api/v1/auth/session`, { headers: { accept: "application/json", ...credentials } });
+    const ok = reply.status >= 200 && reply.status <= 299;
+    logAuth({
+      event: "auth.session",
+      outcome: ok ? "success" : reply.status >= 500 ? "error" : "failure",
+      status: reply.status,
+      requestId: reply.requestId,
+      attempts: reply.attempts,
+      durationMs: performance.now() - started,
+    });
+    if (!ok) return null;
+    const body = (parseJson(reply.text) ?? {}) as Record<string, unknown>;
+    noteLoginEnabled(body);
+    const text = (value: unknown) => (typeof value === "string" ? value : "");
+    return { principal: text(body.principal), account: text(body.account), root: body.root === true, expiresAt: text(body.expiresAt) };
+  } catch (error) {
+    const apiError = transportError(error);
+    logAuth({ event: "auth.session", outcome: "error", status: null, requestId: apiError.requestId, code: apiError.code, durationMs: performance.now() - started });
+    return null;
+  }
+}

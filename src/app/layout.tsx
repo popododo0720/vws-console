@@ -1,21 +1,27 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
+import { identityFromSession } from "@/lib/vws-api/adapter";
+import { signedInSession } from "@/lib/vws-api/client";
+import { iamState } from "@/lib/vws-api/mode";
 
 export const metadata: Metadata = {
   title: "VWS console",
   description: "Mock cloud console with local sample data.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const state = await iamState();
+  const signIn = state === "on";
+  const identity = identityFromSession(await signedInSession(), { iam: state !== "off" });
   return (
     <html lang="en" className="h-full antialiased">
       <body className="console min-h-full">
-        <ConsoleProvider>{children}</ConsoleProvider>
+        <ConsoleProvider identity={identity} signIn={signIn}>{children}</ConsoleProvider>
       </body>
     </html>
   );
