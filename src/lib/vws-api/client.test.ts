@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createInstanceTags, createSecurityGroup, createVpc, getVolume, getVpc, instanceBatch, launchInstances, listVpcs, modifyVolume } from "./client";
+import { createSubnet, createSubnetTags, createVpcTags, createInstanceTags, createSecurityGroup, createVpc, getVolume, getVpc, instanceBatch, launchInstances, listVpcs, modifyVolume } from "./client";
 
 type Call = { url: string; init: RequestInit };
 
@@ -142,5 +142,20 @@ describe("console-api client", () => {
     expect(await modifyVolume("vol-1", 9)).toEqual({ ok: true, value: undefined });
     expect(calls[0].url).toBe("http://api.test/api/v1/volumes/vol-1/modify");
     expect(calls[0].init.body).toBe('{"size":9}');
+  });
+
+  it("sends a Name tag on create and renames VPCs and subnets through their tags endpoints", async () => {
+    const ok = () => respond(202, { operation: { id: "op-n", state: "succeeded" }, items: [] });
+    serve(ok(), ok(), ok(), ok());
+    await createVpc("10.9.0.0/16", { Name: "prod" });
+    await createSubnet("vpc-1", "10.9.1.0/24");
+    await createVpcTags("vpc-1", { Name: "prod2" });
+    await createSubnetTags("subnet-1", { Name: "web" });
+    expect(calls.map((c) => [c.url.replace("http://api.test/api/v1", ""), c.init.body])).toEqual([
+      ["/vpcs", '{"cidrBlock":"10.9.0.0/16","tags":{"Name":"prod"}}'],
+      ["/subnets", '{"vpcId":"vpc-1","cidrBlock":"10.9.1.0/24"}'],
+      ["/vpcs/vpc-1/tags", '{"tags":{"Name":"prod2"}}'],
+      ["/subnets/subnet-1/tags", '{"tags":{"Name":"web"}}'],
+    ]);
   });
 });

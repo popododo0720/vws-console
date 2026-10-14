@@ -10,7 +10,7 @@ test("creates and deletes a VPC, subnet and volume through the fake console-api"
   await expect(page.getByText("Sample data")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Create VPC" }).first().click();
-  await page.getByRole("dialog").locator("input").fill("10.42.0.0/16");
+  await page.getByRole("dialog").getByLabel("IPv4 CIDR").fill("10.42.0.0/16");
   await dialogButton(page, "Create VPC");
   const vpcRow = page.getByRole("row").filter({ hasText: "10.42.0.0/16" });
   await expect(vpcRow).toHaveCount(1);
@@ -56,7 +56,7 @@ test("creates and deletes a VPC, subnet and volume through the fake console-api"
 test("shows the API error code when a create is rejected", async ({ page }) => {
   await page.goto("/network/vpcs");
   await page.getByRole("button", { name: "Create VPC" }).first().click();
-  await page.getByRole("dialog").locator("input").fill("not-a-cidr");
+  await page.getByRole("dialog").getByLabel("IPv4 CIDR").fill("not-a-cidr");
   await dialogButton(page, "Create VPC");
   const alert = page.getByRole("dialog").getByRole("alert");
   await expect(alert).toContainText("The VPC could not be created");
@@ -348,4 +348,75 @@ test("shows instance VPC and launch time, subnet zone and public IP setting, and
   const vpcRow = page.getByRole("row").filter({ hasText: vpcId });
   await vpcRow.getByRole("checkbox").check();
   await expect(page.locator("dt", { hasText: /^Default VPC$/ }).locator("..")).toContainText("No");
+});
+
+const netApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
+const netHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+
+test("names a VPC and a subnet on create, renames them and shows their tags", async ({ page }) => {
+  await page.goto("/network/vpcs");
+  await page.getByRole("button", { name: "Create VPC" }).first().click();
+  await page.getByRole("dialog").getByLabel("VPC name").fill("e2e-net");
+  await page.getByRole("dialog").getByLabel("IPv4 CIDR").fill("10.44.0.0/16");
+  await page.getByRole("dialog").getByRole("button", { name: "Create VPC" }).click();
+  const vpcRow = page.getByRole("row").filter({ hasText: "10.44.0.0/16" });
+  await expect(vpcRow).toContainText("e2e-net");
+  const vpcId = (await vpcRow.getByText(/^vpc-/).first().textContent())!.trim();
+
+  await vpcRow.getByRole("button", { name: "Edit name" }).click();
+  await vpcRow.getByLabel("Name").fill("e2e-net-2");
+  await vpcRow.getByLabel("Name").press("Enter");
+  await expect(vpcRow).toContainText("e2e-net-2");
+  await vpcRow.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Tags" }).click();
+  await expect(page.getByRole("cell", { name: "e2e-net-2", exact: true })).toBeVisible();
+
+  await page.goto(`/network/vpcs/${vpcId}`);
+  await expect(page.getByText("e2e-net-2").first()).toBeVisible();
+
+  await page.goto("/network/subnets");
+  await page.getByRole("button", { name: "Create subnet" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Subnet name").fill("e2e-sub");
+  await dialog.locator("select").selectOption(vpcId);
+  await dialog.getByPlaceholder("10.0.1.0/24").fill("10.44.1.0/24");
+  await dialog.getByRole("button", { name: "Create subnet" }).click();
+  const subnetRow = page.getByRole("row").filter({ hasText: "10.44.1.0/24" });
+  await expect(subnetRow).toContainText("e2e-sub");
+  await subnetRow.getByRole("button", { name: "Edit name" }).click();
+  await subnetRow.getByLabel("Name").fill("e2e-sub-2");
+  await subnetRow.getByLabel("Name").press("Enter");
+  await expect(subnetRow).toContainText("e2e-sub-2");
+  await subnetRow.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Tags" }).click();
+  await expect(page.getByRole("cell", { name: "e2e-sub-2", exact: true })).toBeVisible();
+});
+
+test("shows an instance's public IP and Elastic IP allocation", async ({ page, request }) => {
+  const vpc = await (await request.post(`${netApi()}/vpcs`, { headers: netHeaders("pip-vpc"), data: { cidrBlock: "10.45.0.0/16" } })).json();
+  const vpcId = vpc.items[0].vpcId;
+  await expect.poll(async () => (await (await request.get(`${netApi()}/vpcs/${vpcId}`, { headers: netHeaders("x") })).json()).state).toBe("available");
+  const subnet = await (await request.post(`${netApi()}/subnets`, { headers: netHeaders("pip-subnet"), data: { vpcId, cidrBlock: "10.45.1.0/24" } })).json();
+  const run = await (await request.post(`${netApi()}/instances`, {
+    headers: netHeaders("pip-run"),
+    data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId: subnet.items[0].subnetId, count: 1 },
+  })).json();
+  const instanceId: string = run.items[0].instanceId;
+  await expect.poll(async () => (await (await request.get(`${netApi()}/instances/${instanceId}`, { headers: netHeaders("x") })).json()).state, { timeout: 30_000 }).toBe("running");
+  const eip = await (await request.post(`${netApi()}/addresses`, { headers: netHeaders("pip-eip"), data: {} })).json();
+  const allocationId: string = eip.items[0].allocationId;
+  const publicIp: string = eip.items[0].publicIp;
+  const assoc = await request.post(`${netApi()}/addresses/${allocationId}/associate`, { headers: netHeaders("pip-assoc"), data: { instanceId } });
+  expect(assoc.status()).toBe(202);
+  await expect.poll(async () => (await (await request.get(`${netApi()}/instances/${instanceId}`, { headers: netHeaders("x") })).json()).publicIpAddress).toBe(publicIp);
+
+  await page.goto("/compute/instances");
+  const row = page.getByRole("row").filter({ hasText: instanceId });
+  await expect(row).toContainText(publicIp);
+  await expect(row).toContainText(allocationId);
+
+  await page.goto(`/compute/instances/${instanceId}`);
+  await expect(page.getByText(publicIp).first()).toBeVisible();
+  await page.getByRole("button", { name: "Networking" }).click();
+  await expect(page.getByText(allocationId)).toHaveCount(2);
 });

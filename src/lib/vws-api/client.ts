@@ -174,9 +174,15 @@ export const createVolume = (size: number, volumeType: string) => mutate("/volum
 export const deleteVolume = (id: string) => mutate(`/volumes/${seg(id)}/delete`);
 export const createSnapshot = (volumeId: string, description: string) =>
   mutate("/snapshots", description ? { volumeId, description } : { volumeId });
-export const createVpc = (cidrBlock: string) => mutate("/vpcs", { cidrBlock });
+const withTags = <T extends object>(body: T, tags: Record<string, string>) => (Object.keys(tags).length > 0 ? { ...body, tags } : body);
+
+export const createVpc = (cidrBlock: string, tags: Record<string, string> = {}) => mutate("/vpcs", withTags({ cidrBlock }, tags));
 export const deleteVpc = (id: string) => mutate(`/vpcs/${seg(id)}/delete`);
-export const createSubnet = (vpcId: string, cidrBlock: string) => mutate("/subnets", { vpcId, cidrBlock });
+export const createSubnet = (vpcId: string, cidrBlock: string, tags: Record<string, string> = {}) =>
+  mutate("/subnets", withTags({ vpcId, cidrBlock }, tags));
+/** Adds or overwrites tags on one VPC or subnet; tags not named stay. */
+export const createVpcTags = (id: string, tags: Record<string, string>) => mutate(`/vpcs/${seg(id)}/tags`, { tags });
+export const createSubnetTags = (id: string, tags: Record<string, string>) => mutate(`/subnets/${seg(id)}/tags`, { tags });
 export const deleteSubnet = (id: string) => mutate(`/subnets/${seg(id)}/delete`);
 
 export const listInstanceTypes = (): Promise<ApiResult<InstanceType[]>> => listAll("/instance-types", parseInstanceTypes);

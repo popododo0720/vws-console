@@ -17,6 +17,8 @@ export type Instance = {
   /** Server-provided private DNS name; empty when the API does not supply one. */
   privateDns: string;
   elasticIp: string;
+  /** Allocation ID of the Elastic IP that supplies the public IP, if any. */
+  publicIpAllocationId: string;
   ipv6: string;
   region: string;
   vpcId: string;
@@ -88,6 +90,7 @@ export type Vpc = {
   owner: string;
   isDefault: boolean | null;
   region: string;
+  tags: Record<string, string>;
 };
 
 export type Subnet = {
@@ -101,6 +104,7 @@ export type Subnet = {
   routeTableId: string;
   autoAssignPublicIp: boolean | null;
   region: string;
+  tags: Record<string, string>;
 };
 
 export type Route = {

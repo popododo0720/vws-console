@@ -98,6 +98,7 @@ export function InstanceDetails({ instance }: { instance: Instance }) {
       <Field label="Private IP DNS name (IPv4 only)">{dash(instance.privateDns)}</Field>
       <Field label="Instance type">{instance.type}</Field>
       <Field label="Elastic IP addresses">{dash(instance.elasticIp)}</Field>
+      <Field label="Elastic IP allocation ID">{dash(instance.publicIpAllocationId)}</Field>
       <Field label="Availability Zone">{instance.availabilityZone}</Field>
       <Field label="VPC ID">{dash(instance.vpcId)}</Field>
       <Field label="AMI ID">{instance.imageId}</Field>
@@ -142,6 +143,7 @@ export function InstanceTab({ tab, instance, hideSummary = false }: { tab: strin
           <Field label="Private IP DNS name (IPv4 only)">{dash(instance.privateDns)}</Field>
           <Field label="VPC ID">{dash(instance.vpcId)}</Field>
           <Field label="Elastic IP addresses">{dash(instance.elasticIp)}</Field>
+          <Field label="Elastic IP allocation ID">{dash(instance.publicIpAllocationId)}</Field>
           <Field label="IPv6 address">{dash(instance.ipv6)}</Field>
         </Fields>
       </Section>

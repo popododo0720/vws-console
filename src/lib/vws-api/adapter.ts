@@ -28,6 +28,11 @@ function bool(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
+/** Reads a tags object, keeping string values only. */
+function tags(value: unknown): Record<string, string> {
+  return Object.fromEntries(Object.entries(obj(value)).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+}
+
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
@@ -81,10 +86,11 @@ export function toInstance(item: Json): Instance {
     checksTotal: 0,
     availabilityZone: str(item.availabilityZone),
     publicDns: "",
-    publicIpv4: "",
+    publicIpv4: str(item.publicIpAddress),
     privateIpv4: str(item.privateIpAddress),
     privateDns: "",
-    elasticIp: "",
+    elasticIp: str(item.publicIpAllocationId) ? str(item.publicIpAddress) : "",
+    publicIpAllocationId: str(item.publicIpAllocationId),
     ipv6: "",
     region: REGION,
     vpcId: str(item.vpcId),
@@ -117,7 +123,7 @@ export function toVolume(item: Json): Volume {
 export function toVpc(item: Json): Vpc {
   return {
     id: str(item.vpcId),
-    name: "",
+    name: str(obj(item.tags).Name),
     state: str(item.state) === "available" ? "available" : "pending",
     encryption: "",
     encryptionControl: "",
@@ -126,6 +132,7 @@ export function toVpc(item: Json): Vpc {
     ipv6Cidr: "",
     owner: str(item.ownerId),
     isDefault: bool(item.isDefault),
+    tags: tags(item.tags),
     region: REGION,
   };
 }
@@ -133,7 +140,7 @@ export function toVpc(item: Json): Vpc {
 export function toSubnet(item: Json): Subnet {
   return {
     id: str(item.subnetId),
-    name: "",
+    name: str(obj(item.tags).Name),
     vpcId: str(item.vpcId),
     state: str(item.state) === "available" ? "available" : "pending",
     ipv4Cidr: str(item.cidrBlock),
@@ -141,6 +148,7 @@ export function toSubnet(item: Json): Subnet {
     availabilityZone: str(item.availabilityZone),
     routeTableId: "",
     autoAssignPublicIp: bool(item.mapPublicIpOnLaunch),
+    tags: tags(item.tags),
     region: REGION,
   };
 }
