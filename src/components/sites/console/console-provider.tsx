@@ -28,7 +28,6 @@ import type {
   LaunchDraft,
   RouteTable,
   SecurityGroup,
-  SecurityGroupRule,
   Subnet,
   ElasticIp,
   Volume,
@@ -64,16 +63,6 @@ type ConsoleApi = {
   launch: (draft: LaunchDraft) => void;
   createSnapshot: (input: { volumeId: string; name: string; description: string }) => void;
   deleteSnapshots: (ids: string[]) => void;
-  createSecurityGroup: (input: {
-    name: string;
-    groupName: string;
-    description: string;
-    vpcId: string;
-    inbound: SecurityGroupRule[];
-    outbound: SecurityGroupRule[];
-  }) => string;
-  updateSecurityGroupRules: (id: string, direction: SecurityGroupRule["direction"], rules: SecurityGroupRule[]) => void;
-  deleteSecurityGroups: (ids: string[]) => void;
   createRouteTable: (input: { name: string; vpcId: string }) => void;
   deleteRouteTables: (ids: string[]) => void;
   addRoute: (tableId: string, destination: string, target: string) => string | null;
@@ -283,48 +272,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
           ...prev,
           snapshots: prev.snapshots.filter((item) => !ids.includes(item.id)),
           volumes: prev.volumes.map((item) => (ids.includes(item.snapshotId) ? { ...item, snapshotId: "" } : item)),
-        }));
-      },
-      createSecurityGroup: (input) => {
-        const id = newId("sg");
-        setData((prev) => ({
-          ...prev,
-          securityGroups: [
-            {
-              id,
-              name: input.name,
-              groupName: input.groupName || input.name || "unnamed",
-              vpcId: input.vpcId,
-              description: input.description,
-              owner: ACCOUNT.id,
-              region,
-              rules: [
-                ...input.inbound.map((rule) => ({ ...rule, direction: "in" as const })),
-                ...input.outbound.map((rule) => ({ ...rule, direction: "out" as const })),
-              ],
-            },
-            ...prev.securityGroups,
-          ],
-        }));
-        return id;
-      },
-      updateSecurityGroupRules: (id, direction, rules) => {
-        setData((prev) => ({
-          ...prev,
-          securityGroups: prev.securityGroups.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  rules: [...item.rules.filter((rule) => rule.direction !== direction), ...rules.map((rule) => ({ ...rule, direction }))],
-                }
-              : item,
-          ),
-        }));
-      },
-      deleteSecurityGroups: (ids) => {
-        setData((prev) => ({
-          ...prev,
-          securityGroups: prev.securityGroups.filter((item) => !ids.includes(item.id)),
         }));
       },
       createRouteTable: (input) => {

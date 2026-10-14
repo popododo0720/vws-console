@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import type { SecurityGroup } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { downloadCsv } from "@/lib/csv";
-import { useConsole } from "@/components/sites/console/console-provider";
+import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { deleteSecurityGroupsAction } from "@/app/actions/resources";
+import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
-import { RulesTable } from "@/components/sites/console/sg-rules-table";
+import { OUTBOUND_UNAVAILABLE, RulesTable } from "@/components/sites/console/sg-rules-table";
 import { Shell } from "@/components/sites/console/shell";
 import { cn } from "@/lib/utils";
 import {
@@ -18,36 +20,37 @@ import {
   MenuChevron,
   OrangeButton,
   OutlineButton,
+  dash,
   menuTriggerClass,
 } from "@/components/sites/console/ui";
 
-export function SecurityGroupsView() {
-  const api = useConsole();
+export function SecurityGroupsView({ securityGroups, loadError }: { securityGroups: SecurityGroup[]; loadError: ApiError | null }) {
+  const action = useApiAction();
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(220);
   const [updated, setUpdated] = useState("Last updated less than a minute ago");
   const [ruleTab, setRuleTab] = useState("in");
-  const selected = api.securityGroups.filter((item) => selectedIds.includes(item.id));
+  const selected = securityGroups.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
   const exportGroups = () =>
     downloadCsv("security-groups.csv", [
       ["Security group ID", "Security group name", "VPC ID", "Description", "Owner", "Inbound rules count", "Outbound rules count"],
-      ...api.securityGroups.map((item) => [
+      ...securityGroups.map((item) => [
         item.id,
         item.groupName,
         item.vpcId,
-        item.description,
+        "",
         item.owner,
-        String(item.rules.filter((rule) => rule.direction === "in").length),
-        String(item.rules.filter((rule) => rule.direction === "out").length),
+        String(item.rules.length),
+        "",
       ]),
     ]);
   const exportRules = () =>
     downloadCsv("security-group-rules.csv", [
       ["Security group ID", "Rule ID", "Direction", "Protocol", "Port range", "Source", "Description"],
-      ...api.securityGroups.flatMap((item) =>
-        item.rules.map((rule) => [item.id, rule.id, rule.direction === "in" ? "Inbound" : "Outbound", rule.protocol, rule.port, rule.source, rule.description]),
+      ...securityGroups.flatMap((item) =>
+        item.rules.map((rule) => [item.id, rule.id, "Inbound", rule.protocol, rule.port, rule.source, rule.description]),
       ),
     ]);
 
@@ -74,17 +77,17 @@ export function SecurityGroupsView() {
           "—"
         ),
     },
-    { key: "description", header: "Description", minWidth: 220, sortValue: (row) => row.description, cell: (row) => row.description },
-    { key: "owner", header: "Owner", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => row.owner },
-    { key: "in", header: "Inbound rules count", minWidth: 150, sortValue: (row) => String(row.rules.filter((rule) => rule.direction === "in").length).padStart(4, "0"), cell: (row) => row.rules.filter((rule) => rule.direction === "in").length },
-    { key: "out", header: "Outbound rules count", minWidth: 160, sortValue: (row) => String(row.rules.filter((rule) => rule.direction === "out").length).padStart(4, "0"), cell: (row) => row.rules.filter((rule) => rule.direction === "out").length },
+    { key: "description", header: "Description", minWidth: 220, sortValue: (row) => row.description, cell: (row) => dash(row.description) },
+    { key: "owner", header: "Owner", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => dash(row.owner) },
+    { key: "in", header: "Inbound rules count", minWidth: 150, sortValue: (row) => String(row.rules.length).padStart(4, "0"), cell: (row) => row.rules.length },
+    { key: "out", header: "Outbound rules count", minWidth: 160, sortValue: () => "", cell: () => "—" },
   ];
 
   return (
     <Shell tree={computeNav}>
       <PageHeader
         mark="C"
-        crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: `Security Groups (${api.securityGroups.length})` }]}
+        crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: `Security Groups (${securityGroups.length})` }]}
         info="A security group is a set of allow rules for instances in a VPC."
         meta={updated}
         actions={
@@ -98,12 +101,11 @@ export function SecurityGroupsView() {
               }
               items={[
                 { label: "View details", disabled: !one, onSelect: () => one && router.push(`/network/security-groups/${one.id}`) },
-                { label: "Edit inbound rules", disabled: !one, onSelect: () => one && router.push(`/network/security-groups/${one.id}/edit/inbound`) },
-                { label: "Edit outbound rules", disabled: !one, onSelect: () => one && router.push(`/network/security-groups/${one.id}/edit/outbound`) },
+                { label: "Add inbound rules", disabled: !one, onSelect: () => one && router.push(`/network/security-groups/${one.id}/edit/inbound`) },
                 {
                   label: "Delete security groups",
-                  disabled: selected.length === 0 || selected.some((item) => item.groupName === "default"),
-                  onSelect: () => api.deleteSecurityGroups(selected.map((item) => item.id)),
+                  disabled: action.pending || selected.length === 0 || selected.some((item) => item.groupName === "default"),
+                  onSelect: () => action.run(() => deleteSecurityGroupsAction(selected.map((item) => item.id)), () => setSelectedIds([])),
                 },
               ]}
             />
@@ -130,8 +132,10 @@ export function SecurityGroupsView() {
           </>
         }
       />
+      <ApiErrorAlert error={loadError} title="Security groups could not be loaded" />
+      <ApiErrorAlert error={action.error} title="The security group action failed" />
       <ResourceTable
-        rows={api.securityGroups}
+        rows={securityGroups}
         getId={(row) => row.id}
         columns={columns}
         selectedIds={selected.map((item) => item.id)}
@@ -140,7 +144,10 @@ export function SecurityGroupsView() {
         emptyMessage="You do not have any security groups in this region"
         filterPlaceholder="Find security groups by attribute or tag"
         presets={[{ id: "default", label: "Default groups", match: (row) => row.groupName === "default" }]}
-        onRefresh={() => setUpdated("Last updated less than a minute ago")}
+        onRefresh={() => {
+          setUpdated("Last updated less than a minute ago");
+          action.refresh();
+        }}
       />
       <DetailDock
         title={one ? one.groupName : "Select a security group"}
@@ -151,7 +158,7 @@ export function SecurityGroupsView() {
         onHeight={setDock}
       >
         {one ? (
-          <RulesTable rules={one.rules} direction={ruleTab === "out" ? "out" : "in"} />
+          <RulesTable rules={one.rules} direction="in" unavailable={ruleTab === "out" ? OUTBOUND_UNAVAILABLE : undefined} />
         ) : null}
       </DetailDock>
     </Shell>
