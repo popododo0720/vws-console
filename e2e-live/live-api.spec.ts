@@ -68,3 +68,32 @@ test("shows the empty instance list from the API", async ({ page }) => {
   await expect(page.getByText("No instances")).toBeVisible();
   await expect(page.getByText("Instances could not be loaded")).toHaveCount(0);
 });
+
+test("lists a seeded instance by its Name tag and stops it", async ({ page, request }) => {
+  const api = `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
+  const headers = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+  const vpc = await (await request.post(`${api}/vpcs`, { headers: headers("seed-vpc"), data: { cidrBlock: "10.77.0.0/16" } })).json();
+  const vpcId = vpc.items[0].vpcId;
+  await expect.poll(async () => (await (await request.get(`${api}/vpcs`, { headers: headers("x") })).json()).items.find((v: { vpcId: string }) => v.vpcId === vpcId).state).toBe("available");
+  const subnet = await (await request.post(`${api}/subnets`, { headers: headers("seed-subnet"), data: { vpcId, cidrBlock: "10.77.1.0/24" } })).json();
+  const run = await request.post(`${api}/instances`, {
+    headers: headers("seed-run"),
+    data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId: subnet.items[0].subnetId, count: 1, tags: { Name: "e2e-web" } },
+  });
+  expect(run.status()).toBe(202);
+  const instanceId = (await run.json()).items[0].instanceId;
+
+  await page.goto("/compute/instances");
+  const row = page.getByRole("row").filter({ hasText: instanceId });
+  await expect(row).toContainText("e2e-web");
+  await expect(row).toContainText("vws.small");
+  await expect.poll(async () => { await page.reload(); return (await row.textContent()) ?? ""; }, { timeout: 30_000 }).toContain("Running");
+  await row.getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Instance state/ }).first().click();
+  await page.getByRole("menuitem", { name: "Stop" }).click();
+  await expect(row).toContainText("Stopped", { timeout: 60_000 });
+
+  await page.goto(`/compute/instances/${instanceId}`);
+  await expect(page.getByText(`${instanceId} (e2e-web)`).first()).toBeVisible();
+  await expect(page.getByText(vpcId).first()).toBeVisible();
+});

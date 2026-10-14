@@ -21,9 +21,8 @@ export default defineConfig({
       command: `npm run start -- -p ${port} -H 127.0.0.1`,
       url: `http://127.0.0.1:${port}`,
       env: {
-        VWS_API_URL: `http://127.0.0.1:${ec2Port}/`,
-        VWS_ACCESS_KEY_ID: "AKIDEXAMPLE",
-        VWS_SECRET_ACCESS_KEY: "secret",
+        VWS_CONSOLE_API_URL: `http://127.0.0.1:${ec2Port - 1}`,
+        VWS_CONSOLE_API_TOKEN: "dev-token",
       },
       reuseExistingServer: false,
     },
