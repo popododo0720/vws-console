@@ -97,3 +97,104 @@ test("lists a seeded instance by its Name tag and stops it", async ({ page, requ
   await expect(page.getByText(`${instanceId} (e2e-web)`).first()).toBeVisible();
   await expect(page.getByText(vpcId).first()).toBeVisible();
 });
+
+const consoleApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
+const apiHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+
+test("creates a security group with an inbound rule, adds a rule and deletes it", async ({ page, request }) => {
+  const vpc = await (await request.post(`${consoleApi()}/vpcs`, { headers: apiHeaders("sg-seed-vpc"), data: { cidrBlock: "10.88.0.0/16" } })).json();
+  const vpcId = vpc.items[0].vpcId;
+
+  await page.goto("/network/security-groups/create");
+  await page.locator("input.field").first().fill("e2e-web");
+  await page.locator("select.field").first().selectOption(vpcId);
+  await page.getByRole("button", { name: "Add rule", exact: true }).click();
+  await page.getByRole("button", { name: "Create security group" }).click();
+  await expect(page).toHaveURL(/\/network\/security-groups$/);
+  const row = page.getByRole("row").filter({ hasText: "e2e-web" });
+  await expect(row).toContainText(vpcId);
+  const groupId = (await row.getByText(/^sg-/).first().textContent())!.trim();
+
+  await page.goto(`/network/security-groups/${groupId}`);
+  await expect(page.getByText("Inbound rules (1)")).toBeVisible();
+  await expect(page.getByRole("cell", { name: "22", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Outbound rules (—)" }).click();
+  await expect(page.getByText("The VWS API does not report outbound rules yet.")).toBeVisible();
+
+  await page.goto(`/network/security-groups/${groupId}/edit/inbound`);
+  await page.getByRole("button", { name: "Add rule", exact: true }).click();
+  await page.locator("tbody").last().locator("select").first().selectOption({ label: "HTTPS" });
+  await page.getByRole("button", { name: "Add rules" }).click();
+  await expect(page).toHaveURL(new RegExp(`/network/security-groups/${groupId}$`));
+  await expect(page.getByText("Inbound rules (2)")).toBeVisible();
+  await expect(page.getByRole("cell", { name: "443", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Delete security groups" }).click();
+  await expect(page).toHaveURL(/\/network\/security-groups$/);
+  await expect(page.getByRole("row").filter({ hasText: groupId })).toHaveCount(0);
+});
+
+test("allocates, associates, disassociates and releases an Elastic IP address", async ({ page, request }) => {
+  const vpc = await (await request.post(`${consoleApi()}/vpcs`, { headers: apiHeaders("eip-seed-vpc"), data: { cidrBlock: "10.89.0.0/16" } })).json();
+  const vpcId = vpc.items[0].vpcId;
+  await expect.poll(async () => (await (await request.get(`${consoleApi()}/vpcs`, { headers: apiHeaders("x") })).json()).items.find((v: { vpcId: string }) => v.vpcId === vpcId).state).toBe("available");
+  const subnet = await (await request.post(`${consoleApi()}/subnets`, { headers: apiHeaders("eip-seed-subnet"), data: { vpcId, cidrBlock: "10.89.1.0/24" } })).json();
+  const run = await request.post(`${consoleApi()}/instances`, {
+    headers: apiHeaders("eip-seed-run"),
+    data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId: subnet.items[0].subnetId, count: 1, tags: { Name: "e2e-eip" } },
+  });
+  const instanceId = (await run.json()).items[0].instanceId;
+  await expect.poll(async () => (await (await request.get(`${consoleApi()}/instances/${instanceId}`, { headers: apiHeaders("x") })).json()).state, { timeout: 30_000 }).toBe("running");
+
+  await page.goto("/network/elastic-ips");
+  await expect(page.getByText("Elastic IP addresses could not be loaded")).toHaveCount(0);
+  const before = await page.getByRole("row").filter({ hasText: /eipalloc-/ }).count();
+  await page.getByRole("button", { name: "Allocate Elastic IP address" }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Allocate" }).click();
+  const rows = page.getByRole("row").filter({ hasText: /eipalloc-/ });
+  await expect(rows).toHaveCount(before + 1);
+  const row = rows.last();
+  const allocationId = (await row.getByText(/^eipalloc-/).first().textContent())!.trim();
+  const byId = page.getByRole("row").filter({ hasText: allocationId });
+
+  await byId.getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Associate Elastic IP address", exact: true }).click();
+  await page.getByRole("dialog").locator("select").selectOption(instanceId);
+  await page.getByRole("dialog").getByRole("button", { name: "Associate" }).click();
+  await expect(byId).toContainText(instanceId);
+
+  await byId.getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Disassociate Elastic IP address" }).click();
+  await expect(byId).not.toContainText(instanceId);
+
+  await byId.getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Release Elastic IP addresses" }).click();
+  await expect(byId).toHaveCount(0);
+});
+
+test("creates a snapshot from a volume and deletes it", async ({ page, request }) => {
+  const volume = await (await request.post(`${consoleApi()}/volumes`, { headers: apiHeaders("snap-seed-vol"), data: { size: 7 } })).json();
+  const volumeId = volume.items[0].volumeId;
+  await expect.poll(async () => (await (await request.get(`${consoleApi()}/volumes`, { headers: apiHeaders("x") })).json()).items.find((v: { volumeId: string }) => v.volumeId === volumeId).state).toBe("available");
+
+  await page.goto("/storage/snapshots");
+  await expect(page.getByText("Snapshots could not be loaded")).toHaveCount(0);
+  await page.getByRole("button", { name: "Create snapshot" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("select").selectOption(volumeId);
+  await dialog.locator("input.field").fill("e2e backup");
+  await dialog.getByRole("button", { name: "Create snapshot" }).click();
+  const row = page.getByRole("row").filter({ hasText: "e2e backup" });
+  await expect(row).toContainText(volumeId);
+  await expect(row).toContainText("7 GiB");
+  await expect.poll(async () => { await page.reload(); return (await row.textContent()) ?? ""; }, { timeout: 15_000 }).toContain("Completed");
+
+  await row.getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Delete snapshot" }).click();
+  await expect(row).toHaveCount(0);
+});
