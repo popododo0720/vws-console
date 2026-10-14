@@ -1,4 +1,4 @@
-export type InstanceState = "pending" | "running" | "stopping" | "stopped";
+export type InstanceState = "pending" | "running" | "stopping" | "stopped" | "shutting-down" | "terminated";
 
 export type CheckStatus = "ok" | "initializing" | "impaired" | "none";
 
@@ -20,6 +20,7 @@ export type Instance = {
   ipv6: string;
   region: string;
   vpcId: string;
+  subnetId: string;
   securityGroupIds: string[];
   keyPair: string;
   imageId: string;
@@ -29,9 +30,11 @@ export type Instance = {
 export type Volume = {
   id: string;
   name: string;
+  /** API volume status (creating, available, in-use, ...); empty for local data. */
+  state: string;
   volumeType: string;
   sizeGiB: number;
-  iops: number;
+  iops: number | null;
   throughput: string;
   owner: string;
   snapshotId: string;
@@ -80,9 +83,11 @@ export type Vpc = {
   state: "available" | "pending";
   encryption: string;
   encryptionControl: string;
-  blockPublicAccess: "off" | "on";
+  blockPublicAccess: "off" | "on" | "";
   ipv4Cidr: string;
   ipv6Cidr: string;
+  owner: string;
+  isDefault: boolean | null;
   region: string;
 };
 
@@ -92,10 +97,10 @@ export type Subnet = {
   vpcId: string;
   state: "available" | "pending";
   ipv4Cidr: string;
-  availableIps: number;
+  availableIps: number | null;
   availabilityZone: string;
   routeTableId: string;
-  autoAssignPublicIp: boolean;
+  autoAssignPublicIp: boolean | null;
   region: string;
 };
 

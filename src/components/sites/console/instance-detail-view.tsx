@@ -3,7 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { computeNav } from "@/lib/console-data";
-import { useConsole } from "@/components/sites/console/console-provider";
+import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { startInstancesAction, stopInstancesAction, terminateInstancesAction } from "@/app/actions/resources";
+import type { ApiError } from "@/lib/vws-api/adapter";
+import type { Instance } from "@/types/console";
 import { InstanceDetails, InstanceTab, instanceTabs } from "@/components/sites/console/instance-detail";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
@@ -11,10 +14,18 @@ import { MenuButton, OutlineButton, blueMenuTriggerClass } from "@/components/si
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 
-export function InstanceDetailView({ id }: { id: string }) {
-  const api = useConsole();
+export function InstanceDetailView({ id, instance, loadError }: { id: string; instance: Instance | null; loadError: ApiError | null }) {
+  const action = useApiAction();
   const [tab, setTab] = useState("details");
-  const instance = api.instances.find((item) => item.id === id);
+
+  if (loadError) {
+    return (
+      <Shell tree={computeNav}>
+        <PageHeader crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: "Instances", href: "/compute/instances" }, { label: id }]} />
+        <ApiErrorAlert error={loadError} title="The instance could not be loaded" />
+      </Shell>
+    );
+  }
 
   if (!instance) {
     return (
@@ -40,7 +51,7 @@ export function InstanceDetailView({ id }: { id: string }) {
           { label: "Instances", href: "/compute/instances" },
           { label },
         ]}
-        info="A single instance in the current region. This is local sample data."
+        info="A single instance in the current region, read from the VWS API."
         actions={
           <>
             <OutlineButton>Connect</OutlineButton>
@@ -48,9 +59,9 @@ export function InstanceDetailView({ id }: { id: string }) {
               className={blueMenuTriggerClass()}
               label={<>Instance state <span aria-hidden className="text-[9px]">▼</span></>}
               items={[
-                { label: "Start", disabled: instance.state === "running", onSelect: () => api.setInstanceState([instance.id], "running") },
-                { label: "Stop", disabled: instance.state !== "running", onSelect: () => api.setInstanceState([instance.id], "stopped") },
-                { label: "Terminate", onSelect: () => api.terminateInstances([instance.id]) },
+                { label: "Start", disabled: action.pending || instance.state !== "stopped", onSelect: () => action.run(() => startInstancesAction([instance.id])) },
+                { label: "Stop", disabled: action.pending || instance.state !== "running", onSelect: () => action.run(() => stopInstancesAction([instance.id])) },
+                { label: "Terminate", disabled: action.pending || instance.state === "terminated", onSelect: () => action.run(() => terminateInstancesAction([instance.id])) },
               ]}
             />
             <MenuButton
@@ -61,6 +72,7 @@ export function InstanceDetailView({ id }: { id: string }) {
           </>
         }
       />
+      <ApiErrorAlert error={action.error} title="The instance action failed" />
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-6">
         <section className="rounded-lg border border-[#d5dbdb] p-4">
           <h2 className="mb-3 text-[16px] font-bold">Instance summary</h2>

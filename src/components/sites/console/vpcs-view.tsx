@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CircleCheck } from "lucide-react";
-import type { Vpc } from "@/types/console";
+import type { Subnet, Vpc } from "@/types/console";
 import { networkNav } from "@/lib/console-data";
-import { useConsole } from "@/components/sites/console/console-provider";
+import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { createVpcAction, deleteVpcsAction } from "@/app/actions/resources";
+import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
@@ -18,22 +20,24 @@ import {
   OrangeButton,
   OutlineButton,
   PanelDialog,
-  SampleBadge,
   dash,
   menuTriggerClass,
 } from "@/components/sites/console/ui";
 
-export function VpcsView() {
-  const api = useConsole();
+function blockPublicAccess(value: Vpc["blockPublicAccess"]) {
+  return value === "" ? "—" : value === "off" ? "Off" : "On";
+}
+
+export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: Subnet[]; loadError: ApiError | null }) {
+  const action = useApiAction();
   const initial = useSearchParams().get("vpc") ?? "all";
   const [vpcFilter, setVpcFilter] = useState(initial);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(200);
-  const [updated, setUpdated] = useState("Last updated less than a minute ago");
   const [createOpen, setCreateOpen] = useState(false);
   const [vpcTab, setVpcTab] = useState("details");
-  const [form, setForm] = useState({ name: "", ipv4Cidr: "10.1.0.0/16" });
-  const rows = vpcFilter === "all" ? api.vpcs : api.vpcs.filter((item) => item.id === vpcFilter);
+  const [cidr, setCidr] = useState("10.1.0.0/16");
+  const rows = vpcFilter === "all" ? vpcs : vpcs.filter((item) => item.id === vpcFilter);
   const selected = rows.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
 
@@ -55,9 +59,9 @@ export function VpcsView() {
           <span className="text-[#006ce0]">Pending</span>
         ),
     },
-    { key: "encryption", header: "Encryption", minWidth: 120, sortValue: (row) => row.encryption, cell: (row) => dash(row.encryption === "—" ? "" : row.encryption) },
-    { key: "control", header: "Encryption control", minWidth: 150, sortValue: (row) => row.encryptionControl, cell: (row) => dash(row.encryptionControl === "—" ? "" : row.encryptionControl) },
-    { key: "block", header: "Block public access", minWidth: 150, sortValue: (row) => row.blockPublicAccess, cell: (row) => (row.blockPublicAccess === "off" ? "Off" : "On") },
+    { key: "encryption", header: "Encryption", minWidth: 120, sortValue: (row) => row.encryption, cell: (row) => dash(row.encryption) },
+    { key: "control", header: "Encryption control", minWidth: 150, sortValue: (row) => row.encryptionControl, cell: (row) => dash(row.encryptionControl) },
+    { key: "block", header: "Block public access", minWidth: 150, sortValue: (row) => row.blockPublicAccess, cell: (row) => blockPublicAccess(row.blockPublicAccess) },
     { key: "cidr", header: "IPv4 CIDR", minWidth: 130, sortValue: (row) => row.ipv4Cidr, cell: (row) => row.ipv4Cidr },
     { key: "ipv6", header: "IPv6 CIDR", minWidth: 120, sortValue: (row) => row.ipv6Cidr, cell: (row) => dash(row.ipv6Cidr) },
   ];
@@ -70,7 +74,7 @@ export function VpcsView() {
           Filter by VPC
           <select className="field mt-1" value={vpcFilter} onChange={(event) => setVpcFilter(event.target.value)}>
             <option value="all">Choose a VPC</option>
-            {api.vpcs.map((vpc) => (
+            {vpcs.map((vpc) => (
               <option key={vpc.id} value={vpc.id}>
                 {vpc.name || vpc.id}
               </option>
@@ -92,13 +96,7 @@ export function VpcsView() {
             </div>
           </div>
         }
-        info="A VPC is an isolated network in the current region."
-        meta={
-          <span className="inline-flex items-center gap-2">
-            {api.mode === "sample" ? <SampleBadge /> : null}
-            {updated}
-          </span>
-        }
+        info="A VPC is an isolated network in the current region, read from the VWS API."
         actions={
           <>
             <MenuButton
@@ -111,11 +109,8 @@ export function VpcsView() {
               items={[
                 {
                   label: "Delete",
-                  disabled: selected.length === 0,
-                  onSelect: () => {
-                    api.deleteVpcs(selected.map((item) => item.id));
-                    setSelectedIds([]);
-                  },
+                  disabled: action.pending || selected.length === 0,
+                  onSelect: () => action.run(() => deleteVpcsAction(selected.map((item) => item.id)), () => setSelectedIds([])),
                 },
               ]}
             />
@@ -123,6 +118,8 @@ export function VpcsView() {
           </>
         }
       />
+      <ApiErrorAlert error={loadError} title="VPCs could not be loaded" />
+      <ApiErrorAlert error={action.error} title="The VPC action failed" />
       <ResourceTable
         rows={rows}
         getId={(row) => row.id}
@@ -132,8 +129,8 @@ export function VpcsView() {
         emptyTitle="No VPCs"
         emptyMessage="You do not have any VPCs in this region"
         filterPlaceholder="Filter VPCs by attribute or tag"
-        presets={[{ id: "off", label: "Block public access off", match: (row) => row.blockPublicAccess === "off" }]}
-        onRefresh={() => setUpdated("Last updated less than a minute ago")}
+        presets={[{ id: "default", label: "Default VPC", match: (row) => row.isDefault === true }]}
+        onRefresh={action.refresh}
       />
       <DetailDock
         title={one ? one.name || one.id : "Select a VPC above"}
@@ -148,15 +145,7 @@ export function VpcsView() {
             <dl className="grid gap-3 text-[13px] sm:grid-cols-3">
               <div>
                 <dt className="font-semibold text-[#5f6b7a]">Subnets</dt>
-                <dd>{api.subnets.filter((item) => item.vpcId === one.id).map((item) => item.id).join(", ") || "—"}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-[#5f6b7a]">Route tables</dt>
-                <dd>{api.routeTables.filter((item) => item.vpcId === one.id).map((item) => item.id).join(", ") || "—"}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-[#5f6b7a]">Internet gateways</dt>
-                <dd>{api.internetGateways.filter((item) => item.vpcId === one.id).map((item) => item.id).join(", ") || "—"}</dd>
+                <dd>{subnets.filter((item) => item.vpcId === one.id).map((item) => item.id).join(", ") || "—"}</dd>
               </div>
             </dl>
           ) : vpcTab === "cidrs" ? (
@@ -165,7 +154,8 @@ export function VpcsView() {
             <dl className="grid gap-3 text-[13px] sm:grid-cols-3">
               <div><dt className="text-[#5f6b7a]">VPC ID</dt><dd>{one.id}</dd></div>
               <div><dt className="text-[#5f6b7a]">IPv4 CIDR</dt><dd>{one.ipv4Cidr}</dd></div>
-              <div><dt className="text-[#5f6b7a]">Block public access</dt><dd>{one.blockPublicAccess === "off" ? "Off" : "On"}</dd></div>
+              <div><dt className="text-[#5f6b7a]">Owner ID</dt><dd>{dash(one.owner)}</dd></div>
+              <div><dt className="text-[#5f6b7a]">Default VPC</dt><dd>{one.isDefault === null ? "—" : one.isDefault ? "Yes" : "No"}</dd></div>
             </dl>
           )
         ) : null}
@@ -177,12 +167,7 @@ export function VpcsView() {
         footer={
           <>
             <OutlineButton onClick={() => setCreateOpen(false)}>Cancel</OutlineButton>
-            <OrangeButton
-              onClick={() => {
-                api.createVpc(form);
-                setCreateOpen(false);
-              }}
-            >
+            <OrangeButton disabled={action.pending} onClick={() => action.run(() => createVpcAction(cidr), () => setCreateOpen(false))}>
               Create VPC
             </OrangeButton>
           </>
@@ -190,13 +175,10 @@ export function VpcsView() {
       >
         <div className="space-y-3">
           <div>
-            <FieldLabel>Name</FieldLabel>
-            <input className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-          </div>
-          <div>
             <FieldLabel>IPv4 CIDR</FieldLabel>
-            <input className="field" value={form.ipv4Cidr} onChange={(event) => setForm({ ...form, ipv4Cidr: event.target.value })} />
+            <input className="field" value={cidr} onChange={(event) => setCidr(event.target.value)} />
           </div>
+          <ApiErrorAlert error={action.error} title="The VPC could not be created" />
         </div>
       </PanelDialog>
     </Shell>

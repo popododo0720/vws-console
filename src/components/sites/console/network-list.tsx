@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { networkNav } from "@/lib/console-data";
+import type { Vpc } from "@/types/console";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
@@ -25,6 +26,9 @@ type ListAction<T> = {
 
 type Tab = { id: string; label: string };
 
+/** Set when rows come from the VWS API instead of the local data set. */
+type Live = { vpcs: Vpc[]; banner: ReactNode; onRefresh: () => void };
+
 export function NetworkList<T>({
   title,
   info,
@@ -41,6 +45,7 @@ export function NetworkList<T>({
   detailTabs,
   renderDetail,
   vpcOf,
+  live,
   children,
 }: {
   title: string;
@@ -58,6 +63,7 @@ export function NetworkList<T>({
   detailTabs?: Tab[];
   renderDetail: (row: T, tab: string) => ReactNode;
   vpcOf?: (row: T) => string;
+  live?: Live;
   children?: ReactNode;
 }) {
   const api = useConsole();
@@ -88,7 +94,7 @@ export function NetworkList<T>({
             Filter by VPC
             <select className="field mt-1" value={vpcFilter} onChange={(event) => setVpcFilter(event.target.value)}>
               <option value="all">Choose a VPC</option>
-              {api.vpcs.map((vpc) => (
+              {(live ? live.vpcs : api.vpcs).map((vpc) => (
                 <option key={vpc.id} value={vpc.id}>
                   {vpc.name || vpc.id}
                 </option>
@@ -104,8 +110,8 @@ export function NetworkList<T>({
         info={info}
         meta={
           <span className="inline-flex items-center gap-2">
-            {api.mode === "sample" ? <SampleBadge /> : null}
-            {updated}
+            {!live && api.mode === "sample" ? <SampleBadge /> : null}
+            {live ? null : updated}
           </span>
         }
         actions={
@@ -123,6 +129,7 @@ export function NetworkList<T>({
           </>
         }
       />
+      {live?.banner}
       <ResourceTable
         rows={visible}
         getId={getId}
@@ -133,7 +140,7 @@ export function NetworkList<T>({
         emptyMessage={emptyMessage}
         emptyAction={{ label: createLabel, onClick: onCreate }}
         filterPlaceholder={filterPlaceholder}
-        onRefresh={() => setUpdated("Last updated less than a minute ago")}
+        onRefresh={live ? live.onRefresh : () => setUpdated("Last updated less than a minute ago")}
       />
       <DetailDock
         title={one ? detailTitle(one) : "Select a resource"}

@@ -6,7 +6,9 @@ import Link from "next/link";
 import { CircleCheck, ExternalLink, Info, RefreshCw } from "lucide-react";
 import type { Instance } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
-import { useConsole } from "@/components/sites/console/console-provider";
+import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { startInstancesAction, stopInstancesAction, terminateInstancesAction } from "@/app/actions/resources";
+import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
@@ -35,14 +37,13 @@ function StatusCell({ row }: { row: Instance }) {
   );
 }
 
-export function InstancesView() {
-  const api = useConsole();
+export function InstancesView({ instances, loadError }: { instances: Instance[]; loadError: ApiError | null }) {
+  const action = useApiAction();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(300);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [connectOpen, setConnectOpen] = useState(false);
   const [panel, setPanel] = useState("details");
-  const selected = api.instances.filter((item) => selectedIds.includes(item.id));
+  const selected = instances.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
 
   const columns: Column<Instance>[] = [
@@ -51,7 +52,7 @@ export function InstancesView() {
       header: "Name",
       minWidth: 160,
       sortValue: (row) => row.name,
-      cell: (row) => <NameCell value={row.name} onRename={(name) => api.renameInstance(row.id, name)} />,
+      cell: (row) => <NameCell value={row.name} />,
     },
     { key: "id", header: "Instance ID", minWidth: 180, sortValue: (row) => row.id, cell: (row) => <InstanceLink id={row.id} /> },
     { key: "state", header: "Instance state", minWidth: 140, sortValue: (row) => row.state, cell: (row) => <StateDot state={row.state} /> },
@@ -72,7 +73,7 @@ export function InstancesView() {
           { label: "EC2", href: "/compute/instances" },
           { label: "Instances" },
         ]}
-        info="Instances are virtual machines in the current region. This list is local sample data."
+        info="Instances are virtual machines in the current region, read from the VWS API."
         actions={
           <>
             <button
@@ -81,7 +82,7 @@ export function InstancesView() {
               className="grid size-8 place-items-center rounded-full border border-[#006ce0] text-[#006ce0] hover:bg-[#f2f8fd]"
               onClick={() => {
                 setSelectedIds([]);
-                setRefreshKey((value) => value + 1);
+                action.refresh();
               }}
             >
               <RefreshCw className="size-3.5" />
@@ -99,18 +100,18 @@ export function InstancesView() {
               items={[
                 {
                   label: "Start",
-                  disabled: selected.every((item) => item.state === "running"),
-                  onSelect: () => api.setInstanceState(selected.map((item) => item.id), "running"),
+                  disabled: action.pending || selected.every((item) => item.state !== "stopped"),
+                  onSelect: () => action.run(() => startInstancesAction(selected.map((item) => item.id))),
                 },
                 {
                   label: "Stop",
-                  disabled: selected.every((item) => item.state !== "running"),
-                  onSelect: () => api.setInstanceState(selected.map((item) => item.id), "stopped"),
+                  disabled: action.pending || selected.every((item) => item.state !== "running"),
+                  onSelect: () => action.run(() => stopInstancesAction(selected.map((item) => item.id))),
                 },
                 {
                   label: "Terminate",
-                  disabled: selected.length === 0,
-                  onSelect: () => api.terminateInstances(selected.map((item) => item.id)),
+                  disabled: action.pending || selected.length === 0,
+                  onSelect: () => action.run(() => terminateInstancesAction(selected.map((item) => item.id)), () => setSelectedIds([])),
                 },
               ]}
             />
@@ -153,10 +154,11 @@ export function InstancesView() {
           </>
         }
       />
+      <ApiErrorAlert error={loadError} title="Instances could not be loaded" />
+      <ApiErrorAlert error={action.error} title="The instance action failed" />
       <ResourceTable
-        key={refreshKey}
         hideRefresh
-        rows={api.instances}
+        rows={instances}
         getId={(row) => row.id}
         columns={columns}
         selectedIds={selected.map((item) => item.id)}
