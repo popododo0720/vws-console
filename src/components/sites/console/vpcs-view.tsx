@@ -79,15 +79,19 @@ export function VpcsView() {
         </label>
       }
     >
-      <div className="border-b border-[#e6e8eb] px-4 pt-3">
-        <div className="flex gap-4 text-[14px]">
-          <span className="border-b-2 border-[#006ce0] pb-2 font-semibold text-[#006ce0]">VPCs</span>
-          <span className="pb-2 text-[#5f6b7a]">VPC encryption controls</span>
-        </div>
-      </div>
       <PageHeader
         mark="N"
-        crumbs={[{ label: "VPC", href: "/network/vpcs" }, { label: `Your VPCs (${rows.length})` }]}
+        crumbs={[{ label: "VPC", href: "/network/vpcs" }, { label: "Your VPCs" }]}
+        title={`Your VPCs (${rows.length})`}
+        lead={
+          <div className="border-b border-[#e6e8eb] px-4 pt-3">
+            <p className="text-[20px] font-bold leading-7">Your VPCs</p>
+            <div className="mt-2 flex gap-4 text-[14px]">
+              <span className="border-b-2 border-[#006ce0] pb-2 font-semibold text-[#006ce0]">VPCs</span>
+              <span className="pb-2 text-[#5f6b7a]">VPC encryption controls</span>
+            </div>
+          </div>
+        }
         info="A VPC is an isolated network in the current region."
         meta={
           <span className="inline-flex items-center gap-2">
@@ -132,7 +136,7 @@ export function VpcsView() {
         onRefresh={() => setUpdated("Last updated less than a minute ago")}
       />
       <DetailDock
-        title={one ? one.name || one.id : "VPC"}
+        title={one ? one.name || one.id : "Select a VPC above"}
         tabs={one ? [{ id: "details", label: "Details" }, { id: "cidrs", label: "CIDRs" }, { id: "map", label: "Resource map" }] : undefined}
         tab={vpcTab}
         onTab={setVpcTab}
@@ -164,9 +168,7 @@ export function VpcsView() {
               <div><dt className="text-[#5f6b7a]">Block public access</dt><dd>{one.blockPublicAccess === "off" ? "Off" : "On"}</dd></div>
             </dl>
           )
-        ) : (
-          <p className="py-8 text-center text-[14px] text-[#5f6b7a]">Select a VPC above</p>
-        )}
+        ) : null}
       </DetailDock>
       <PanelDialog
         open={createOpen}
