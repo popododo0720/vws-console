@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Bucket } from "@/types/console";
@@ -21,6 +21,11 @@ import {
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 
+// The resource name scheme is not settled with vws-api yet. Keep it in one place.
+function bucketArn(name: string) {
+  return `arn:vws:s3:::${name}`;
+}
+
 export function BucketsView() {
   const api = useConsole();
   const router = useRouter();
@@ -31,6 +36,7 @@ export function BucketsView() {
   const [confirm, setConfirm] = useState("");
   const [blockedNames, setBlockedNames] = useState<string[]>([]);
   const [dash, setDash] = useState(false);
+  const [cards, setCards] = useState({ snapshot: false, access: false });
   const rows = useMemo(() => api.buckets.filter((item) => item.kind === tab), [api.buckets, tab]);
   const selected = rows.filter((item) => selectedIds.includes(item.name));
   const generalCount = api.buckets.filter((item) => item.kind === "general").length;
@@ -89,24 +95,32 @@ export function BucketsView() {
                 className={cn("border-b-2 pb-2", tab === "general" ? "border-[#006ce0] font-semibold text-[#006ce0]" : "border-transparent text-[#16191f]")}
                 onClick={() => setTab("general")}
               >
-                General purpose buckets ({generalCount})
+                General purpose buckets
+                <span className="ml-2 rounded bg-[#414d5c] px-1.5 py-0.5 text-[11px] font-semibold text-white">All Regions</span>
               </button>
               <button
                 type="button"
                 className={cn("border-b-2 pb-2", tab === "directory" ? "border-[#006ce0] font-semibold text-[#006ce0]" : "border-transparent text-[#16191f]")}
                 onClick={() => setTab("directory")}
               >
-                Directory buckets ({directoryCount})
+                Directory buckets
               </button>
               <InfoTip text="General purpose buckets are the default. Directory buckets are a separate list in this preview." />
             </div>
             <div className="mx-4 rounded-lg border border-[#e6e8eb] bg-white p-3">
               <div className="mb-3 flex flex-wrap items-center gap-2">
+                <div className="mr-auto">
+                  <h2 className="flex items-center gap-2 text-[18px] font-bold">
+                    {tab === "general" ? "General purpose buckets" : "Directory buckets"}
+                    <span className="font-normal text-[#5f6b7a]">({tab === "general" ? generalCount : directoryCount})</span>
+                  </h2>
+                  <p className="text-[12px] text-[#5f6b7a]">Buckets are containers for data stored in object storage.</p>
+                </div>
                 <OutlineButton
-                  disabled={selected.length === 0}
-                  onClick={() => void copyToClipboard(selected.map((item) => item.name).join("\n"), "buckets-view")}
+                  disabled={selected.length !== 1}
+                  onClick={() => void copyToClipboard(bucketArn(selected[0].name), "buckets-view")}
                 >
-                  Copy name
+                  Copy ARN
                 </OutlineButton>
                 <OutlineButton
                   disabled={selected.length === 0}
@@ -120,7 +134,7 @@ export function BucketsView() {
                 >
                   Delete
                 </OutlineButton>
-                <Link href="/storage/buckets/create" className={cn(orangeLinkClass, "ml-auto")}>
+                <Link href="/storage/buckets/create" className={orangeLinkClass}>
                   Create bucket
                 </Link>
               </div>
@@ -141,31 +155,34 @@ export function BucketsView() {
             </div>
           </div>
           <aside className="w-full shrink-0 space-y-4 xl:w-[300px]">
-            <section className="rounded-lg border border-[#e6e8eb] bg-white p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="font-semibold">Account snapshot</h2>
-                <InfoTip text="Counts come from the records currently loaded in this session." />
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <span className="rounded bg-[#f2f3f3] px-2 py-0.5 text-[11px] text-[#5f6b7a]">Updated daily</span>
-                <OutlineButton onClick={() => setDash((value) => !value)}>View dashboard</OutlineButton>
-              </div>
+            <SideCard
+              title="Account snapshot"
+              info="Counts come from the records currently loaded in this session."
+              open={cards.snapshot}
+              onToggle={() => setCards((value) => ({ ...value, snapshot: !value.snapshot }))}
+              action={<OutlineButton onClick={() => setDash((value) => !value)}>View dashboard</OutlineButton>}
+              summary="Storage lens shows storage usage and activity trends."
+            >
               {dash ? (
-                <dl className="mt-3 space-y-1 text-[13px]">
+                <dl className="space-y-1 text-[13px]">
                   <div className="flex justify-between"><dt>Buckets</dt><dd>{api.buckets.length}</dd></div>
                   <div className="flex justify-between"><dt>Instances in region</dt><dd>{api.instances.length}</dd></div>
                   <div className="flex justify-between"><dt>Volumes in region</dt><dd>{api.volumes.length}</dd></div>
                   <div className="flex justify-between"><dt>VPCs in region</dt><dd>{api.vpcs.length}</dd></div>
                 </dl>
-              ) : null}
-            </section>
-            <section className="rounded-lg border border-[#e6e8eb] bg-white p-4">
-              <h2 className="font-semibold">External access summary</h2>
-              <span className="mt-3 inline-block rounded bg-[#f2f3f3] px-2 py-0.5 text-[11px] text-[#5f6b7a]">Updated daily</span>
-              <p className="mt-3 text-[13px] text-[#5f6b7a]">
-                Findings in this preview list buckets whose policy would allow access from outside the account. None are recorded.
-              </p>
-            </section>
+              ) : (
+                <p className="text-[13px] text-[#5f6b7a]">Open the dashboard to see counts for this session.</p>
+              )}
+            </SideCard>
+            <SideCard
+              title="External access summary"
+              info="Findings list buckets whose policy would allow access from outside the account."
+              open={cards.access}
+              onToggle={() => setCards((value) => ({ ...value, access: !value.access }))}
+              summary="External access findings identify bucket permissions that allow public access or access from other accounts."
+            >
+              <p className="text-[13px] text-[#5f6b7a]">No findings are recorded.</p>
+            </SideCard>
           </aside>
         </div>
       </div>
@@ -210,5 +227,43 @@ export function BucketsView() {
         <input className="field" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
       </PanelDialog>
     </Shell>
+  );
+}
+
+function SideCard({
+  title,
+  info,
+  open,
+  onToggle,
+  action,
+  summary,
+  children,
+}: {
+  title: string;
+  info: string;
+  open: boolean;
+  onToggle: () => void;
+  action?: ReactNode;
+  summary: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-lg border border-[#e6e8eb] bg-white p-4">
+      <div className="flex items-start gap-2">
+        <div className="flex items-center gap-2">
+          <button type="button" className="flex items-center gap-2 text-left" aria-expanded={open} onClick={onToggle}>
+            <span aria-hidden className="w-3 text-[9px]">{open ? "▼" : "▶"}</span>
+            <h2 className="whitespace-nowrap font-bold">{title}</h2>
+          </button>
+          <InfoTip text={info} />
+        </div>
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span className="rounded bg-[#414d5c] px-1.5 py-0.5 text-[11px] text-white">Updated daily</span>
+        {action}
+      </div>
+      <p className="mt-2 text-[13px] text-[#5f6b7a]">{summary}</p>
+      {open ? <div className="mt-3 border-t border-[#e6e8eb] pt-3">{children}</div> : null}
+    </section>
   );
 }
