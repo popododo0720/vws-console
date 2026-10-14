@@ -24,7 +24,6 @@ import type {
   BucketObject,
   Dataset,
   Instance,
-  InstanceState,
   InternetGateway,
   LaunchDraft,
   RouteTable,
@@ -62,13 +61,7 @@ type ConsoleApi = {
   buckets: Bucket[];
   objects: BucketObject[];
   keyPairs: Dataset["keyPairs"];
-  renameInstance: (id: string, name: string) => void;
-  setInstanceState: (ids: string[], state: InstanceState) => void;
-  terminateInstances: (ids: string[]) => void;
   launch: (draft: LaunchDraft) => void;
-  createVolume: (input: { name: string; volumeType: string; sizeGiB: number; availabilityZone: string }) => void;
-  deleteVolumes: (ids: string[]) => void;
-  modifyVolume: (id: string, input: { volumeType: string; sizeGiB: number }) => void;
   createSnapshot: (input: { volumeId: string; name: string; description: string }) => void;
   deleteSnapshots: (ids: string[]) => void;
   createSecurityGroup: (input: {
@@ -81,10 +74,6 @@ type ConsoleApi = {
   }) => string;
   updateSecurityGroupRules: (id: string, direction: SecurityGroupRule["direction"], rules: SecurityGroupRule[]) => void;
   deleteSecurityGroups: (ids: string[]) => void;
-  createVpc: (input: { name: string; ipv4Cidr: string }) => void;
-  deleteVpcs: (ids: string[]) => void;
-  createSubnet: (input: { name: string; vpcId: string; ipv4Cidr: string; availabilityZone: string }) => string | null;
-  deleteSubnets: (ids: string[]) => void;
   createRouteTable: (input: { name: string; vpcId: string }) => void;
   deleteRouteTables: (ids: string[]) => void;
   addRoute: (tableId: string, destination: string, target: string) => string | null;
@@ -120,24 +109,6 @@ function isCidr(value: string) {
   return match.slice(1, 5).every((part) => Number(part) <= 255) && Number(match[5]) <= 32;
 }
 
-function ipToInt(ip: string) {
-  return ip.split(".").reduce((acc, part) => acc * 256 + Number(part), 0);
-}
-
-function validateSubnetCidr(cidr: string, vpc: Vpc | undefined) {
-  if (!vpc) return "Choose a VPC.";
-  if (!isCidr(cidr)) return "IPv4 CIDR must look like 10.0.1.0/24.";
-  const prefix = Number(cidr.split("/")[1]);
-  if (prefix < 16 || prefix > 28) return "Subnet size must be between /16 and /28.";
-  const [vpcBase, vpcPrefix] = vpc.ipv4Cidr.split("/");
-  const size = 2 ** (32 - prefix);
-  const start = ipToInt(cidr.split("/")[0]);
-  const vpcStart = ipToInt(vpcBase);
-  const vpcSize = 2 ** (32 - Number(vpcPrefix));
-  if (start % size !== 0) return "CIDR block must start on a boundary of its own size.";
-  if (start < vpcStart || start + size > vpcStart + vpcSize) return `CIDR block must be inside the VPC range ${vpc.ipv4Cidr}.`;
-  return null;
-}
 
 function nextTestAddress(existing: ElasticIp[]) {
   const used = new Set(existing.map((item) => item.address));
@@ -192,35 +163,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       showSample: () => {
         setMode("sample");
         setData(createSampleAccount());
-      },
-      renameInstance: (id, name) => {
-        setData((prev) => ({
-          ...prev,
-          instances: prev.instances.map((item) => (item.id === id ? { ...item, name } : item)),
-        }));
-      },
-      setInstanceState: (ids, state) => {
-        setData((prev) => ({
-          ...prev,
-          instances: prev.instances.map((item) =>
-            ids.includes(item.id)
-              ? {
-                  ...item,
-                  state,
-                  status: state === "running" ? "ok" : "none",
-                  checksPassed: state === "running" ? 3 : 0,
-                }
-              : item,
-          ),
-        }));
-      },
-      terminateInstances: (ids) => {
-        setData((prev) => ({
-          ...prev,
-          instances: prev.instances.filter((item) => !ids.includes(item.id)),
-          volumes: prev.volumes.filter((item) => !ids.includes(item.attachedTo)),
-          elasticIps: prev.elasticIps.map((item) => (ids.includes(item.instanceId) ? { ...item, instanceId: "" } : item)),
-        }));
       },
       launch: (draft) => {
         const count = Math.min(20, Math.max(1, Math.round(draft.count) || 1));
@@ -285,6 +227,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
               ipv6: "",
               region,
               vpcId: draft.vpcId,
+              subnetId: "",
               securityGroupIds: groupId ? [groupId] : [],
               keyPair: draft.keyPair,
               imageId: image?.id ?? draft.imageId,
@@ -293,6 +236,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
             next.volumes.push({
               id: newId("blk"),
               name: name ? `${name}-root` : "",
+              state: "",
               volumeType: spec.id,
               sizeGiB: draft.volumeGiB,
               iops: spec.iops,
@@ -308,48 +252,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
           }
           return next;
         });
-      },
-      createVolume: (input) => {
-        const spec = volumeTypeOptions.find((item) => item.id === input.volumeType) ?? volumeTypeOptions[0];
-        setData((prev) => ({
-          ...prev,
-          volumes: [
-            {
-              id: newId("blk"),
-              name: input.name,
-              volumeType: spec.id,
-              sizeGiB: input.sizeGiB,
-              iops: spec.iops,
-              throughput: spec.throughput,
-              owner: ACCOUNT.id,
-              snapshotId: "",
-              sourceVolumeId: "",
-              created: "Just now",
-              availabilityZone: input.availabilityZone,
-              region,
-              attachedTo: "",
-            },
-            ...prev.volumes,
-          ],
-        }));
-      },
-      deleteVolumes: (ids) => {
-        setData((prev) => ({
-          ...prev,
-          volumes: prev.volumes.filter((item) => !ids.includes(item.id)),
-        }));
-      },
-      modifyVolume: (id, input) => {
-        const spec = volumeTypeOptions.find((item) => item.id === input.volumeType);
-        if (!spec) return;
-        setData((prev) => ({
-          ...prev,
-          volumes: prev.volumes.map((item) =>
-            item.id === id
-              ? { ...item, volumeType: spec.id, sizeGiB: Math.max(item.sizeGiB, input.sizeGiB), iops: spec.iops, throughput: spec.throughput }
-              : item,
-          ),
-        }));
       },
       createSnapshot: (input) => {
         setData((prev) => {
@@ -423,77 +325,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         setData((prev) => ({
           ...prev,
           securityGroups: prev.securityGroups.filter((item) => !ids.includes(item.id)),
-        }));
-      },
-      createVpc: (input) => {
-        setData((prev) => ({
-          ...prev,
-          vpcs: [
-            {
-              id: newId("vpc"),
-              name: input.name,
-              state: "available",
-              encryption: "—",
-              encryptionControl: "—",
-              blockPublicAccess: "off",
-              ipv4Cidr: input.ipv4Cidr,
-              ipv6Cidr: "",
-              region,
-            },
-            ...prev.vpcs,
-          ],
-        }));
-      },
-      deleteVpcs: (ids) => {
-        setData((prev) => ({
-          ...prev,
-          vpcs: prev.vpcs.filter((item) => !ids.includes(item.id)),
-          subnets: prev.subnets.filter((item) => !ids.includes(item.vpcId)),
-          routeTables: prev.routeTables.filter((item) => !ids.includes(item.vpcId)),
-          internetGateways: prev.internetGateways.map((item) =>
-            ids.includes(item.vpcId) ? { ...item, state: "detached", vpcId: "" } : item,
-          ),
-        }));
-      },
-      createSubnet: (input) => {
-        const error = validateSubnetCidr(input.ipv4Cidr, data.vpcs.find((item) => item.id === input.vpcId));
-        if (error) return error;
-        const prefix = Number(input.ipv4Cidr.split("/")[1]);
-        setData((prev) => {
-          const main = prev.routeTables.find((item) => item.vpcId === input.vpcId && item.main);
-          const id = newId("subnet");
-          return {
-            ...prev,
-            subnets: [
-              {
-                id,
-                name: input.name,
-                vpcId: input.vpcId,
-                state: "available",
-                ipv4Cidr: input.ipv4Cidr,
-                availableIps: 2 ** (32 - prefix) - 5,
-                availabilityZone: input.availabilityZone,
-                routeTableId: main?.id ?? "",
-                autoAssignPublicIp: false,
-                region,
-              },
-              ...prev.subnets,
-            ],
-            routeTables: prev.routeTables.map((item) =>
-              main && item.id === main.id ? { ...item, subnetIds: [...item.subnetIds, id] } : item,
-            ),
-          };
-        });
-        return null;
-      },
-      deleteSubnets: (ids) => {
-        setData((prev) => ({
-          ...prev,
-          subnets: prev.subnets.filter((item) => !ids.includes(item.id)),
-          routeTables: prev.routeTables.map((item) => ({
-            ...item,
-            subnetIds: item.subnetIds.filter((subnetId) => !ids.includes(subnetId)),
-          })),
         }));
       },
       createRouteTable: (input) => {

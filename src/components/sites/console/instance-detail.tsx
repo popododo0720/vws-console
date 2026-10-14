@@ -21,6 +21,8 @@ const stateMeta: Record<Instance["state"], { label: string; color: string }> = {
   stopped: { label: "Stopped", color: "#d13212" },
   pending: { label: "Pending", color: "#006ce0" },
   stopping: { label: "Stopping", color: "#d13212" },
+  "shutting-down": { label: "Shutting-down", color: "#d13212" },
+  terminated: { label: "Terminated", color: "#5f6b7a" },
 };
 
 export function StateDot({ state }: { state: Instance["state"] }) {

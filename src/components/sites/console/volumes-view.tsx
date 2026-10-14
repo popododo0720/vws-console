@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import type { Volume } from "@/types/console";
-import { computeNav, volumeTypeOptions, zonesFor } from "@/lib/console-data";
-import { useConsole } from "@/components/sites/console/console-provider";
+import { computeNav } from "@/lib/console-data";
+import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { createSnapshotAction, createVolumeAction, deleteVolumesAction } from "@/app/actions/ec2";
+import type { ApiError } from "@/lib/vws-api/ec2";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
@@ -22,27 +24,29 @@ import {
   menuTriggerClass,
 } from "@/components/sites/console/ui";
 
+const VOLUME_TYPES = ["gp3", "gp2", "standard"];
+
 function volumeState(row: Volume) {
-  return row.attachedTo ? "In-use" : "Available";
+  return row.state ? row.state.charAt(0).toUpperCase() + row.state.slice(1) : "—";
 }
 
-export function VolumesView() {
-  const api = useConsole();
+export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadError: ApiError | null }) {
+  const action = useApiAction();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(240);
   const [updated, setUpdated] = useState("less than a minute ago");
   const [createOpen, setCreateOpen] = useState(false);
   const [recycleOpen, setRecycleOpen] = useState(false);
-  const [tab, setTab] = useState("details");
-  const [modifyOpen, setModifyOpen] = useState(false);
   const [snapOpen, setSnapOpen] = useState(false);
-  const [modForm, setModForm] = useState({ volumeType: "General SSD", sizeGiB: 8 });
-  const [snapForm, setSnapForm] = useState({ name: "", description: "" });
-  const [form, setForm] = useState({ name: "", volumeType: "General SSD", sizeGiB: 8, availabilityZone: zonesFor(api.region)[0] ?? "north-a" });
-  const selected = api.volumes.filter((item) => selectedIds.includes(item.id));
+  const [snapDescription, setSnapDescription] = useState("");
+  const [form, setForm] = useState({ volumeType: VOLUME_TYPES[0], sizeGiB: 8 });
+  const selected = volumes.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
-  const volumeSnapshots = one ? api.snapshots.filter((item) => item.volumeId === one.id) : [];
-  const backedUp = api.volumes.filter((item) => item.snapshotId).length;
+  const backedUp = volumes.filter((item) => item.snapshotId).length;
+  const refresh = () => {
+    setUpdated("less than a minute ago");
+    action.refresh();
+  };
 
   const columns: Column<Volume>[] = [
     { key: "name", header: "Name", minWidth: 140, sortValue: (row) => row.name, cell: (row) => <NameCell value={row.name} /> },
@@ -50,12 +54,12 @@ export function VolumesView() {
     { key: "state", header: "Volume state", minWidth: 120, sortValue: (row) => volumeState(row), cell: (row) => volumeState(row) },
     { key: "type", header: "Type", minWidth: 130, sortValue: (row) => row.volumeType, cell: (row) => row.volumeType },
     { key: "size", header: "Size", minWidth: 80, sortValue: (row) => String(row.sizeGiB), cell: (row) => `${row.sizeGiB} GiB` },
-    { key: "iops", header: "IOPS", minWidth: 80, sortValue: (row) => String(row.iops), cell: (row) => row.iops },
-    { key: "throughput", header: "Throughput", minWidth: 110, sortValue: (row) => row.throughput, cell: (row) => row.throughput },
-    { key: "owner", header: "Owner ID", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => row.owner },
+    { key: "iops", header: "IOPS", minWidth: 80, sortValue: (row) => String(row.iops ?? ""), cell: (row) => (row.iops === null ? "—" : row.iops) },
+    { key: "throughput", header: "Throughput", minWidth: 110, sortValue: (row) => row.throughput, cell: (row) => dash(row.throughput) },
+    { key: "owner", header: "Owner ID", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => dash(row.owner) },
     { key: "snapshot", header: "Snapshot ID", minWidth: 120, sortValue: (row) => row.snapshotId, cell: (row) => dash(row.snapshotId) },
     { key: "source", header: "Source volume ID", minWidth: 150, sortValue: (row) => row.sourceVolumeId, cell: (row) => dash(row.sourceVolumeId) },
-    { key: "created", header: "Created", minWidth: 120, sortValue: (row) => row.created, cell: (row) => row.created },
+    { key: "created", header: "Created", minWidth: 120, sortValue: (row) => row.created, cell: (row) => dash(row.created) },
     { key: "az", header: "Availability", minWidth: 120, sortValue: (row) => row.availabilityZone, cell: (row) => row.availabilityZone },
   ];
 
@@ -64,7 +68,7 @@ export function VolumesView() {
       <PageHeader
         mark="C"
         crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: "Volumes" }]}
-        info="Volumes are block disks in the current region. Attachment is shown when a volume is tied to an instance."
+        info="Volumes are block disks in the current region, read from the VWS API."
         actions={
           <>
             <span className="text-right text-[12px] leading-4 text-[#5f6b7a]">
@@ -72,7 +76,7 @@ export function VolumesView() {
               <br />
               {updated}
             </span>
-            <RefreshButton onClick={() => setUpdated("less than a minute ago")} />
+            <RefreshButton onClick={refresh} />
             <OutlineButton onClick={() => setRecycleOpen(true)}>Recycle bin</OutlineButton>
             <MenuButton
               className={menuTriggerClass()}
@@ -83,26 +87,17 @@ export function VolumesView() {
               }
               items={[
                 {
-                  label: "Modify volume",
-                  disabled: !one,
-                  onSelect: () => {
-                    if (!one) return;
-                    setModForm({ volumeType: one.volumeType, sizeGiB: one.sizeGiB });
-                    setModifyOpen(true);
-                  },
-                },
-                {
                   label: "Create snapshot",
                   disabled: !one,
                   onSelect: () => {
-                    setSnapForm({ name: "", description: "" });
+                    setSnapDescription("");
                     setSnapOpen(true);
                   },
                 },
                 {
                   label: "Delete volume",
-                  disabled: selected.length === 0,
-                  onSelect: () => api.deleteVolumes(selected.map((item) => item.id)),
+                  disabled: action.pending || selected.length === 0,
+                  onSelect: () => action.run(() => deleteVolumesAction(selected.map((item) => item.id)), () => setSelectedIds([])),
                 },
               ]}
             />
@@ -110,8 +105,10 @@ export function VolumesView() {
           </>
         }
       />
+      <ApiErrorAlert error={loadError} title="Volumes could not be loaded" />
+      <ApiErrorAlert error={action.error} title="The volume action failed" />
       <ResourceTable
-        rows={api.volumes}
+        rows={volumes}
         getId={(row) => row.id}
         columns={columns}
         selectedIds={selected.map((item) => item.id)}
@@ -120,7 +117,7 @@ export function VolumesView() {
         emptyMessage="You currently have no volumes in this region"
         filterPlaceholder="Search"
         presets={[
-          { id: "ssd", label: "General SSD", match: (row) => row.volumeType === "General SSD" },
+          { id: "gp3", label: "gp3", match: (row) => row.volumeType === "gp3" },
           { id: "large", label: "20 GiB or larger", match: (row) => row.sizeGiB >= 20 },
         ]}
         hideRefresh
@@ -129,32 +126,22 @@ export function VolumesView() {
         title={one ? `Volume ID: ${one.id}` : "Fault tolerance for all volumes in this Region"}
         height={dock}
         onHeight={setDock}
-        tabs={
-          one
-            ? [
-                { id: "details", label: "Details" },
-                { id: "snapshots", label: "Snapshots" },
-              ]
-            : undefined
-        }
-        tab={tab}
-        onTab={setTab}
       >
-        {one && tab === "details" ? (
+        {one ? (
           <dl className="grid gap-x-8 gap-y-3 text-[13px] sm:grid-cols-3">
             {[
               ["Volume ID", one.id],
               ["Size", `${one.sizeGiB} GiB`],
               ["Type", one.volumeType],
               ["Volume state", volumeState(one)],
-              ["IOPS", String(one.iops)],
-              ["Throughput", one.throughput],
+              ["IOPS", one.iops === null ? "—" : String(one.iops)],
+              ["Throughput", dash(one.throughput)],
               ["Availability Zone", one.availabilityZone],
-              ["Created", one.created],
+              ["Created", dash(one.created)],
               ["Attached instance", dash(one.attachedTo)],
               ["Snapshot ID", dash(one.snapshotId)],
               ["Source volume ID", dash(one.sourceVolumeId)],
-              ["Owner ID", one.owner],
+              ["Owner ID", dash(one.owner)],
             ].map(([k, v]) => (
               <div key={k}>
                 <dt className="font-semibold text-[#5f6b7a]">{k}</dt>
@@ -163,26 +150,13 @@ export function VolumesView() {
             ))}
           </dl>
         ) : null}
-        {one && tab === "snapshots" ? (
-          volumeSnapshots.length === 0 ? (
-            <p className="text-[13px] text-[#5f6b7a]">No snapshots for this volume.</p>
-          ) : (
-            <ul className="space-y-1 text-[13px]">
-              {volumeSnapshots.map((item) => (
-                <li key={item.id}>
-                  {item.id} · {item.state} · {item.started}
-                </li>
-              ))}
-            </ul>
-          )
-        ) : null}
         {!one ? (
           <article className="rounded-lg border border-[#e6e8eb] p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <h3 className="text-[16px] font-bold">Snapshot summary</h3>
               <span className="flex items-center gap-2 text-[12px] text-[#5f6b7a]">
                 Last updated {updated}
-                <RefreshButton onClick={() => setUpdated("less than a minute ago")} />
+                <RefreshButton onClick={refresh} />
               </span>
             </div>
             <p className="mt-1 max-w-3xl text-[13px] text-[#5f6b7a]">
@@ -192,7 +166,7 @@ export function VolumesView() {
               <div>
                 <p className="text-[13px] font-semibold">Volumes with a snapshot / Total # volumes</p>
                 <p className="mt-1 text-[13px]">
-                  {backedUp} / {api.volumes.length}
+                  {backedUp} / {volumes.length}
                 </p>
               </div>
               <div className="sm:border-l sm:border-[#e6e8eb] sm:pl-4">
@@ -212,41 +186,7 @@ export function VolumesView() {
         onClose={() => setRecycleOpen(false)}
         footer={<OutlineButton onClick={() => setRecycleOpen(false)}>Close</OutlineButton>}
       >
-        <p>The recycle bin is empty. Deleted volumes in this preview are removed immediately.</p>
-      </PanelDialog>
-      <PanelDialog
-        open={modifyOpen}
-        title="Modify volume"
-        onClose={() => setModifyOpen(false)}
-        footer={
-          <>
-            <OutlineButton onClick={() => setModifyOpen(false)}>Cancel</OutlineButton>
-            <OrangeButton
-              onClick={() => {
-                if (one) api.modifyVolume(one.id, modForm);
-                setModifyOpen(false);
-              }}
-            >
-              Modify
-            </OrangeButton>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Volume type</FieldLabel>
-            <select className="field" value={modForm.volumeType} onChange={(event) => setModForm({ ...modForm, volumeType: event.target.value })}>
-              {volumeTypeOptions.map((item) => (
-                <option key={item.id}>{item.id}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <FieldLabel>Size (GiB)</FieldLabel>
-            <input className="field" type="number" min={one?.sizeGiB ?? 1} value={modForm.sizeGiB} onChange={(event) => setModForm({ ...modForm, sizeGiB: Number(event.target.value) })} />
-            <p className="mt-1 text-[12px] text-[#5f6b7a]">A volume can only grow. Smaller values keep the current size.</p>
-          </div>
-        </div>
+        <p>The recycle bin is empty. Deleted volumes are removed immediately.</p>
       </PanelDialog>
       <PanelDialog
         open={snapOpen}
@@ -256,9 +196,9 @@ export function VolumesView() {
           <>
             <OutlineButton onClick={() => setSnapOpen(false)}>Cancel</OutlineButton>
             <OrangeButton
+              disabled={action.pending}
               onClick={() => {
-                if (one) api.createSnapshot({ volumeId: one.id, ...snapForm });
-                setSnapOpen(false);
+                if (one) action.run(() => createSnapshotAction(one.id, snapDescription), () => setSnapOpen(false));
               }}
             >
               Create snapshot
@@ -272,12 +212,8 @@ export function VolumesView() {
             <p className="text-[13px]">{one?.id ?? "—"}</p>
           </div>
           <div>
-            <FieldLabel>Name</FieldLabel>
-            <input className="field" value={snapForm.name} onChange={(event) => setSnapForm({ ...snapForm, name: event.target.value })} />
-          </div>
-          <div>
             <FieldLabel>Description</FieldLabel>
-            <input className="field" value={snapForm.description} onChange={(event) => setSnapForm({ ...snapForm, description: event.target.value })} />
+            <input className="field" value={snapDescription} onChange={(event) => setSnapDescription(event.target.value)} />
           </div>
         </div>
       </PanelDialog>
@@ -289,10 +225,8 @@ export function VolumesView() {
           <>
             <OutlineButton onClick={() => setCreateOpen(false)}>Cancel</OutlineButton>
             <OrangeButton
-              onClick={() => {
-                api.createVolume({ ...form, sizeGiB: Number(form.sizeGiB) || 1 });
-                setCreateOpen(false);
-              }}
+              disabled={action.pending}
+              onClick={() => action.run(() => createVolumeAction(Number(form.sizeGiB) || 1, form.volumeType), () => setCreateOpen(false))}
             >
               Create volume
             </OrangeButton>
@@ -301,14 +235,10 @@ export function VolumesView() {
       >
         <div className="space-y-3">
           <div>
-            <FieldLabel>Name</FieldLabel>
-            <input className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-          </div>
-          <div>
             <FieldLabel>Type</FieldLabel>
             <select className="field" value={form.volumeType} onChange={(event) => setForm({ ...form, volumeType: event.target.value })}>
-              {volumeTypeOptions.map((item) => (
-                <option key={item.id}>{item.id}</option>
+              {VOLUME_TYPES.map((item) => (
+                <option key={item}>{item}</option>
               ))}
             </select>
           </div>
@@ -316,14 +246,7 @@ export function VolumesView() {
             <FieldLabel>Size (GiB)</FieldLabel>
             <input className="field" type="number" min={1} value={form.sizeGiB} onChange={(event) => setForm({ ...form, sizeGiB: Number(event.target.value) })} />
           </div>
-          <div>
-            <FieldLabel>Availability Zone</FieldLabel>
-            <select className="field" value={form.availabilityZone} onChange={(event) => setForm({ ...form, availabilityZone: event.target.value })}>
-              {zonesFor(api.region).map((zone) => (
-                <option key={zone}>{zone}</option>
-              ))}
-            </select>
-          </div>
+          <ApiErrorAlert error={action.error} title="The volume could not be created" />
         </div>
       </PanelDialog>
     </Shell>

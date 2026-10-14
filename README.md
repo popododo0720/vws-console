@@ -27,6 +27,21 @@ No environment variables are required, and no `.env` file is read by the app. `P
 
 Check it is up: `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:43123/compute/instances` prints `200`. The root path `/` redirects (307) to the instances screen.
 
+## Connect to console-api
+
+The Instances, Volumes, VPCs and Subnets screens read and change resources through the vws-console-api EC2 Query endpoint. The console server signs each call with SigV4. Credentials stay on the server and never reach the browser.
+
+| Variable | Meaning |
+| --- | --- |
+| `VWS_API_URL` | EC2 Query endpoint, for example `http://127.0.0.1:8081/` |
+| `VWS_ACCESS_KEY_ID` | Access key the API accepts |
+| `VWS_SECRET_ACCESS_KEY` | Secret for that key |
+| `VWS_REGION` | Signing region, default `vws-1` |
+
+Without them those screens show a `ConsoleNotConfigured` error. The other screens still use local data.
+
+`npx playwright test -c playwright.live.config.ts` starts console-api with its fake backend (`VWS_CONSOLE_API_DIR`, default `../vws-console-api`, needs Go) and runs the live tests against it.
+
 ## Screens
 
 | Screen | Route |
