@@ -15,11 +15,12 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const identity = identityFromSession(await signedInSession());
+  const signIn = await iamEnabled();
+  const identity = identityFromSession(await signedInSession(), { iam: signIn });
   return (
     <html lang="en" className="h-full antialiased">
       <body className="console min-h-full">
-        <ConsoleProvider identity={identity} signIn={iamEnabled()}>{children}</ConsoleProvider>
+        <ConsoleProvider identity={identity} signIn={signIn}>{children}</ConsoleProvider>
       </body>
     </html>
   );

@@ -9,6 +9,6 @@ export const metadata: Metadata = { title: "Sign in · VWS" };
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   // With IAM off there is no sign-in; the console works with the server-side token.
-  if (!iamEnabled()) redirect(safeNext(params.next));
+  if (!(await iamEnabled())) redirect(safeNext(params.next));
   return <LoginView next={safeNext(params.next)} expired={params.reason === "expired"} />;
 }

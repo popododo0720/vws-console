@@ -28,7 +28,7 @@ export async function loginAction(_prev: LoginState, form: FormData): Promise<Lo
 }
 
 export async function logoutAction() {
-  if (!iamEnabled()) redirect("/");
+  if (!(await iamEnabled())) redirect("/");
   await vws.logout();
   await clearSession();
   redirect("/login");

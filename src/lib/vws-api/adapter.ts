@@ -257,7 +257,8 @@ export function firstItem(body: unknown, key: string): string {
 export type Identity = { userName: string; accountId: string };
 
 /** Maps GET /auth/session to the menu identity: the user name is the last part of the principal ARN. */
-export function identityFromSession(session: { principal?: string; account?: string } | null): Identity {
+export function identityFromSession(session: { principal?: string; account?: string } | null, mode: { iam: boolean } = { iam: true }): Identity {
+  if (!mode.iam) return { userName: "root (IAM off)", accountId: session?.account?.trim() || "—" };
   const principal = session?.principal?.trim() ?? "";
   const resource = principal.slice(principal.lastIndexOf(":") + 1);
   const userName = resource.slice(resource.lastIndexOf("/") + 1);

@@ -63,10 +63,22 @@ describe("proxy", () => {
     expect((await proxy(req("/network/vpcs"))).headers.get("location")).toBeNull();
   });
 
-  it("asks for no sign-in with IAM off, the default", async () => {
-    vi.stubEnv("VWS_CONSOLE_IAM", "");
+  it("asks for no sign-in with IAM forced off", async () => {
+    vi.stubEnv("VWS_CONSOLE_IAM", "off");
     const response = await proxy(req("/network/vpcs"));
     expect(response.headers.get("location")).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("detects IAM off from console-api and asks for no sign-in", async () => {
+    const { resetIamModeCache } = await import("@/lib/vws-api/mode");
+    resetIamModeCache();
+    vi.stubEnv("VWS_CONSOLE_IAM", "");
+    fetchMock.mockResolvedValue(new Response('{"loginEnabled":false}', { status: 200 }));
+    expect((await proxy(req("/network/vpcs"))).headers.get("location")).toBeNull();
+    resetIamModeCache();
+    fetchMock.mockResolvedValue(new Response("{}", { status: 401 }));
+    expect((await proxy(req("/network/vpcs"))).headers.get("location")).toContain("/login?next=");
+    resetIamModeCache();
   });
 });

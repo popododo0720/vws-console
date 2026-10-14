@@ -373,7 +373,7 @@ describe("console-api client", () => {
 
   describe("IAM off (the default)", () => {
     beforeEach(() => {
-      vi.stubEnv("VWS_CONSOLE_IAM", "");
+      vi.stubEnv("VWS_CONSOLE_IAM", "off");
       vi.stubEnv("VWS_CONSOLE_API_TOKEN", "tok");
     });
 
@@ -401,22 +401,18 @@ describe("console-api client", () => {
       expect(calls).toEqual([]);
     });
 
-    it("refuses sign-in, skips sign-out and has no session for the menu", async () => {
+    it("refuses sign-in and skips sign-out without calling the API", async () => {
       serve();
       expect(await login({ account: "1", userName: "root", password: "pw" })).toMatchObject({ ok: false, error: { code: "SignInDisabled" } });
       await logout();
-      expect(await signedInSession()).toBeNull();
       expect(calls).toEqual([]);
     });
 
-    it("treats any value other than on as off", async () => {
-      const { iamMode } = await import("./mode");
-      for (const value of ["", "off", "true", "1", "yes"]) {
-        vi.stubEnv("VWS_CONSOLE_IAM", value);
-        expect(iamMode()).toBe("off");
-      }
-      vi.stubEnv("VWS_CONSOLE_IAM", " ON ");
-      expect(iamMode()).toBe("on");
+    it("reads the account for the menu with the bearer token", async () => {
+      serve(respond(200, { principal: "arn:vws:iam::123456789012:root", account: "123456789012", root: true, loginEnabled: false }));
+      expect(await signedInSession()).toMatchObject({ account: "123456789012" });
+      expect(calls[0].init.headers).toMatchObject({ authorization: "Bearer tok" });
+      expect((calls[0].init.headers as Record<string, string>).cookie).toBeUndefined();
     });
   });
 });

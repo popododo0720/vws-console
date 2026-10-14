@@ -4,7 +4,7 @@ import { headers as requestHeaders } from "next/headers";
 import { redirect } from "next/navigation";
 import { currentSession } from "./session";
 import { logAuth } from "./log";
-import { iamEnabled } from "./mode";
+import { iamEnabled, noteLoginEnabled } from "./mode";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
 import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type { ElasticIp, Instance, SecurityGroup, Snapshot, Subnet, Volume, Vpc } from "@/types/console";
@@ -95,7 +95,7 @@ async function toLogin(reason: "signin" | "expired"): Promise<never> {
 async function request(method: "GET" | "POST", path: string, body?: unknown): Promise<ApiResult<{ status: number; json: unknown }>> {
   const base = apiBase();
   if (typeof base !== "string") return { ok: false, error: base };
-  const iam = iamEnabled();
+  const iam = await iamEnabled();
   const headers: Record<string, string> = { accept: "application/json" };
   if (iam) {
     const session = await currentSession();
@@ -282,7 +282,7 @@ export type LoginInput = { account: string; userName: string; password: string; 
 
 /** Signs in with POST /auth/login and returns the session cookies console-api set. Never retried. */
 export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
-  if (!iamEnabled()) return { ok: false, error: { code: "SignInDisabled", message: "Sign-in is off on this console.", requestId: null } };
+  if (!(await iamEnabled())) return { ok: false, error: { code: "SignInDisabled", message: "Sign-in is off on this console.", requestId: null } };
   const base = apiBase();
   if (typeof base !== "string") return { ok: false, error: base };
   const started = performance.now();
@@ -316,6 +316,7 @@ export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
     done("error", reply.status, reply.requestId, "MalformedResponse");
     return { ok: false, error: malformed("/auth/login") };
   }
+  noteLoginEnabled(json);
   done("success", reply.status, reply.requestId);
   return { ok: true, value: session };
 }
@@ -323,7 +324,7 @@ export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
 /** Revokes the session with POST /auth/logout. A missing or expired session is already signed out. Never retried. */
 export async function logout(): Promise<void> {
   const base = apiBase();
-  const session = iamEnabled() ? await currentSession() : null;
+  const session = (await iamEnabled()) ? await currentSession() : null;
   const started = performance.now();
   if (typeof base !== "string" || !session) {
     logAuth({ event: "auth.logout", outcome: "skipped", status: null, requestId: null, durationMs: performance.now() - started });
@@ -364,15 +365,23 @@ export async function getSession(): Promise<ApiResult<SessionInfo>> {
  * there is no session, or it no longer answers. Pages still redirect through their own calls.
  */
 export async function signedInSession(): Promise<SessionInfo | null> {
-  if (!iamEnabled()) return null;
+  const iam = await iamEnabled();
   const base = apiBase();
-  const session = await currentSession();
-  if (typeof base !== "string" || !session) return null;
+  if (typeof base !== "string") return null;
+  let credentials: Record<string, string>;
+  if (iam) {
+    const session = await currentSession();
+    if (!session) return null;
+    credentials = { cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}` };
+  } else {
+    // IAM off: the bearer is the account root; console-api reports its account the same way.
+    const token = bearer();
+    if (typeof token !== "string") return null;
+    credentials = { authorization: `Bearer ${token}` };
+  }
   const started = performance.now();
   try {
-    const reply = await apiFetch(`${base}/api/v1/auth/session`, {
-      headers: { accept: "application/json", cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}` },
-    });
+    const reply = await apiFetch(`${base}/api/v1/auth/session`, { headers: { accept: "application/json", ...credentials } });
     const ok = reply.status >= 200 && reply.status <= 299;
     logAuth({
       event: "auth.session",
@@ -384,6 +393,7 @@ export async function signedInSession(): Promise<SessionInfo | null> {
     });
     if (!ok) return null;
     const body = (parseJson(reply.text) ?? {}) as Record<string, unknown>;
+    noteLoginEnabled(body);
     const text = (value: unknown) => (typeof value === "string" ? value : "");
     return { principal: text(body.principal), account: text(body.account), root: body.root === true, expiresAt: text(body.expiresAt) };
   } catch (error) {

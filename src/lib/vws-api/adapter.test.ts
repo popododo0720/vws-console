@@ -223,3 +223,10 @@ describe("identityFromSession", () => {
     expect(identityFromSession(null)).toEqual({ userName: "—", accountId: "—" });
   });
 });
+
+describe("identityFromSession with IAM off", () => {
+  it("names the bearer root and keeps the account", () => {
+    expect(identityFromSession({ principal: "arn:vws:iam::123456789012:root", account: "123456789012" }, { iam: false })).toEqual({ userName: "root (IAM off)", accountId: "123456789012" });
+    expect(identityFromSession(null, { iam: false })).toEqual({ userName: "root (IAM off)", accountId: "—" });
+  });
+});

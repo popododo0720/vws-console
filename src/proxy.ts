@@ -45,7 +45,7 @@ export async function proxy(request: NextRequest) {
   const base = process.env.VWS_CONSOLE_API_URL;
   // IAM off (the default) uses the server-side token and asks for no sign-in; without console-api
   // there is nothing to sign in to either, and the screens report ConsoleNotConfigured.
-  if (!base || !iamEnabled()) return NextResponse.next();
+  if (!base || !(await iamEnabled())) return NextResponse.next();
   const session = request.cookies.get(SESSION_COOKIE)?.value;
 
   if (request.nextUrl.pathname === "/login") {

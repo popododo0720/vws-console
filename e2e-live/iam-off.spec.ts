@@ -21,6 +21,8 @@ test("IAM off: pages open without sign-in and writes go through with the server-
 test("IAM off: /login is not used and the account menu has no Sign out", async ({ page }) => {
   await page.goto("/login?next=%2Fstorage%2Fvolumes");
   await expect(page).toHaveURL(/\/storage\/volumes$/);
-  await page.getByRole("button", { name: /—/ }).click();
+  const menu = page.getByRole("button", { name: /root \(IAM off\)/ });
+  await expect(menu).toContainText("123456789012");
+  await menu.click();
   await expect(page.getByRole("menuitem", { name: "Sign out" })).toHaveCount(0);
 });
