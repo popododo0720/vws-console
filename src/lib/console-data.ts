@@ -12,7 +12,6 @@ import type {
   RouteTable,
   SecurityGroup,
   Subnet,
-  Snapshot,
   Vpc,
 } from "@/types/console";
 
@@ -381,7 +380,6 @@ export function createEmptyAccount(): Dataset {
   return {
     instances: [],
     volumes: [],
-    snapshots: [],
     buckets: [],
     objects: [],
     keyPairs: [],
@@ -427,20 +425,6 @@ export function createSampleAccount(): Dataset {
         makeRule("in", "TCP", "443", "0.0.0.0/0", "sgr-sample-https", "HTTPS (sample)"),
         makeRule("out", "All", "All", "0.0.0.0/0", "sgr-sample-out"),
       ],
-    },
-  ];
-  // MOCK_SNAPSHOTS: sample-only data. Shown only when the console is switched to sample data.
-  const MOCK_SNAPSHOTS: Snapshot[] = [
-    {
-      id: "snap-0aa11",
-      name: "web-root-backup",
-      volumeId: "blk-0123abcd90ef4567",
-      sizeGiB: 8,
-      description: "Sample snapshot",
-      state: "completed",
-      started: "Oct 1, 2026",
-      owner: ACCOUNT.id,
-      region: HOME_REGION,
     },
   ];
   // MOCK_SUBNETS: sample-only data, shown only when the console is switched to sample data.
@@ -526,7 +510,7 @@ export function createSampleAccount(): Dataset {
     { bucket: "vws-logs", key: "2026/access-sample.log", sizeBytes: 18432, modified: "Aug 3, 2026", storageClass: "Standard" },
     { bucket: "vws-logs", key: "readme-sample.txt", sizeBytes: 512, modified: "Aug 2, 2026", storageClass: "Standard" },
   ];
-  return { instances: [], volumes: [], snapshots: MOCK_SNAPSHOTS, securityGroups,
+  return { instances: [], volumes: [], securityGroups,
     vpcs,
     subnets: MOCK_SUBNETS,
     routeTables: MOCK_ROUTE_TABLES,

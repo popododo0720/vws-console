@@ -30,7 +30,6 @@ import type {
   SecurityGroup,
   Subnet,
   Volume,
-  Snapshot,
   Vpc,
 } from "@/types/console";
 
@@ -49,7 +48,6 @@ type ConsoleApi = {
   setDensity: (density: Density) => void;
   instances: Instance[];
   volumes: Volume[];
-  snapshots: Snapshot[];
   securityGroups: SecurityGroup[];
   vpcs: Vpc[];
   subnets: Subnet[];
@@ -59,8 +57,6 @@ type ConsoleApi = {
   objects: BucketObject[];
   keyPairs: Dataset["keyPairs"];
   launch: (draft: LaunchDraft) => void;
-  createSnapshot: (input: { volumeId: string; name: string; description: string }) => void;
-  deleteSnapshots: (ids: string[]) => void;
   createRouteTable: (input: { name: string; vpcId: string }) => void;
   deleteRouteTables: (ids: string[]) => void;
   addRoute: (tableId: string, destination: string, target: string) => string | null;
@@ -102,7 +98,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const api = useMemo<ConsoleApi>(() => {
     const instances = data.instances.filter((item) => item.region === region);
     const volumes = data.volumes.filter((item) => item.region === region);
-    const snapshots = data.snapshots.filter((item) => item.region === region);
     const securityGroups = data.securityGroups.filter((item) => item.region === region);
     const vpcs = data.vpcs.filter((item) => item.region === region);
     const subnets = data.subnets.filter((item) => item.region === region);
@@ -119,7 +114,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       setDensity,
       instances,
       volumes,
-      snapshots,
       securityGroups,
       vpcs,
       subnets,
@@ -145,7 +139,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
             ...prev,
             instances: [...prev.instances],
             volumes: [...prev.volumes],
-            snapshots: [...prev.snapshots],
             securityGroups: [...prev.securityGroups],
             vpcs: [...prev.vpcs],
             buckets: [...prev.buckets],
@@ -224,38 +217,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
           }
           return next;
         });
-      },
-      createSnapshot: (input) => {
-        setData((prev) => {
-          const volume = prev.volumes.find((item) => item.id === input.volumeId);
-          if (!volume) return prev;
-          const id = newId("snap");
-          return {
-            ...prev,
-            volumes: prev.volumes.map((item) => (item.id === volume.id ? { ...item, snapshotId: id } : item)),
-            snapshots: [
-              {
-                id,
-                name: input.name,
-                volumeId: volume.id,
-                sizeGiB: volume.sizeGiB,
-                description: input.description,
-                state: "completed",
-                started: "Just now",
-                owner: ACCOUNT.id,
-                region: volume.region,
-              },
-              ...prev.snapshots,
-            ],
-          };
-        });
-      },
-      deleteSnapshots: (ids) => {
-        setData((prev) => ({
-          ...prev,
-          snapshots: prev.snapshots.filter((item) => !ids.includes(item.id)),
-          volumes: prev.volumes.map((item) => (ids.includes(item.snapshotId) ? { ...item, snapshotId: "" } : item)),
-        }));
       },
       createRouteTable: (input) => {
         const vpc = data.vpcs.find((item) => item.id === input.vpcId);

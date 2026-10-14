@@ -166,7 +166,6 @@ export type KeyPair = {
 export type Dataset = {
   instances: Instance[];
   volumes: Volume[];
-  snapshots: Snapshot[];
   securityGroups: SecurityGroup[];
   vpcs: Vpc[];
   subnets: Subnet[];
