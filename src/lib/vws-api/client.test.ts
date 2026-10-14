@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createVpc, launchInstances, listVpcs, modifyVolume } from "./client";
+import { createSecurityGroup, createVpc, launchInstances, listVpcs, modifyVolume } from "./client";
 
 type Call = { url: string; init: RequestInit };
 
@@ -70,6 +70,15 @@ describe("console-api client", () => {
     const result = await listVpcs();
     expect(result).toEqual({ ok: false, error: { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_TOKEN on the console server.", requestId: null } });
     expect(calls).toEqual([]);
+  });
+
+  it("returns the new security group ID from the accepted request", async () => {
+    serve(
+      respond(202, { operation: { id: "op-4", state: "running" }, items: [{ groupId: "sg-9", groupName: "web", vpcId: "vpc-1" }] }),
+      respond(200, { id: "op-4", state: "succeeded" }),
+    );
+    expect(await createSecurityGroup("web", "vpc-1")).toEqual({ ok: true, value: "sg-9" });
+    expect(calls[0].init.body).toBe('{"groupName":"web","vpcId":"vpc-1"}');
   });
 
   it("launches with tags only when there are some", async () => {

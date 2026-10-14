@@ -1,4 +1,4 @@
-import type { Instance, InstanceState, Subnet, Volume, Vpc } from "@/types/console";
+import type { ElasticIp, Instance, InstanceState, SecurityGroup, SecurityGroupRule, Snapshot, Subnet, Volume, Vpc } from "@/types/console";
 
 export const REGION = "vws-1";
 
@@ -89,7 +89,6 @@ export function toInstance(item: Json): Instance {
     region: REGION,
     vpcId: str(item.vpcId),
     subnetId: str(item.subnetId),
-    securityGroupIds: [],
     keyPair: "",
     imageId: str(item.imageId),
     launchedAt: str(item.launchTime),
@@ -161,3 +160,87 @@ export function toInstanceType(item: Json): InstanceType {
 }
 
 export const parseInstanceTypes = (page: unknown) => list(page).map(toInstanceType);
+
+function num(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+const protocolLabels: Record<string, string> = { "-1": "All", tcp: "TCP", udp: "UDP", icmp: "ICMP" };
+
+/** console-api reports ingress rules only, without rule IDs or descriptions. */
+export function toIngressRule(item: Json): SecurityGroupRule {
+  const protocol = str(item.ipProtocol);
+  const label = protocolLabels[protocol] ?? protocol.toUpperCase();
+  const from = num(item.fromPort);
+  const to = num(item.toPort);
+  const port = label === "All" || label === "ICMP" || from === null ? "All" : from === to || to === null ? String(from) : `${from}-${to}`;
+  return { id: "", direction: "in", protocol: label, port, source: str(item.cidrIp), description: "" };
+}
+
+export function toSecurityGroup(item: Json): SecurityGroup {
+  const permissions = Array.isArray(item.ipPermissions) ? item.ipPermissions.map(obj) : [];
+  return {
+    id: str(item.groupId),
+    name: "",
+    groupName: str(item.groupName),
+    vpcId: str(item.vpcId),
+    description: "",
+    owner: str(item.ownerId),
+    region: REGION,
+    rules: permissions.map(toIngressRule),
+  };
+}
+
+export type IngressPermission = { ipProtocol: string; fromPort: number; toPort: number; cidrIp: string };
+
+/** Maps a console rule onto one authorize-ingress body, or explains why the API cannot take it. */
+export function toIngressPermission(rule: SecurityGroupRule): { ok: true; value: IngressPermission } | { ok: false; error: string } {
+  const protocol = Object.entries(protocolLabels).find(([, label]) => label === rule.protocol)?.[0];
+  if (!protocol) return { ok: false, error: `The VWS API does not take protocol ${rule.protocol}.` };
+  if (rule.source.startsWith("sg-")) return { ok: false, error: "The VWS API only takes CIDR sources, not security group IDs." };
+  let fromPort = 0;
+  let toPort = 0;
+  if (protocol === "tcp" || protocol === "udp") {
+    const match = /^(\d+)(?:-(\d+))?$/.exec(rule.port);
+    if (!match) return { ok: false, error: `Port range ${rule.port} is not a port or a range.` };
+    fromPort = Number(match[1]);
+    toPort = match[2] === undefined ? fromPort : Number(match[2]);
+  }
+  return { ok: true, value: { ipProtocol: protocol, fromPort, toPort, cidrIp: rule.source } };
+}
+
+export function toAddress(item: Json): ElasticIp {
+  return {
+    allocationId: str(item.allocationId),
+    name: "",
+    address: str(item.publicIp),
+    instanceId: str(item.instanceId),
+    privateIp: "",
+    owner: str(item.ownerId),
+    region: REGION,
+  };
+}
+
+export function toSnapshot(item: Json): Snapshot {
+  return {
+    id: str(item.snapshotId),
+    name: "",
+    volumeId: str(item.volumeId),
+    sizeGiB: num(item.volumeSize) ?? 0,
+    description: str(item.description),
+    state: str(item.state),
+    started: "",
+    owner: str(item.ownerId),
+    region: REGION,
+  };
+}
+
+export const parseSecurityGroups = (page: unknown) => list(page).map(toSecurityGroup);
+export const parseAddresses = (page: unknown) => list(page).map(toAddress);
+export const parseSnapshots = (page: unknown) => list(page).map(toSnapshot);
+
+/** Reads the first item of a 202 mutation response, which carries the new resource. */
+export function firstItem(body: unknown, key: string): string {
+  const items = obj(body).items;
+  return Array.isArray(items) && items.length > 0 ? str(obj(items[0])[key]) : "";
+}

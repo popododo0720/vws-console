@@ -3,28 +3,30 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { computeNav } from "@/lib/console-data";
-import { useConsole } from "@/components/sites/console/console-provider";
+import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { createSecurityGroupAction } from "@/app/actions/resources";
+import type { ApiError } from "@/lib/vws-api/adapter";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
-import { RuleEditor, finalizeRules, firstRuleError } from "@/components/sites/console/sg-rule-editor";
-import { FieldLabel, OrangeButton, OutlineButton, SampleBadge } from "@/components/sites/console/ui";
-import { makeRule, newRuleId } from "@/lib/security-group-rules";
-import type { SecurityGroupRule } from "@/types/console";
+import { RuleEditor, firstRuleError } from "@/components/sites/console/sg-rule-editor";
+import { ingressPermissions } from "@/components/sites/console/sg-permissions";
+import { OUTBOUND_UNAVAILABLE } from "@/components/sites/console/sg-rules-table";
+import { FieldLabel, OrangeButton, OutlineButton } from "@/components/sites/console/ui";
+import type { SecurityGroupRule, Vpc } from "@/types/console";
 
-export function SecurityGroupCreateView() {
-  const api = useConsole();
+export function SecurityGroupCreateView({ vpcs, loadError }: { vpcs: Vpc[]; loadError: ApiError | null }) {
+  const action = useApiAction();
   const router = useRouter();
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [vpcId, setVpcId] = useState(api.vpcs[0]?.id ?? "");
+  const [vpcId, setVpcId] = useState(vpcs[0]?.id ?? "");
   const [inbound, setInbound] = useState<SecurityGroupRule[]>([]);
-  const [outbound, setOutbound] = useState<SecurityGroupRule[]>(() => [makeRule("out", "All", "All", "0.0.0.0/0", `new-${newRuleId()}`)]);
   const [touched, setTouched] = useState(false);
 
   const nameError = !name.trim() ? "Security group name is required." : null;
-  const descriptionError = !description.trim() ? "Description is required." : null;
-  const ruleError = firstRuleError([...inbound, ...outbound]);
-  const blocked = Boolean(nameError || descriptionError || ruleError || !vpcId);
+  const vpcError = !vpcId ? "Create a VPC first; a security group belongs to one." : null;
+  const mapped = ingressPermissions(inbound);
+  const ruleError = firstRuleError(inbound) ?? mapped.error;
+  const blocked = Boolean(nameError || ruleError || vpcError);
 
   return (
     <Shell tree={computeNav}>
@@ -34,9 +36,10 @@ export function SecurityGroupCreateView() {
           { label: "Security Groups", href: "/network/security-groups" },
           { label: "Create security group" },
         ]}
-        info="A security group acts as a virtual firewall for your instances. This console saves it to local sample data only."
-        meta={api.mode === "sample" ? <SampleBadge /> : null}
+        info="A security group acts as a virtual firewall for your instances. It is created through the VWS API."
       />
+      <ApiErrorAlert error={loadError} title="VPCs could not be loaded" />
+      <ApiErrorAlert error={action.error} title="The security group could not be created" />
       <div className="min-h-0 flex-1 space-y-4 overflow-auto px-4 pb-6 text-[13px]">
         <section className="rounded-lg border border-[#d5dbdb] p-4">
           <h2 className="mb-3 text-[16px] font-semibold">Basic details</h2>
@@ -49,18 +52,19 @@ export function SecurityGroupCreateView() {
             </div>
             <div>
               <FieldLabel>Description</FieldLabel>
-              <input className="field" value={description} onChange={(event) => setDescription(event.target.value)} aria-invalid={touched && descriptionError ? true : undefined} />
-              {touched && descriptionError ? <p className="mt-1 text-[12px] text-[#d91515]">{descriptionError}</p> : null}
+              <p>—</p>
+              <p className="mt-1 text-[12px] text-[#5f6b7a]">The VWS API does not take a description yet.</p>
             </div>
             <div>
               <FieldLabel>VPC</FieldLabel>
               <select className="field" value={vpcId} onChange={(event) => setVpcId(event.target.value)}>
-                {api.vpcs.map((vpc) => (
+                {vpcs.map((vpc) => (
                   <option key={vpc.id} value={vpc.id}>
                     {vpc.name ? `${vpc.id} (${vpc.name})` : vpc.id}
                   </option>
                 ))}
               </select>
+              {touched && vpcError ? <p className="mt-1 text-[12px] text-[#d91515]">{vpcError}</p> : null}
             </div>
           </div>
         </section>
@@ -71,24 +75,20 @@ export function SecurityGroupCreateView() {
         </section>
         <section className="rounded-lg border border-[#d5dbdb] p-4">
           <h2 className="mb-1 text-[16px] font-semibold">Outbound rules</h2>
-          <RuleEditor direction="out" rules={outbound} onChange={setOutbound} />
+          <p className="text-[#5f6b7a]">{OUTBOUND_UNAVAILABLE}</p>
         </section>
         {touched && ruleError ? <p role="alert" className="text-[12px] text-[#d91515]">{ruleError}</p> : null}
         <div className="flex justify-end gap-2">
           <OutlineButton onClick={() => router.push("/network/security-groups")}>Cancel</OutlineButton>
           <OrangeButton
+            disabled={action.pending}
             onClick={() => {
               setTouched(true);
               if (blocked) return;
-              const id = api.createSecurityGroup({
-                name: name.trim(),
-                groupName: name.trim(),
-                description: description.trim(),
-                vpcId,
-                inbound: finalizeRules(inbound),
-                outbound: finalizeRules(outbound),
-              });
-              router.push(`/network/security-groups/${id}`);
+              action.run(
+                () => createSecurityGroupAction(name.trim(), vpcId, mapped.permissions),
+                () => router.push("/network/security-groups"),
+              );
             }}
           >
             Create security group

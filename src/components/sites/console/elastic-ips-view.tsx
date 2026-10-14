@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { ElasticIp } from "@/types/console";
-import { useConsole } from "@/components/sites/console/console-provider";
+import type { ElasticIp, Instance } from "@/types/console";
+import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { allocateAddressAction, associateAddressAction, disassociateAddressesAction, releaseAddressesAction } from "@/app/actions/resources";
+import type { ApiError } from "@/lib/vws-api/adapter";
 import { NetworkList } from "@/components/sites/console/network-list";
 import { Column } from "@/components/sites/console/resource-table";
 import {
@@ -17,26 +19,35 @@ import {
 
 type Dialog = { kind: "allocate" } | { kind: "associate"; eip: ElasticIp } | null;
 
-export function ElasticIpsView() {
-  const api = useConsole();
+export function ElasticIpsView({
+  addresses,
+  instances,
+  loadError,
+}: {
+  addresses: ElasticIp[];
+  instances: Instance[];
+  loadError: ApiError | null;
+}) {
+  const action = useApiAction();
   const [dialog, setDialog] = useState<Dialog>(null);
-  const [name, setName] = useState("");
   const [instanceId, setInstanceId] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Terminated instances cannot take an address.
+  const associable = instances.filter((item) => item.state !== "terminated" && item.state !== "shutting-down");
 
   const columns: Column<ElasticIp>[] = [
     { key: "name", header: "Name", minWidth: 150, sortValue: (row) => row.name, cell: (row) => dash(row.name) },
     { key: "address", header: "Allocated IPv4 address", minWidth: 170, sortValue: (row) => row.address, cell: (row) => row.address },
     { key: "type", header: "Type", minWidth: 100, sortValue: () => "Public IP", cell: () => "Public IP" },
     { key: "alloc", header: "Allocation ID", minWidth: 210, sortValue: (row) => row.allocationId, cell: (row) => <CopyText value={row.allocationId} /> },
-    { key: "instance", header: "Associated instance ID", minWidth: 200, sortValue: (row) => row.instanceId, cell: (row) => <CopyText value={row.instanceId} /> },
+    { key: "instance", header: "Associated instance ID", minWidth: 200, sortValue: (row) => row.instanceId, cell: (row) => (row.instanceId ? <CopyText value={row.instanceId} /> : "—") },
     { key: "private", header: "Private IP address", minWidth: 150, sortValue: (row) => row.privateIp, cell: (row) => dash(row.privateIp) },
   ];
 
   const open = (next: Dialog) => {
-    setName("");
     setError(null);
-    setInstanceId(api.instances[0]?.id ?? "");
+    setInstanceId(associable[0]?.id ?? "");
     setDialog(next);
   };
   const close = () => setDialog(null);
@@ -45,24 +56,34 @@ export function ElasticIpsView() {
     <NetworkList
       title="Elastic IP addresses"
       info="An Elastic IP address is a static public IPv4 address you can move between instances."
-      rows={api.elasticIps}
+      rows={addresses}
       getId={(row) => row.allocationId}
+      live={{
+        vpcs: [],
+        onRefresh: action.refresh,
+        banner: (
+          <>
+            <ApiErrorAlert error={loadError} title="Elastic IP addresses could not be loaded" />
+            <ApiErrorAlert error={action.error} title="The Elastic IP address action failed" />
+          </>
+        ),
+      }}
       columns={columns}
       actions={[
         {
           label: "Associate Elastic IP address",
-          disabled: (rows) => rows.length !== 1 || Boolean(rows[0].instanceId),
+          disabled: (rows) => action.pending || rows.length !== 1 || Boolean(rows[0].instanceId),
           onSelect: (rows) => open({ kind: "associate", eip: rows[0] }),
         },
         {
           label: "Disassociate Elastic IP address",
-          disabled: (rows) => rows.length !== 1 || !rows[0].instanceId,
-          onSelect: (rows) => api.disassociateElasticIp(rows[0].allocationId),
+          disabled: (rows) => action.pending || rows.length !== 1 || !rows[0].instanceId,
+          onSelect: (rows) => action.run(() => disassociateAddressesAction([rows[0].allocationId])),
         },
         {
           label: "Release Elastic IP addresses",
-          disabled: (rows) => rows.length === 0 || rows.some((row) => row.instanceId),
-          onSelect: (rows) => api.releaseElasticIps(rows.map((row) => row.allocationId)),
+          disabled: (rows) => action.pending || rows.length === 0 || rows.some((row) => row.instanceId),
+          onSelect: (rows) => action.run(() => releaseAddressesAction(rows.map((row) => row.allocationId))),
         },
       ]}
       createLabel="Allocate Elastic IP address"
@@ -79,7 +100,7 @@ export function ElasticIpsView() {
             ["Associated instance ID", dash(row.instanceId)],
             ["Private IP address", dash(row.privateIp)],
             ["Network border group", "—"],
-            ["Owner", api.account.id],
+            ["Owner", dash(row.owner)],
           ]}
         />
       )}
@@ -91,20 +112,15 @@ export function ElasticIpsView() {
         footer={
           <>
             <OutlineButton onClick={close}>Cancel</OutlineButton>
-            <OrangeButton
-              onClick={() => {
-                api.allocateElasticIp(name);
-                close();
-              }}
-            >
+            <OrangeButton disabled={action.pending} onClick={() => action.run(allocateAddressAction, close)}>
               Allocate
             </OrangeButton>
           </>
         }
       >
         <FieldLabel>Name tag</FieldLabel>
-        <input className="field" value={name} onChange={(event) => setName(event.target.value)} />
-        <p className="mt-2 text-[12px] text-[#5f6b7a]">Addresses come from a documentation range and never reach a real network.</p>
+        <p>—</p>
+        <p className="mt-2 text-[12px] text-[#5f6b7a]">The VWS API does not take a name tag for an address yet.</p>
       </PanelDialog>
       <PanelDialog
         open={dialog?.kind === "associate"}
@@ -114,11 +130,12 @@ export function ElasticIpsView() {
           <>
             <OutlineButton onClick={close}>Cancel</OutlineButton>
             <OrangeButton
+              disabled={action.pending}
               onClick={() => {
                 if (dialog?.kind !== "associate") return;
                 if (!instanceId) return setError("Choose an instance.");
-                api.associateElasticIp(dialog.eip.allocationId, instanceId);
-                close();
+                const allocationId = dialog.eip.allocationId;
+                action.run(() => associateAddressAction(allocationId, instanceId), close);
               }}
             >
               Associate
@@ -126,13 +143,13 @@ export function ElasticIpsView() {
           </>
         }
       >
-        {api.instances.length === 0 ? (
+        {associable.length === 0 ? (
           <p>There are no instances in this region.</p>
         ) : (
           <div className="space-y-3">
             <FieldLabel>Instance</FieldLabel>
             <select className="field" value={instanceId} onChange={(event) => setInstanceId(event.target.value)}>
-              {api.instances.map((item) => (
+              {associable.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name ? `${item.name} (${item.id})` : item.id}
                 </option>
