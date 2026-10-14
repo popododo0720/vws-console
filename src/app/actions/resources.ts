@@ -21,15 +21,22 @@ export async function launchInstancesAction(req: LaunchRequest) {
 }
 
 export async function startInstancesAction(ids: string[]) {
-  return each(ids, vws.startInstance);
+  return errorOf(vws.instanceBatch("start", ids));
 }
 
 export async function stopInstancesAction(ids: string[]) {
-  return each(ids, vws.stopInstance);
+  return errorOf(vws.instanceBatch("stop", ids));
 }
 
 export async function terminateInstancesAction(ids: string[]) {
-  return each(ids, vws.terminateInstance);
+  return errorOf(vws.instanceBatch("terminate", ids));
+}
+
+/** Renames an instance through its Name tag. console-api has no DeleteTags, so a name cannot be cleared. */
+export async function renameInstanceAction(id: string, name: string): Promise<ApiError | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return { code: "NameRequired", message: "The VWS API cannot remove a Name tag yet, so enter a name.", requestId: null };
+  return errorOf(vws.createInstanceTags(id, { Name: trimmed }));
 }
 
 export async function createVolumeAction(sizeGiB: number, volumeType: string) {

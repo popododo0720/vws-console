@@ -1,5 +1,6 @@
 "use client";
 
+import { DetailLink } from "@/components/sites/console/resource-detail";
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CircleCheck } from "lucide-react";
@@ -13,7 +14,6 @@ import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
 import { Shell } from "@/components/sites/console/shell";
 import {
-  CopyText,
   FieldLabel,
   MenuButton,
   MenuChevron,
@@ -43,7 +43,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
 
   const columns: Column<Vpc>[] = [
     { key: "name", header: "Name", minWidth: 120, sortValue: (row) => row.name, cell: (row) => <NameCell value={row.name} /> },
-    { key: "id", header: "VPC ID", minWidth: 190, sortValue: (row) => row.id, cell: (row) => <CopyText value={row.id} /> },
+    { key: "id", header: "VPC ID", minWidth: 190, sortValue: (row) => row.id, cell: (row) => <DetailLink href={`/network/vpcs/${row.id}`} id={row.id} /> },
     {
       key: "state",
       header: "State",

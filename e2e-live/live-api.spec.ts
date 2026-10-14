@@ -223,6 +223,81 @@ test("launches an instance from the launch screen", async ({ page, request }) =>
   await expect(row).toContainText("vws.medium");
 });
 
+const tagsApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
+const tagsHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+
+async function seedInstances(request: import("@playwright/test").APIRequestContext, prefix: string, cidr: string, count: number) {
+  const vpc = await (await request.post(`${tagsApi()}/vpcs`, { headers: tagsHeaders(`${prefix}-vpc`), data: { cidrBlock: `${cidr}.0.0/16` } })).json();
+  const vpcId: string = vpc.items[0].vpcId;
+  await expect.poll(async () => (await (await request.get(`${tagsApi()}/vpcs/${vpcId}`, { headers: tagsHeaders("x") })).json()).state).toBe("available");
+  const subnet = await (await request.post(`${tagsApi()}/subnets`, { headers: tagsHeaders(`${prefix}-subnet`), data: { vpcId, cidrBlock: `${cidr}.1.0/24` } })).json();
+  const run = await (await request.post(`${tagsApi()}/instances`, {
+    headers: tagsHeaders(`${prefix}-run`),
+    data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId: subnet.items[0].subnetId, count, tags: { Name: `${prefix}-old` } },
+  })).json();
+  const ids: string[] = run.items.map((item: { instanceId: string }) => item.instanceId);
+  for (const id of ids) {
+    await expect.poll(async () => (await (await request.get(`${tagsApi()}/instances/${id}`, { headers: tagsHeaders("x") })).json()).state, { timeout: 30_000 }).toBe("running");
+  }
+  return { vpcId, subnetId: subnet.items[0].subnetId as string, ids };
+}
+
+test("renames an instance through its Name tag from the list and the detail page", async ({ page, request }) => {
+  const { ids } = await seedInstances(request, "rename", "10.55", 1);
+  const [id] = ids;
+
+  await page.goto("/compute/instances");
+  const row = page.getByRole("row").filter({ hasText: id });
+  await expect(row).toContainText("rename-old");
+  await row.getByRole("button", { name: "Edit name" }).click();
+  await row.getByLabel("Name").fill("rename-new");
+  await row.getByLabel("Name").press("Enter");
+  await expect(row).toContainText("rename-new");
+
+  await page.goto(`/compute/instances/${id}`);
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Edit Name tag" }).click();
+  await page.getByLabel("Instance name").fill("rename-detail");
+  await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText(`${id} (rename-detail)`).first()).toBeVisible();
+});
+
+test("stops and terminates several instances in one batch", async ({ page, request }) => {
+  const { ids } = await seedInstances(request, "batch", "10.56", 2);
+
+  await page.goto("/compute/instances");
+  for (const id of ids) await page.getByRole("row").filter({ hasText: id }).getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Instance state/ }).first().click();
+  await page.getByRole("menuitem", { name: "Stop" }).click();
+  for (const id of ids) await expect(page.getByRole("row").filter({ hasText: id })).toContainText("Stopped", { timeout: 60_000 });
+
+  for (const id of ids) await page.getByRole("row").filter({ hasText: id }).getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Instance state/ }).first().click();
+  await page.getByRole("menuitem", { name: "Terminate" }).click();
+  for (const id of ids) await expect(page.getByRole("row").filter({ hasText: id })).toContainText("Terminated", { timeout: 60_000 });
+});
+
+test("opens VPC and volume detail pages from their lists", async ({ page, request }) => {
+  const { vpcId, subnetId } = await seedInstances(request, "detail", "10.57", 1);
+  const volume = await (await request.post(`${tagsApi()}/volumes`, { headers: tagsHeaders("detail-vol"), data: { size: 6 } })).json();
+  const volumeId: string = volume.items[0].volumeId;
+
+  await page.goto("/network/vpcs");
+  await page.getByRole("link", { name: vpcId }).click();
+  await expect(page).toHaveURL(new RegExp(`/network/vpcs/${vpcId}$`));
+  await expect(page.getByText("10.57.0.0/16")).toBeVisible();
+  await expect(page.getByText(subnetId)).toBeVisible();
+  await expect(page.locator("dt", { hasText: /^Default VPC$/ }).locator("..")).toContainText("No");
+
+  await page.goto("/storage/volumes");
+  await page.getByRole("link", { name: volumeId }).click();
+  await expect(page).toHaveURL(new RegExp(`/storage/volumes/${volumeId}$`));
+  await expect(page.getByText("6 GiB")).toBeVisible();
+
+  await page.goto("/storage/volumes/vol-0000000000000000f");
+  await expect(page.getByText("Volume not found")).toBeVisible();
+});
+
 const liveApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
 const liveHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
 

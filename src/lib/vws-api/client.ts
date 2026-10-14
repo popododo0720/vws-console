@@ -18,6 +18,8 @@ import {
   parseVolumes,
   parseVpcs,
   toInstance,
+  toVolume,
+  toVpc,
   type ApiError,
   type ApiResult,
   type Image,
@@ -137,21 +139,37 @@ export const listVolumes = (): Promise<ApiResult<Volume[]>> => listAll("/volumes
 export const listVpcs = (): Promise<ApiResult<Vpc[]>> => listAll("/vpcs", parseVpcs);
 export const listSubnets = (): Promise<ApiResult<Subnet[]>> => listAll("/subnets", parseSubnets);
 
-export async function getInstance(id: string): Promise<ApiResult<Instance | null>> {
-  const result = await request("GET", `/instances/${seg(id)}`);
+/** Reads one resource; a 404 is a missing resource, not an error. */
+async function getOne<T>(path: string, map: (item: Record<string, unknown>) => T): Promise<ApiResult<T | null>> {
+  const result = await request("GET", path);
   if (!result.ok) return result.error.code === "NotFound" ? { ok: true, value: null } : result;
   try {
-    return { ok: true, value: toInstance(result.value.json as Record<string, unknown>) };
+    return { ok: true, value: map(result.value.json as Record<string, unknown>) };
   } catch {
-    return { ok: false, error: malformed(`/instances/${id}`) };
+    return { ok: false, error: malformed(path) };
   }
 }
 
+export const getInstance = (id: string): Promise<ApiResult<Instance | null>> => getOne(`/instances/${seg(id)}`, toInstance);
+export const getVpc = (id: string): Promise<ApiResult<Vpc | null>> => getOne(`/vpcs/${seg(id)}`, toVpc);
+export const getVolume = (id: string): Promise<ApiResult<Volume | null>> => getOne(`/volumes/${seg(id)}`, toVolume);
+
 export const launchInstances = ({ tags, ...rest }: LaunchRequest) =>
   mutate("/instances", Object.keys(tags).length > 0 ? { ...rest, tags } : rest);
-export const startInstance = (id: string) => mutate(`/instances/${seg(id)}/start`);
-export const stopInstance = (id: string) => mutate(`/instances/${seg(id)}/stop`);
-export const terminateInstance = (id: string) => mutate(`/instances/${seg(id)}/terminate`);
+/** console-api takes at most this many instance IDs in one batch call. */
+export const INSTANCE_BATCH_LIMIT = 20;
+
+/** Starts, stops or terminates instances with one operation per batch of up to 20 IDs. */
+export async function instanceBatch(action: "start" | "stop" | "terminate", ids: string[]): Promise<ApiResult<void>> {
+  for (let index = 0; index < ids.length; index += INSTANCE_BATCH_LIMIT) {
+    const result = await mutate(`/instances/${action}`, { instanceIds: ids.slice(index, index + INSTANCE_BATCH_LIMIT) });
+    if (!result.ok) return result;
+  }
+  return { ok: true, value: undefined };
+}
+
+/** Adds or overwrites tags on one instance; tags not named stay. */
+export const createInstanceTags = (id: string, tags: Record<string, string>) => mutate(`/instances/${seg(id)}/tags`, { tags });
 export const createVolume = (size: number, volumeType: string) => mutate("/volumes", { size, volumeType });
 export const deleteVolume = (id: string) => mutate(`/volumes/${seg(id)}/delete`);
 export const createSnapshot = (volumeId: string, description: string) =>
