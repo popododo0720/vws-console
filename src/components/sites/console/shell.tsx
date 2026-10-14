@@ -9,9 +9,10 @@ import { TopBar } from "@/components/sites/console/top-bar";
 import { OutlineButton, PanelDialog } from "@/components/sites/console/ui";
 
 const notices: Record<string, string> = {
-  Shell: "The browser shell is not connected in this preview.",
-  Toolkit: "The local toolkit is not installed in this preview.",
-  "Mobile app": "There is no mobile companion for this preview.",
+  "VWS Shell": "The browser shell is not connected in this preview.",
+  "Agent Toolkit": "The local agent toolkit is not installed in this preview.",
+  Feedback: "Feedback is not collected in this preview.",
+  "Console Mobile App": "There is no mobile companion for this preview.",
   Privacy: "This preview keeps data in memory for the browser tab. Nothing is uploaded.",
   Terms: "VWS is a local mock of a cloud console. It is not a cloud provider.",
   "Cookie preferences": "This preview does not set tracking cookies.",
@@ -73,15 +74,15 @@ export function Shell({
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>
       </div>
       <footer className="flex h-7 shrink-0 items-center justify-between gap-3 bg-[#161d26] px-3 text-[12px] text-[#d5dbdb]">
-        <div className="flex items-center gap-3">
-          {["Shell", "Toolkit", "Mobile app"].map((label) => (
+        <div className="flex items-center gap-4">
+          {["VWS Shell", "Agent Toolkit", "Feedback", "Console Mobile App"].map((label) => (
             <button key={label} type="button" className="hover:underline" onClick={() => setNotice(label)}>
               {label}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden sm:inline">© 2026 VWS</span>
+          <span className="hidden sm:inline">© 2026, VWS contributors.</span>
           {["Privacy", "Terms", "Cookie preferences"].map((label) => (
             <button key={label} type="button" className="hover:underline" onClick={() => setNotice(label)}>
               {label}
