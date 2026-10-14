@@ -86,8 +86,8 @@ export function SideNav({
 
   return (
     <div className="flex h-full flex-col">
-      {header ? <div className="px-3 pt-3">{header}</div> : null}
       <div className="px-4 pb-2 pt-3 text-[18px] font-bold leading-6">{tree.title}</div>
+      {header ? <div className="px-3 pb-2">{header}</div> : null}
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" aria-label={tree.title}>
         {renderNodes(tree.sections, 0)}
       </nav>

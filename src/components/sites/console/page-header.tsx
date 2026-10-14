@@ -36,20 +36,25 @@ export function BreadcrumbBar({ crumbs }: { crumbs: { label: string; href?: stri
 
 export function PageHeader({
   crumbs,
+  title: heading,
+  lead,
   info,
   actions,
   meta,
 }: {
   mark?: string;
   crumbs: { label: string; href?: string }[];
+  title?: string;
+  lead?: ReactNode;
   info?: string;
   actions?: ReactNode;
   meta?: ReactNode;
 }) {
-  const title = crumbs[crumbs.length - 1]?.label ?? "";
+  const title = heading ?? crumbs[crumbs.length - 1]?.label ?? "";
   return (
     <>
       <BreadcrumbBar crumbs={crumbs} />
+      {lead}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-2 pt-3">
         <div className="flex min-w-0 items-center gap-2">
           <h1 className="text-[20px] font-bold leading-7">{title}</h1>

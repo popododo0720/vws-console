@@ -111,7 +111,7 @@ export const computeNav: NavTree = {
 
 export const networkNav: NavTree = {
   id: "network",
-  title: "VPC",
+  title: "VPC dashboard",
   sections: [
     { id: "global", label: "Global view" },
     {
