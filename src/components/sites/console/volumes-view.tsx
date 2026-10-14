@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { RefreshCw } from "lucide-react";
 import type { Volume } from "@/types/console";
 import { computeNav, volumeTypeOptions, zonesFor } from "@/lib/console-data";
 import { useConsole } from "@/components/sites/console/console-provider";
@@ -29,9 +30,8 @@ export function VolumesView() {
   const api = useConsole();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(240);
-  const [updated, setUpdated] = useState("Last updated less than a minute ago");
+  const [updated, setUpdated] = useState("less than a minute ago");
   const [createOpen, setCreateOpen] = useState(false);
-  const [policyOpen, setPolicyOpen] = useState(false);
   const [recycleOpen, setRecycleOpen] = useState(false);
   const [tab, setTab] = useState("details");
   const [modifyOpen, setModifyOpen] = useState(false);
@@ -52,7 +52,7 @@ export function VolumesView() {
     { key: "size", header: "Size", minWidth: 80, sortValue: (row) => String(row.sizeGiB), cell: (row) => `${row.sizeGiB} GiB` },
     { key: "iops", header: "IOPS", minWidth: 80, sortValue: (row) => String(row.iops), cell: (row) => row.iops },
     { key: "throughput", header: "Throughput", minWidth: 110, sortValue: (row) => row.throughput, cell: (row) => row.throughput },
-    { key: "owner", header: "Owner", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => row.owner },
+    { key: "owner", header: "Owner ID", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => row.owner },
     { key: "snapshot", header: "Snapshot ID", minWidth: 120, sortValue: (row) => row.snapshotId, cell: (row) => dash(row.snapshotId) },
     { key: "source", header: "Source volume ID", minWidth: 150, sortValue: (row) => row.sourceVolumeId, cell: (row) => dash(row.sourceVolumeId) },
     { key: "created", header: "Created", minWidth: 120, sortValue: (row) => row.created, cell: (row) => row.created },
@@ -65,9 +65,14 @@ export function VolumesView() {
         mark="C"
         crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: "Volumes" }]}
         info="Volumes are block disks in the current region. Attachment is shown when a volume is tied to an instance."
-        meta={updated}
         actions={
           <>
+            <span className="text-right text-[12px] leading-4 text-[#5f6b7a]">
+              Last updated
+              <br />
+              {updated}
+            </span>
+            <RefreshButton onClick={() => setUpdated("less than a minute ago")} />
             <OutlineButton onClick={() => setRecycleOpen(true)}>Recycle bin</OutlineButton>
             <MenuButton
               className={menuTriggerClass()}
@@ -118,20 +123,23 @@ export function VolumesView() {
           { id: "ssd", label: "General SSD", match: (row) => row.volumeType === "General SSD" },
           { id: "large", label: "20 GiB or larger", match: (row) => row.sizeGiB >= 20 },
         ]}
-        onRefresh={() => setUpdated("Last updated less than a minute ago")}
+        hideRefresh
       />
       <DetailDock
-        title={one ? `Volume ID: ${one.id}` : "Select a volume"}
+        title={one ? `Volume ID: ${one.id}` : "Fault tolerance for all volumes in this Region"}
         height={dock}
         onHeight={setDock}
-        tabs={[
-          { id: "details", label: "Details" },
-          { id: "snapshots", label: "Snapshots" },
-        ]}
+        tabs={
+          one
+            ? [
+                { id: "details", label: "Details" },
+                { id: "snapshots", label: "Snapshots" },
+              ]
+            : undefined
+        }
         tab={tab}
         onTab={setTab}
       >
-        {!one ? <p className="text-[13px] text-[#5f6b7a]">Select a volume above to see its details.</p> : null}
         {one && tab === "details" ? (
           <dl className="grid gap-x-8 gap-y-3 text-[13px] sm:grid-cols-3">
             {[
@@ -146,7 +154,7 @@ export function VolumesView() {
               ["Attached instance", dash(one.attachedTo)],
               ["Snapshot ID", dash(one.snapshotId)],
               ["Source volume ID", dash(one.sourceVolumeId)],
-              ["Owner", one.owner],
+              ["Owner ID", one.owner],
             ].map(([k, v]) => (
               <div key={k}>
                 <dt className="font-semibold text-[#5f6b7a]">{k}</dt>
@@ -168,32 +176,35 @@ export function VolumesView() {
             </ul>
           )
         ) : null}
-        <article className="mt-4 rounded-lg border border-[#e6e8eb] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <h3 className="font-semibold">Fault tolerance for all volumes</h3>
-            <span className="text-[12px] text-[#5f6b7a]">{updated}</span>
-          </div>
-          <p className="mt-2 max-w-3xl text-[13px] text-[#5f6b7a]">
-            Snapshots back up a volume on demand, or on a schedule you attach to a lifecycle policy or a backup plan.
-          </p>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="text-[13px] font-semibold">Volumes with a snapshot / Total # volumes</p>
-              <p className="mt-2 text-[20px]">
-                {backedUp} / {api.volumes.length}
-              </p>
+        {!one ? (
+          <article className="rounded-lg border border-[#e6e8eb] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <h3 className="text-[16px] font-bold">Snapshot summary</h3>
+              <span className="flex items-center gap-2 text-[12px] text-[#5f6b7a]">
+                Last updated {updated}
+                <RefreshButton onClick={() => setUpdated("less than a minute ago")} />
+              </span>
             </div>
-            <div>
-              <button type="button" className="inline-flex items-center gap-1 text-[13px] font-semibold" onClick={() => setPolicyOpen((value) => !value)}>
-                Snapshot policy status <MenuChevron />
-              </button>
-              {policyOpen ? <p className="mt-2 text-[13px] text-[#5f6b7a]">No default policy is attached in this region.</p> : null}
-              <div className="mt-3 flex gap-3 text-[13px]">
-                <InfoTip text="Lifecycle manager would schedule snapshots. This preview only counts volumes that already have a snapshot id." />
+            <p className="mt-1 max-w-3xl text-[13px] text-[#5f6b7a]">
+              Snapshots back up a volume on demand, or on a schedule you attach to a lifecycle policy or a backup plan.
+            </p>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-[13px] font-semibold">Volumes with a snapshot / Total # volumes</p>
+                <p className="mt-1 text-[13px]">
+                  {backedUp} / {api.volumes.length}
+                </p>
+              </div>
+              <div className="sm:border-l sm:border-[#e6e8eb] sm:pl-4">
+                <p className="flex items-center gap-1 text-[13px] font-semibold">
+                  Default snapshot policy status
+                  <InfoTip text="Lifecycle manager would schedule snapshots. This preview only counts volumes that already have a snapshot id." />
+                </p>
+                <p className="mt-1 text-[13px] text-[#5f6b7a]">No default policy set up</p>
               </div>
             </div>
-          </div>
-        </article>
+          </article>
+        ) : null}
       </DetailDock>
       <PanelDialog
         open={recycleOpen}
@@ -316,5 +327,18 @@ export function VolumesView() {
         </div>
       </PanelDialog>
     </Shell>
+  );
+}
+
+function RefreshButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Refresh"
+      className="grid size-8 place-items-center rounded-full border-2 border-[#006ce0] text-[#006ce0] hover:bg-[#f2f8fd]"
+      onClick={onClick}
+    >
+      <RefreshCw className="size-3.5" />
+    </button>
   );
 }
