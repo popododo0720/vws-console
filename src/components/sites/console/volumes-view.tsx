@@ -1,5 +1,6 @@
 "use client";
 
+import { DetailLink } from "@/components/sites/console/resource-detail";
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import type { Volume } from "@/types/console";
@@ -12,7 +13,6 @@ import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
 import { Shell } from "@/components/sites/console/shell";
 import {
-  CopyText,
   FieldLabel,
   InfoTip,
   MenuButton,
@@ -50,7 +50,7 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
 
   const columns: Column<Volume>[] = [
     { key: "name", header: "Name", minWidth: 140, sortValue: (row) => row.name, cell: (row) => <NameCell value={row.name} /> },
-    { key: "id", header: "Volume ID", minWidth: 180, sortValue: (row) => row.id, cell: (row) => <CopyText value={row.id} /> },
+    { key: "id", header: "Volume ID", minWidth: 180, sortValue: (row) => row.id, cell: (row) => <DetailLink href={`/storage/volumes/${row.id}`} id={row.id} /> },
     { key: "state", header: "Volume state", minWidth: 120, sortValue: (row) => volumeState(row), cell: (row) => volumeState(row) },
     { key: "type", header: "Type", minWidth: 130, sortValue: (row) => row.volumeType, cell: (row) => row.volumeType },
     { key: "size", header: "Size", minWidth: 80, sortValue: (row) => String(row.sizeGiB), cell: (row) => `${row.sizeGiB} GiB` },

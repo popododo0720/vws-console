@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createSecurityGroup, createVpc, launchInstances, listVpcs } from "./client";
+import { createInstanceTags, createSecurityGroup, createVpc, getVolume, getVpc, instanceBatch, launchInstances, listVpcs } from "./client";
 
 type Call = { url: string; init: RequestInit };
 
@@ -90,5 +90,49 @@ describe("console-api client", () => {
       ["http://api.test/api/v1/instances", '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2,"tags":{"Name":"web"}}'],
       ["http://api.test/api/v1/instances", '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2}'],
     ]);
+  });
+
+  it("stops instances in batches of 20 with one operation per batch", async () => {
+    const ids = Array.from({ length: 21 }, (_, index) => `i-${index}`);
+    serve(
+      respond(202, { operation: { id: "op-a", state: "running" }, items: [] }),
+      respond(200, { id: "op-a", state: "succeeded" }),
+      respond(202, { operation: { id: "op-b", state: "succeeded" }, items: [] }),
+    );
+    expect(await instanceBatch("stop", ids)).toEqual({ ok: true, value: undefined });
+    expect(calls.map((c) => c.url)).toEqual([
+      "http://api.test/api/v1/instances/stop",
+      "http://api.test/api/v1/operations/op-a",
+      "http://api.test/api/v1/instances/stop",
+    ]);
+    expect(JSON.parse(calls[0].init.body as string).instanceIds).toHaveLength(20);
+    expect(JSON.parse(calls[2].init.body as string).instanceIds).toEqual(["i-20"]);
+    const keys = [calls[0], calls[2]].map((c) => (c.init.headers as Record<string, string>)["idempotency-key"]);
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
+  it("stops at the first failed batch", async () => {
+    const ids = Array.from({ length: 25 }, (_, index) => `i-${index}`);
+    serve(respond(202, { operation: { id: "op-c", state: "running" } }), respond(200, { id: "op-c", state: "failed", error: { code: "Conflict", message: "busy" } }));
+    expect(await instanceBatch("terminate", ids)).toEqual({ ok: false, error: { code: "Conflict", message: "busy", requestId: null } });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("writes the Name tag to the instance tags endpoint", async () => {
+    serve(respond(202, { operation: { id: "op-t", state: "succeeded" }, items: [] }));
+    expect(await createInstanceTags("i-1", { Name: "web" })).toEqual({ ok: true, value: undefined });
+    expect(calls[0].url).toBe("http://api.test/api/v1/instances/i-1/tags");
+    expect(calls[0].init.body).toBe('{"tags":{"Name":"web"}}');
+  });
+
+  it("reads one VPC and one volume, and treats a 404 as missing", async () => {
+    serve(
+      respond(200, { vpcId: "vpc-1", cidrBlock: "10.0.0.0/16", state: "available", isDefault: true }),
+      respond(404, { error: { code: "NotFound", message: "no such volume" }, requestId: "r-2" }),
+    );
+    const vpc = await getVpc("vpc-1");
+    expect(vpc.ok && vpc.value?.ipv4Cidr).toBe("10.0.0.0/16");
+    expect(await getVolume("vol-x")).toEqual({ ok: true, value: null });
+    expect(calls.map((c) => c.url)).toEqual(["http://api.test/api/v1/vpcs/vpc-1", "http://api.test/api/v1/volumes/vol-x"]);
   });
 });

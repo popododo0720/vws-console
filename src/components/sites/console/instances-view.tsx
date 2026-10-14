@@ -7,7 +7,7 @@ import { CircleCheck, ExternalLink, Info, RefreshCw } from "lucide-react";
 import type { Instance } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { startInstancesAction, stopInstancesAction, terminateInstancesAction } from "@/app/actions/resources";
+import { renameInstanceAction, startInstancesAction, stopInstancesAction, terminateInstancesAction } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
@@ -52,7 +52,14 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
       header: "Name",
       minWidth: 160,
       sortValue: (row) => row.name,
-      cell: (row) => <NameCell value={row.name} />,
+      cell: (row) => (
+        <NameCell
+          value={row.name}
+          onRename={(name) => {
+            if (name !== row.name) action.run(() => renameInstanceAction(row.id, name));
+          }}
+        />
+      ),
     },
     { key: "id", header: "Instance ID", minWidth: 180, sortValue: (row) => row.id, cell: (row) => <InstanceLink id={row.id} /> },
     { key: "state", header: "Instance state", minWidth: 140, sortValue: (row) => row.state, cell: (row) => <StateDot state={row.state} /> },
