@@ -51,7 +51,7 @@ export type Snapshot = {
   volumeId: string;
   sizeGiB: number;
   description: string;
-  state: "completed" | "pending";
+  state: string;
   started: string;
   owner: string;
   region: string;
