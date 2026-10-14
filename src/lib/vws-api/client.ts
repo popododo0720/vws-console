@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { headers as requestHeaders } from "next/headers";
 import { redirect } from "next/navigation";
 import { currentSession } from "./session";
+import { logAuth } from "./log";
+import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
 import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type { ElasticIp, Instance, SecurityGroup, Snapshot, Subnet, Volume, Vpc } from "@/types/console";
 import {
@@ -40,6 +42,21 @@ function apiBase(): string | ApiError {
 }
 
 const unavailable: ApiError = { code: "ServiceUnavailable", message: "The VWS console API did not answer.", requestId: null };
+
+function transportError(error: unknown): ApiError {
+  if (error instanceof ApiTransportError) {
+    return {
+      code: error.kind === "timeout" ? "RequestTimeout" : "ServiceUnavailable",
+      message: error.kind === "timeout" ? "The VWS console API did not answer in time." : unavailable.message,
+      requestId: error.requestId,
+    };
+  }
+  return unavailable;
+}
+
+function parseJson(text: string): unknown {
+  return text ? JSON.parse(text) : null;
+}
 
 /** Where a request with no session, or one console-api answers 401, is sent. */
 export const LOGIN_PATH = "/login";
@@ -82,25 +99,24 @@ async function request(method: "GET" | "POST", path: string, body?: unknown): Pr
     headers["x-csrf-token"] = session.csrf;
     Object.assign(headers, await browserOrigin());
   }
-  let response: Response;
+  let response: ApiReply;
   let json: unknown;
   try {
-    response = await fetch(`${base}/api/v1${path}`, {
-      method,
-      headers,
-      body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
-      cache: "no-store",
-    });
-    const text = await response.text();
-    json = text ? JSON.parse(text) : null;
+    // apiFetch retries a GET on transient failures and sends a POST exactly once.
+    response = await apiFetch(`${base}/api/v1${path}`, { method, headers, body: method === "POST" ? JSON.stringify(body ?? {}) : undefined });
+  } catch (error) {
+    return { ok: false, error: transportError(error) };
+  }
+  try {
+    json = parseJson(response.text);
   } catch {
-    return { ok: false, error: unavailable };
+    return { ok: false, error: { ...malformed(path), requestId: response.requestId } };
   }
   if (response.status === 401) return toLogin("expired");
-  if (!response.ok) {
+  if (response.status < 200 || response.status > 299) {
     return {
       ok: false,
-      error: parseApiError(json) ?? { code: "InternalError", message: `The VWS console API answered HTTP ${response.status}.`, requestId: null },
+      error: parseApiError(json) ?? { code: "InternalError", message: `The VWS console API answered HTTP ${response.status}.`, requestId: response.requestId },
     };
   }
   return { ok: true, value: { status: response.status, json } };
@@ -248,38 +264,56 @@ export const deleteSnapshot = (id: string) => mutate(`/snapshots/${seg(id)}/dele
 
 export type LoginInput = { account: string; userName: string; password: string; mfaCode?: string };
 
-/** Signs in with POST /auth/login and returns the session cookies console-api set. */
+/** Signs in with POST /auth/login and returns the session cookies console-api set. Never retried. */
 export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
   const base = apiBase();
   if (typeof base !== "string") return { ok: false, error: base };
-  let response: Response;
-  let json: unknown = null;
+  const started = performance.now();
+  const done = (outcome: "success" | "failure" | "error", status: number | null, requestId: string | null, code?: string | null) =>
+    logAuth({ event: "auth.login", outcome, status, requestId, code, durationMs: performance.now() - started });
+  let reply: ApiReply;
   try {
-    response = await fetch(`${base}/api/v1/auth/login`, {
+    reply = await apiFetch(`${base}/api/v1/auth/login`, {
       method: "POST",
       headers: { accept: "application/json", "content-type": "application/json", ...(await browserOrigin()) },
       body: JSON.stringify(input.mfaCode ? input : { account: input.account, userName: input.userName, password: input.password }),
-      cache: "no-store",
     });
-    const text = await response.text();
-    json = text ? JSON.parse(text) : null;
+  } catch (error) {
+    const apiError = transportError(error);
+    done("error", null, apiError.requestId, apiError.code);
+    return { ok: false, error: apiError };
+  }
+  let json: unknown = null;
+  try {
+    json = parseJson(reply.text);
   } catch {
-    return { ok: false, error: unavailable };
+    json = null;
   }
-  if (!response.ok) {
-    return { ok: false, error: parseApiError(json) ?? { code: "InternalError", message: `Sign-in answered HTTP ${response.status}.`, requestId: null } };
+  if (reply.status < 200 || reply.status > 299) {
+    const apiError = parseApiError(json) ?? { code: "InternalError", message: `Sign-in answered HTTP ${reply.status}.`, requestId: reply.requestId };
+    done(reply.status >= 500 ? "error" : "failure", reply.status, reply.requestId, apiError.code);
+    return { ok: false, error: apiError };
   }
-  const session = sessionFromSetCookie(response.headers.getSetCookie());
-  return session ? { ok: true, value: session } : { ok: false, error: malformed("/auth/login") };
+  const session = sessionFromSetCookie(reply.headers.getSetCookie());
+  if (!session) {
+    done("error", reply.status, reply.requestId, "MalformedResponse");
+    return { ok: false, error: malformed("/auth/login") };
+  }
+  done("success", reply.status, reply.requestId);
+  return { ok: true, value: session };
 }
 
-/** Revokes the session with POST /auth/logout. A missing or expired session is already signed out. */
+/** Revokes the session with POST /auth/logout. A missing or expired session is already signed out. Never retried. */
 export async function logout(): Promise<void> {
   const base = apiBase();
   const session = await currentSession();
-  if (typeof base !== "string" || !session) return;
+  const started = performance.now();
+  if (typeof base !== "string" || !session) {
+    logAuth({ event: "auth.logout", outcome: "skipped", status: null, requestId: null, durationMs: performance.now() - started });
+    return;
+  }
   try {
-    await fetch(`${base}/api/v1/auth/logout`, {
+    const reply = await apiFetch(`${base}/api/v1/auth/logout`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -288,10 +322,13 @@ export async function logout(): Promise<void> {
         ...(await browserOrigin()),
       },
       body: "{}",
-      cache: "no-store",
     });
-  } catch {
+    const ok = reply.status >= 200 && reply.status <= 299;
+    logAuth({ event: "auth.logout", outcome: ok ? "success" : "failure", status: reply.status, requestId: reply.requestId, durationMs: performance.now() - started });
+  } catch (error) {
     // The console still drops its cookies; the API session then expires on its own.
+    const apiError = transportError(error);
+    logAuth({ event: "auth.logout", outcome: "error", status: null, requestId: apiError.requestId, code: apiError.code, durationMs: performance.now() - started });
   }
 }
 
@@ -313,16 +350,27 @@ export async function signedInSession(): Promise<SessionInfo | null> {
   const base = apiBase();
   const session = await currentSession();
   if (typeof base !== "string" || !session) return null;
+  const started = performance.now();
   try {
-    const response = await fetch(`${base}/api/v1/auth/session`, {
+    const reply = await apiFetch(`${base}/api/v1/auth/session`, {
       headers: { accept: "application/json", cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}` },
-      cache: "no-store",
     });
-    if (!response.ok) return null;
-    const body = ((await response.json()) ?? {}) as Record<string, unknown>;
+    const ok = reply.status >= 200 && reply.status <= 299;
+    logAuth({
+      event: "auth.session",
+      outcome: ok ? "success" : reply.status >= 500 ? "error" : "failure",
+      status: reply.status,
+      requestId: reply.requestId,
+      attempts: reply.attempts,
+      durationMs: performance.now() - started,
+    });
+    if (!ok) return null;
+    const body = (parseJson(reply.text) ?? {}) as Record<string, unknown>;
     const text = (value: unknown) => (typeof value === "string" ? value : "");
     return { principal: text(body.principal), account: text(body.account), root: body.root === true, expiresAt: text(body.expiresAt) };
-  } catch {
+  } catch (error) {
+    const apiError = transportError(error);
+    logAuth({ event: "auth.session", outcome: "error", status: null, requestId: apiError.requestId, code: apiError.code, durationMs: performance.now() - started });
     return null;
   }
 }

@@ -142,6 +142,7 @@ describe("console-api client", () => {
       cookie: "vws_session=sess-1; vws_csrf=csrf-1",
       "x-csrf-token": "csrf-1",
       origin: "http://console.test",
+      "x-request-id": expect.stringMatching(/^[0-9a-f-]{36}$/),
     });
   });
 
@@ -248,5 +249,124 @@ describe("console-api client", () => {
     nav.session = { session: "s", csrf: "c" };
     expect(await signedInSession()).toBeNull();
     expect(calls).toHaveLength(1);
+  });
+
+  describe("retries, timeouts and logs", () => {
+    beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout"] }));
+    afterEach(() => vi.useRealTimers());
+
+    async function settle<T>(promise: Promise<T>): Promise<T> {
+      await vi.runAllTimersAsync();
+      return promise;
+    }
+
+    it("retries a GET after a 503 and a network error, then succeeds", async () => {
+      let n = 0;
+      vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        n++;
+        if (n === 1) return respond(503, { error: { code: "ServiceUnavailable", message: "busy" } });
+        if (n === 2) throw new TypeError("fetch failed");
+        return respond(200, { items: [] });
+      });
+      expect(await settle(listVpcs())).toEqual({ ok: true, value: [] });
+      expect(calls).toHaveLength(3);
+      const ids = calls.map((c) => (c.init.headers as Record<string, string>)["x-request-id"]);
+      expect(new Set(ids).size).toBe(1);
+      expect(calls.every((c) => c.init.signal instanceof AbortSignal)).toBe(true);
+    });
+
+    it("stops retrying a GET after 3 attempts and reports the request ID", async () => {
+      serve(respond(502, {}), respond(502, {}), respond(502, { error: { code: "BadGateway", message: "down" }, requestId: "r-9" }));
+      const result = await settle(listVpcs());
+      expect(calls).toHaveLength(3);
+      expect(result).toEqual({ ok: false, error: { code: "BadGateway", message: "down", requestId: "r-9" } });
+    });
+
+    it("does not retry a GET that the API rejected", async () => {
+      serve(respond(400, { error: { code: "InvalidArgument", message: "bad" } }));
+      await settle(listVpcs());
+      expect(calls).toHaveLength(1);
+    });
+
+    it("never retries a write, even on a 503 or a network error", async () => {
+      serve(respond(503, { error: { code: "ServiceUnavailable", message: "busy" } }));
+      expect(await settle(createVpc("10.9.0.0/16"))).toMatchObject({ ok: false, error: { code: "ServiceUnavailable" } });
+      expect(calls).toHaveLength(1);
+      calls = [];
+      vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        throw new TypeError("fetch failed");
+      });
+      expect(await settle(createVpc("10.9.0.0/16"))).toMatchObject({ ok: false, error: { code: "ServiceUnavailable" } });
+      expect(calls).toHaveLength(1);
+    });
+
+    it("never retries sign-in or sign-out", async () => {
+      serve(respond(503, { error: { code: "ServiceUnavailable", message: "busy" } }));
+      await settle(login({ account: "1", userName: "root", password: "pw" }));
+      expect(calls).toHaveLength(1);
+      calls = [];
+      serve(respond(503, {}));
+      await settle(logout());
+      expect(calls).toHaveLength(1);
+    });
+
+    it("times out a request that never answers and reports RequestTimeout", async () => {
+      vi.stubEnv("VWS_CONSOLE_API_TIMEOUT_MS", "50");
+      vi.useRealTimers();
+      vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        return new Promise((_, reject) => init.signal!.addEventListener("abort", () => reject(init.signal!.reason)));
+      });
+      const write = await createVpc("10.9.0.0/16");
+      expect(write).toMatchObject({ ok: false, error: { code: "RequestTimeout", requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) } });
+      expect(calls).toHaveLength(1);
+      calls = [];
+      const signIn = await login({ account: "1", userName: "root", password: "pw" });
+      expect(signIn).toMatchObject({ ok: false, error: { code: "RequestTimeout" } });
+      expect(calls).toHaveLength(1);
+    });
+
+    it("logs sign-in, sign-out and session as structured lines without any secret", async () => {
+      const lines: string[] = [];
+      const capture = (line: unknown) => void lines.push(String(line));
+      const info = vi.spyOn(console, "info").mockImplementation(capture);
+      const warn = vi.spyOn(console, "warn").mockImplementation(capture);
+      nav.session = { session: "SESSION-TOKEN-SECRET", csrf: "CSRF-VALUE-SECRET" };
+      const ok = respond(200, {});
+      ok.headers.append("set-cookie", "vws_session=NEW-SESSION-SECRET; HttpOnly");
+      ok.headers.append("set-cookie", "vws_csrf=NEW-CSRF-SECRET");
+      serve(
+        respond(401, { error: { code: "Unauthenticated", message: "authentication failed" } }),
+        ok,
+        respond(200, { principal: "arn:vws:iam::1:root", account: "1" }),
+        new Response(null, { status: 204 }),
+      );
+      await settle(login({ account: "123456789012", userName: "root", password: "PASSWORD-SECRET", mfaCode: "987654" }));
+      await settle(login({ account: "123456789012", userName: "root", password: "PASSWORD-SECRET" }));
+      await settle(signedInSession());
+      await settle(logout());
+      info.mockRestore();
+      warn.mockRestore();
+
+      const events = lines.map((line) => JSON.parse(line));
+      expect(events.map((e) => [e.event, e.outcome, e.status])).toEqual([
+        ["auth.login", "failure", 401],
+        ["auth.login", "success", 200],
+        ["auth.session", "success", 200],
+        ["auth.logout", "success", 204],
+      ]);
+      for (const e of events) {
+        expect(Object.keys(e).sort()).toEqual(expect.arrayContaining(["durationMs", "event", "outcome", "requestId", "status"]));
+        expect(e.requestId).toMatch(/^[0-9a-f-]{36}$/);
+        expect(typeof e.durationMs).toBe("number");
+      }
+      expect(events[0].code).toBe("Unauthenticated");
+      const all = lines.join("\n");
+      for (const secret of ["PASSWORD-SECRET", "987654", "SESSION-TOKEN-SECRET", "CSRF-VALUE-SECRET", "NEW-SESSION-SECRET", "NEW-CSRF-SECRET", "vws_session", "vws_csrf", "password", "mfa", "cookie"]) {
+        expect(all).not.toContain(secret);
+      }
+    });
   });
 });

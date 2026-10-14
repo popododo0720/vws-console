@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { logAuth } from "@/lib/vws-api/log";
 import { CSRF_COOKIE, SESSION_COOKIE } from "@/lib/vws-api/session-cookies";
+import { apiFetch } from "@/lib/vws-api/transport";
 
 const SESSION_CHECK_TIMEOUT_MS = 3_000;
 
@@ -8,14 +10,25 @@ const SESSION_CHECK_TIMEOUT_MS = 3_000;
  * error keeps the cookies, so a link to /login?reason=expired cannot sign a working session out.
  */
 async function sessionRejected(base: string, session: string): Promise<boolean> {
+  const started = performance.now();
   try {
-    const response = await fetch(`${base.replace(/\/+$/, "")}/api/v1/auth/session`, {
-      headers: { accept: "application/json", cookie: `${SESSION_COOKIE}=${session}` },
-      cache: "no-store",
-      signal: AbortSignal.timeout(SESSION_CHECK_TIMEOUT_MS),
+    // One attempt only: this runs before /login renders, and an unconfirmed session is kept anyway.
+    const reply = await apiFetch(
+      `${base.replace(/\/+$/, "")}/api/v1/auth/session`,
+      { headers: { accept: "application/json", cookie: `${SESSION_COOKIE}=${session}` } },
+      { timeoutMs: SESSION_CHECK_TIMEOUT_MS, retry: false },
+    );
+    const rejected = reply.status === 401;
+    logAuth({
+      event: "auth.expired_cookie_cleared",
+      outcome: rejected ? "success" : "skipped",
+      status: reply.status,
+      requestId: reply.requestId,
+      durationMs: performance.now() - started,
     });
-    return response.status === 401;
+    return rejected;
   } catch {
+    logAuth({ event: "auth.expired_cookie_cleared", outcome: "error", status: null, requestId: null, durationMs: performance.now() - started });
     return false;
   }
 }
