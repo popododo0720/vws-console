@@ -29,6 +29,7 @@ describe("console-api client", () => {
   beforeEach(() => {
     calls = [];
     vi.stubEnv("VWS_CONSOLE_API_URL", "http://api.test/");
+    vi.stubEnv("VWS_CONSOLE_IAM", "on");
     nav.session = { session: "sess-1", csrf: "csrf-1" };
     nav.path = "/network/vpcs";
   });
@@ -367,6 +368,55 @@ describe("console-api client", () => {
       for (const secret of ["PASSWORD-SECRET", "987654", "SESSION-TOKEN-SECRET", "CSRF-VALUE-SECRET", "NEW-SESSION-SECRET", "NEW-CSRF-SECRET", "vws_session", "vws_csrf", "password", "mfa", "cookie"]) {
         expect(all).not.toContain(secret);
       }
+    });
+  });
+
+  describe("IAM off (the default)", () => {
+    beforeEach(() => {
+      vi.stubEnv("VWS_CONSOLE_IAM", "");
+      vi.stubEnv("VWS_CONSOLE_API_TOKEN", "tok");
+    });
+
+    it("calls console-api with the server-side bearer token and no session, CSRF or Origin", async () => {
+      nav.session = null;
+      serve(respond(202, { operation: { id: "op-1", state: "succeeded" } }));
+      expect(await createVpc("10.9.0.0/16")).toEqual({ ok: true, value: undefined });
+      const headers = calls[0].init.headers as Record<string, string>;
+      expect(headers.authorization).toBe("Bearer tok");
+      expect(headers.cookie).toBeUndefined();
+      expect(headers["x-csrf-token"]).toBeUndefined();
+      expect(headers.origin).toBeUndefined();
+      expect(headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it("shows a 401 as an error instead of redirecting to login", async () => {
+      serve(respond(401, { error: { code: "Unauthenticated", message: "bad token" } }));
+      expect(await listVpcs()).toMatchObject({ ok: false, error: { code: "Unauthenticated" } });
+    });
+
+    it("reports a missing token without calling the API", async () => {
+      vi.stubEnv("VWS_CONSOLE_API_TOKEN", "");
+      serve();
+      expect(await listVpcs()).toEqual({ ok: false, error: { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_TOKEN on the console server.", requestId: null } });
+      expect(calls).toEqual([]);
+    });
+
+    it("refuses sign-in, skips sign-out and has no session for the menu", async () => {
+      serve();
+      expect(await login({ account: "1", userName: "root", password: "pw" })).toMatchObject({ ok: false, error: { code: "SignInDisabled" } });
+      await logout();
+      expect(await signedInSession()).toBeNull();
+      expect(calls).toEqual([]);
+    });
+
+    it("treats any value other than on as off", async () => {
+      const { iamMode } = await import("./mode");
+      for (const value of ["", "off", "true", "1", "yes"]) {
+        vi.stubEnv("VWS_CONSOLE_IAM", value);
+        expect(iamMode()).toBe("off");
+      }
+      vi.stubEnv("VWS_CONSOLE_IAM", " ON ");
+      expect(iamMode()).toBe("on");
     });
   });
 });

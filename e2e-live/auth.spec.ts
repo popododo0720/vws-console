@@ -110,3 +110,13 @@ test("a forged /login?reason=expired link does not drop a working session", asyn
   await page.goto("/compute/instances");
   await expect(page).toHaveURL(/\/compute\/instances$/);
 });
+
+test.describe("IAM on", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+  test("every console page redirects to /login without a session", async ({ page }) => {
+    for (const path of ["/compute/instances", "/network/vpcs", "/storage/volumes", "/network/security-groups"]) {
+      await page.goto(path);
+      await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(path)}$`));
+    }
+  });
+});

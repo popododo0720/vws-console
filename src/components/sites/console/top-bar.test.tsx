@@ -9,7 +9,7 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/", useRouter: () => ({ 
 describe("TopBar account menu", () => {
   it("shows the signed-in user and account ID", () => {
     render(
-      <ConsoleProvider identity={{ userName: "alice", accountId: "123456789012" }}>
+      <ConsoleProvider identity={{ userName: "alice", accountId: "123456789012" }} signIn>
         <TopBar onMenu={() => {}} />
       </ConsoleProvider>,
     );
@@ -28,5 +28,15 @@ describe("TopBar account menu", () => {
       </ConsoleProvider>,
     );
     expect(screen.getByRole("button", { name: /—/ })).toHaveTextContent("——");
+  });
+
+  it("offers no Sign out with IAM off", () => {
+    render(
+      <ConsoleProvider>
+        <TopBar onMenu={() => {}} />
+      </ConsoleProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /—/ }));
+    expect(screen.queryByRole("menuitem", { name: "Sign out" })).toBeNull();
   });
 });

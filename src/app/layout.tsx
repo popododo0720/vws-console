@@ -3,6 +3,7 @@ import "./globals.css";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { identityFromSession } from "@/lib/vws-api/adapter";
 import { signedInSession } from "@/lib/vws-api/client";
+import { iamEnabled } from "@/lib/vws-api/mode";
 
 export const metadata: Metadata = {
   title: "VWS console",
@@ -18,7 +19,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="console min-h-full">
-        <ConsoleProvider identity={identity}>{children}</ConsoleProvider>
+        <ConsoleProvider identity={identity} signIn={iamEnabled()}>{children}</ConsoleProvider>
       </body>
     </html>
   );

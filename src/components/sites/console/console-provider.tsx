@@ -32,6 +32,7 @@ type Density = "comfortable" | "compact";
 type ConsoleApi = {
   /** The signed-in user name and account ID, "—" where unknown. */
   account: { name: string; id: string };
+  signIn: boolean;
   regions: readonly string[];
   region: string;
   setRegion: (region: string) => void;
@@ -83,7 +84,16 @@ function isCidr(value: string) {
 
 const UNKNOWN: Identity = { userName: "—", accountId: "—" };
 
-export function ConsoleProvider({ children, identity = UNKNOWN }: { children: ReactNode; identity?: Identity }) {
+export function ConsoleProvider({
+  children,
+  identity = UNKNOWN,
+  signIn = false,
+}: {
+  children: ReactNode;
+  identity?: Identity;
+  /** True when IAM is on and users sign in; the account menu then offers Sign out. */
+  signIn?: boolean;
+}) {
   const [region, setRegion] = useState<string>(HOME_REGION);
   const [mode, setMode] = useState<Mode>("empty");
   const [data, setData] = useState<Dataset>(() => createEmptyAccount());
@@ -99,6 +109,7 @@ export function ConsoleProvider({ children, identity = UNKNOWN }: { children: Re
 
     return {
       account: { name: identity.userName, id: identity.accountId },
+      signIn,
       regions: REGIONS,
       region,
       setRegion,
@@ -287,7 +298,7 @@ export function ConsoleProvider({ children, identity = UNKNOWN }: { children: Re
         }));
       },
     };
-  }, [data, density, identity.accountId, identity.userName, mode, region]);
+  }, [data, density, identity.accountId, identity.userName, mode, region, signIn]);
 
   return <ConsoleContext.Provider value={api}>{children}</ConsoleContext.Provider>;
 }

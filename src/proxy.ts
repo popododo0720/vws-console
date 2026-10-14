@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { logAuth } from "@/lib/vws-api/log";
+import { iamEnabled } from "@/lib/vws-api/mode";
 import { CSRF_COOKIE, SESSION_COOKIE } from "@/lib/vws-api/session-cookies";
 import { apiFetch } from "@/lib/vws-api/transport";
 
@@ -42,8 +43,9 @@ async function sessionRejected(base: string, session: string): Promise<boolean> 
  */
 export async function proxy(request: NextRequest) {
   const base = process.env.VWS_CONSOLE_API_URL;
-  // Without console-api there is nothing to sign in to; the screens report ConsoleNotConfigured.
-  if (!base) return NextResponse.next();
+  // IAM off (the default) uses the server-side token and asks for no sign-in; without console-api
+  // there is nothing to sign in to either, and the screens report ConsoleNotConfigured.
+  if (!base || !iamEnabled()) return NextResponse.next();
   const session = request.cookies.get(SESSION_COOKIE)?.value;
 
   if (request.nextUrl.pathname === "/login") {

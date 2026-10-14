@@ -15,6 +15,8 @@ writeFileSync(passwordFile, process.env.E2E_ROOT_PASSWORD, { mode: 0o600 });
 
 export default defineConfig({
   testDir: "./e2e-live",
+  // IAM on: sign-in flow. iam-off.spec.ts runs from playwright.live-iam-off.config.ts.
+  testIgnore: /iam-off\.spec\.ts/,
   workers: 1,
   use: { baseURL: `http://127.0.0.1:${port}` },
   projects: [
@@ -33,7 +35,9 @@ export default defineConfig({
     {
       command: `npm run start -- -p ${port} -H 127.0.0.1`,
       url: `http://127.0.0.1:${port}/login`,
-      env: { VWS_CONSOLE_API_URL: `http://127.0.0.1:${ec2Port - 1}` },
+      env: { VWS_CONSOLE_API_URL: `http://127.0.0.1:${ec2Port - 1}`, VWS_CONSOLE_IAM: "on" },
+      // Keep the console's structured auth log lines in the run output as evidence.
+      stdout: "pipe",
       reuseExistingServer: false,
     },
   ],

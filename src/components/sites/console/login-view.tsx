@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { loginAction, type LoginState } from "@/app/actions/auth";
 import { FieldLabel } from "@/components/sites/console/ui";
 
@@ -8,6 +8,10 @@ const initial: LoginState = { error: null };
 
 export function LoginView({ next, expired }: { next: string; expired: boolean }) {
   const [state, action, pending] = useActionState(loginAction, initial);
+  // A full load, not a client transition: the root layout then renders the account menu for the new session.
+  useEffect(() => {
+    if (state.next) window.location.replace(state.next);
+  }, [state.next]);
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f2f3f3] px-4">
       <form action={action} className="w-full max-w-sm space-y-4 rounded-lg border border-[#d5dbdb] bg-white p-6 text-[13px] shadow-sm">
@@ -44,7 +48,7 @@ export function LoginView({ next, expired }: { next: string; expired: boolean })
         </div>
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || Boolean(state.next)}
           className="h-8 w-full rounded-lg bg-[#ff9900] font-semibold text-[#16191f] hover:bg-[#ec7211] disabled:opacity-60"
         >
           {pending ? "Signing in…" : "Sign in"}

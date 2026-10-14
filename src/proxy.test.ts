@@ -16,6 +16,7 @@ describe("proxy", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     vi.stubEnv("VWS_CONSOLE_API_URL", "http://api.test");
+    vi.stubEnv("VWS_CONSOLE_IAM", "on");
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -60,5 +61,12 @@ describe("proxy", () => {
   it("asks for no sign-in when console-api is not configured", async () => {
     vi.stubEnv("VWS_CONSOLE_API_URL", "");
     expect((await proxy(req("/network/vpcs"))).headers.get("location")).toBeNull();
+  });
+
+  it("asks for no sign-in with IAM off, the default", async () => {
+    vi.stubEnv("VWS_CONSOLE_IAM", "");
+    const response = await proxy(req("/network/vpcs"));
+    expect(response.headers.get("location")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

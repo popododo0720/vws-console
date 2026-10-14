@@ -187,7 +187,7 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
               checked: consoleApi.mode === "sample",
               onSelect: consoleApi.showSample,
             },
-            { label: "Sign out", onSelect: () => void logoutAction() },
+            ...(consoleApi.signIn ? [{ label: "Sign out", onSelect: () => void logoutAction() }] : []),
           ]}
         />
       </div>

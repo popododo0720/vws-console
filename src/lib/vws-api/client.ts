@@ -4,6 +4,7 @@ import { headers as requestHeaders } from "next/headers";
 import { redirect } from "next/navigation";
 import { currentSession } from "./session";
 import { logAuth } from "./log";
+import { iamEnabled } from "./mode";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
 import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type { ElasticIp, Instance, SecurityGroup, Snapshot, Subnet, Volume, Vpc } from "@/types/console";
@@ -34,6 +35,13 @@ import {
 
 const POLL_INTERVAL_MS = 500;
 const POLL_TIMEOUT_MS = 60_000;
+
+/** IAM off: the server-side bearer token, as before sign-in existed. It never reaches the browser. */
+function bearer(): string | ApiError {
+  const token = process.env.VWS_CONSOLE_API_TOKEN;
+  if (token) return token;
+  return { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_TOKEN on the console server.", requestId: null };
+}
 
 function apiBase(): string | ApiError {
   const base = process.env.VWS_CONSOLE_API_URL;
@@ -87,17 +95,24 @@ async function toLogin(reason: "signin" | "expired"): Promise<never> {
 async function request(method: "GET" | "POST", path: string, body?: unknown): Promise<ApiResult<{ status: number; json: unknown }>> {
   const base = apiBase();
   if (typeof base !== "string") return { ok: false, error: base };
-  const session = await currentSession();
-  if (!session) return toLogin("signin");
-  const headers: Record<string, string> = {
-    accept: "application/json",
-    cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`,
-  };
+  const iam = iamEnabled();
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (iam) {
+    const session = await currentSession();
+    if (!session) return toLogin("signin");
+    headers.cookie = `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`;
+    if (method === "POST") {
+      headers["x-csrf-token"] = session.csrf;
+      Object.assign(headers, await browserOrigin());
+    }
+  } else {
+    const token = bearer();
+    if (typeof token !== "string") return { ok: false, error: token };
+    headers.authorization = `Bearer ${token}`;
+  }
   if (method === "POST") {
     headers["idempotency-key"] = randomUUID();
     headers["content-type"] = "application/json";
-    headers["x-csrf-token"] = session.csrf;
-    Object.assign(headers, await browserOrigin());
   }
   let response: ApiReply;
   let json: unknown;
@@ -112,7 +127,8 @@ async function request(method: "GET" | "POST", path: string, body?: unknown): Pr
   } catch {
     return { ok: false, error: { ...malformed(path), requestId: response.requestId } };
   }
-  if (response.status === 401) return toLogin("expired");
+  // With IAM off a 401 means a wrong token, which signing in cannot fix, so it is shown as an error.
+  if (response.status === 401 && iam) return toLogin("expired");
   if (response.status < 200 || response.status > 299) {
     return {
       ok: false,
@@ -266,6 +282,7 @@ export type LoginInput = { account: string; userName: string; password: string; 
 
 /** Signs in with POST /auth/login and returns the session cookies console-api set. Never retried. */
 export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
+  if (!iamEnabled()) return { ok: false, error: { code: "SignInDisabled", message: "Sign-in is off on this console.", requestId: null } };
   const base = apiBase();
   if (typeof base !== "string") return { ok: false, error: base };
   const started = performance.now();
@@ -306,7 +323,7 @@ export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
 /** Revokes the session with POST /auth/logout. A missing or expired session is already signed out. Never retried. */
 export async function logout(): Promise<void> {
   const base = apiBase();
-  const session = await currentSession();
+  const session = iamEnabled() ? await currentSession() : null;
   const started = performance.now();
   if (typeof base !== "string" || !session) {
     logAuth({ event: "auth.logout", outcome: "skipped", status: null, requestId: null, durationMs: performance.now() - started });
@@ -347,6 +364,7 @@ export async function getSession(): Promise<ApiResult<SessionInfo>> {
  * there is no session, or it no longer answers. Pages still redirect through their own calls.
  */
 export async function signedInSession(): Promise<SessionInfo | null> {
+  if (!iamEnabled()) return null;
   const base = apiBase();
   const session = await currentSession();
   if (typeof base !== "string" || !session) return null;
