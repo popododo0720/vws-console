@@ -11,23 +11,16 @@ import {
   ACCOUNT,
   createEmptyAccount,
   createSampleAccount,
-  DEFAULT_SG_ID,
   HOME_REGION,
-  machineImages,
   REGIONS,
-  volumeTypeOptions,
-  zonesFor,
 } from "@/lib/console-data";
-import { makeRule } from "@/lib/security-group-rules";
 import type {
   Bucket,
   BucketObject,
   Dataset,
   Instance,
   InternetGateway,
-  LaunchDraft,
   RouteTable,
-  SecurityGroup,
   Subnet,
   Volume,
   Vpc,
@@ -48,7 +41,6 @@ type ConsoleApi = {
   setDensity: (density: Density) => void;
   instances: Instance[];
   volumes: Volume[];
-  securityGroups: SecurityGroup[];
   vpcs: Vpc[];
   subnets: Subnet[];
   routeTables: RouteTable[];
@@ -56,7 +48,6 @@ type ConsoleApi = {
   buckets: Bucket[];
   objects: BucketObject[];
   keyPairs: Dataset["keyPairs"];
-  launch: (draft: LaunchDraft) => void;
   createRouteTable: (input: { name: string; vpcId: string }) => void;
   deleteRouteTables: (ids: string[]) => void;
   addRoute: (tableId: string, destination: string, target: string) => string | null;
@@ -98,7 +89,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const api = useMemo<ConsoleApi>(() => {
     const instances = data.instances.filter((item) => item.region === region);
     const volumes = data.volumes.filter((item) => item.region === region);
-    const securityGroups = data.securityGroups.filter((item) => item.region === region);
     const vpcs = data.vpcs.filter((item) => item.region === region);
     const subnets = data.subnets.filter((item) => item.region === region);
     const routeTables = data.routeTables.filter((item) => item.region === region);
@@ -114,7 +104,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       setDensity,
       instances,
       volumes,
-      securityGroups,
       vpcs,
       subnets,
       routeTables,
@@ -129,94 +118,6 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       showSample: () => {
         setMode("sample");
         setData(createSampleAccount());
-      },
-      launch: (draft) => {
-        const count = Math.min(20, Math.max(1, Math.round(draft.count) || 1));
-        const zone = zonesFor(region)[0] ?? "a";
-        const image = machineImages.find((item) => item.id === draft.imageId);
-        setData((prev) => {
-          const next: Dataset = {
-            ...prev,
-            instances: [...prev.instances],
-            volumes: [...prev.volumes],
-            securityGroups: [...prev.securityGroups],
-            vpcs: [...prev.vpcs],
-            buckets: [...prev.buckets],
-            objects: [...prev.objects],
-            keyPairs: [...prev.keyPairs],
-          };
-          let groupId = draft.securityGroupId || DEFAULT_SG_ID;
-          if (draft.firewall === "create") {
-            groupId = newId("sg");
-            const slug = draft.name || "launch";
-            next.securityGroups.push({
-              id: groupId,
-              name: `${slug}-sg`,
-              groupName: `${slug}-sg`,
-              vpcId: draft.vpcId,
-              description: "Created from the launch form",
-              owner: ACCOUNT.id,
-              region,
-              rules: [
-                ...(draft.allowSsh
-                  ? [makeRule("in", "TCP", "22", draft.sshCidr)]
-                  : []),
-                ...(draft.allowHttps
-                  ? [makeRule("in", "TCP", "443", "0.0.0.0/0")]
-                  : []),
-                ...(draft.allowHttp
-                  ? [makeRule("in", "TCP", "80", "0.0.0.0/0")]
-                  : []),
-                makeRule("out", "All", "All", "0.0.0.0/0"),
-              ],
-            });
-          }
-          const spec = volumeTypeOptions.find((item) => item.id === draft.volumeType) ?? volumeTypeOptions[0];
-          for (let index = 0; index < count; index += 1) {
-            const id = newId("cmp");
-            const name = draft.name ? (count > 1 ? `${draft.name}-${index + 1}` : draft.name) : "";
-            next.instances.push({
-              id,
-              name,
-              state: "running",
-              type: draft.instanceType,
-              status: "ok",
-              checksPassed: 3,
-              checksTotal: 3,
-              availabilityZone: zone,
-              publicDns: draft.publicIp ? `${id}.north.example.net` : "",
-              publicIpv4: draft.publicIp ? `203.0.113.${(index + 20) % 200}` : "",
-              privateIpv4: "",
-              privateDns: "",
-              elasticIp: "",
-              ipv6: "",
-              region,
-              vpcId: draft.vpcId,
-              subnetId: "",
-              securityGroupIds: groupId ? [groupId] : [],
-              keyPair: draft.keyPair,
-              imageId: image?.id ?? draft.imageId,
-              launchedAt: "Just now",
-            });
-            next.volumes.push({
-              id: newId("blk"),
-              name: name ? `${name}-root` : "",
-              state: "",
-              volumeType: spec.id,
-              sizeGiB: draft.volumeGiB,
-              iops: spec.iops,
-              throughput: spec.throughput,
-              owner: ACCOUNT.id,
-              snapshotId: "",
-              sourceVolumeId: "",
-              created: "Just now",
-              availabilityZone: zone,
-              region,
-              attachedTo: id,
-            });
-          }
-          return next;
-        });
       },
       createRouteTable: (input) => {
         const vpc = data.vpcs.find((item) => item.id === input.vpcId);

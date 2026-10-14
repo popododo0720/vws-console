@@ -9,6 +9,7 @@ import {
   type IngressPermission,
   nextPageToken,
   parseApiError,
+  parseImages,
   parseInstances,
   parseOperation,
   parseSubnets,
@@ -17,6 +18,8 @@ import {
   toInstance,
   type ApiError,
   type ApiResult,
+  type Image,
+  type LaunchRequest,
 } from "./adapter";
 
 const POLL_INTERVAL_MS = 500;
@@ -126,6 +129,7 @@ async function mutateReturning(path: string, body?: unknown): Promise<ApiResult<
 
 const seg = encodeURIComponent;
 
+export const listImages = (): Promise<ApiResult<Image[]>> => listAll("/images", parseImages);
 export const listInstances = (): Promise<ApiResult<Instance[]>> => listAll("/instances", parseInstances);
 export const listVolumes = (): Promise<ApiResult<Volume[]>> => listAll("/volumes", parseVolumes);
 export const listVpcs = (): Promise<ApiResult<Vpc[]>> => listAll("/vpcs", parseVpcs);
@@ -141,6 +145,8 @@ export async function getInstance(id: string): Promise<ApiResult<Instance | null
   }
 }
 
+export const launchInstances = ({ tags, ...rest }: LaunchRequest) =>
+  mutate("/instances", Object.keys(tags).length > 0 ? { ...rest, tags } : rest);
 export const startInstance = (id: string) => mutate(`/instances/${seg(id)}/start`);
 export const stopInstance = (id: string) => mutate(`/instances/${seg(id)}/stop`);
 export const terminateInstance = (id: string) => mutate(`/instances/${seg(id)}/terminate`);

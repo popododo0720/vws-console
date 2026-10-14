@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createSecurityGroup, createVpc, listVpcs } from "./client";
+import { createSecurityGroup, createVpc, launchInstances, listVpcs } from "./client";
 
 type Call = { url: string; init: RequestInit };
 
@@ -79,5 +79,16 @@ describe("console-api client", () => {
     );
     expect(await createSecurityGroup("web", "vpc-1")).toEqual({ ok: true, value: "sg-9" });
     expect(calls[0].init.body).toBe('{"groupName":"web","vpcId":"vpc-1"}');
+  });
+
+  it("launches with tags only when there are some", async () => {
+    serve(respond(202, { operation: { id: "op-3", state: "succeeded" } }), respond(202, { operation: { id: "op-4", state: "succeeded" } }));
+    const req = { imageId: "ami-1", instanceType: "vws.small", subnetId: "subnet-1", count: 2 };
+    await launchInstances({ ...req, tags: { Name: "web" } });
+    await launchInstances({ ...req, tags: {} });
+    expect(calls.map((c) => [c.url, c.init.body])).toEqual([
+      ["http://api.test/api/v1/instances", '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2,"tags":{"Name":"web"}}'],
+      ["http://api.test/api/v1/instances", '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2}'],
+    ]);
   });
 });

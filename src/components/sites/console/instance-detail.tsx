@@ -126,14 +126,9 @@ export function InstanceTab({ tab, instance, hideSummary = false }: { tab: strin
     return <p className="text-[13px] text-[#5f6b7a]">No metric series is stored for this instance.</p>;
   }
   if (tab === "security") {
-    const groups = api.securityGroups.filter((group) => instance.securityGroupIds.includes(group.id));
     return (
       <Section title="Security groups">
-        <SimpleTable
-          head={["Security group", "Name", "Inbound rules"]}
-          empty="No security groups"
-          rows={groups.map((group) => [group.id, group.groupName, `${group.rules.filter((rule) => rule.direction === "in").length}`])}
-        />
+        <p className="text-[13px] text-[#5f6b7a]">The VWS API does not report the security groups of an instance yet.</p>
       </Section>
     );
   }

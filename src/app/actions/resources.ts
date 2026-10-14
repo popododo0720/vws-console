@@ -1,7 +1,7 @@
 "use server";
 
 import * as vws from "@/lib/vws-api/client";
-import type { ApiError, ApiResult, IngressPermission } from "@/lib/vws-api/adapter";
+import type { ApiError, ApiResult, IngressPermission, LaunchRequest } from "@/lib/vws-api/adapter";
 
 async function each(ids: string[], run: (id: string) => Promise<ApiResult<void>>): Promise<ApiError | null> {
   for (const id of ids) {
@@ -15,6 +15,10 @@ const errorOf = async (pending: Promise<ApiResult<void>>) => {
   const result = await pending;
   return result.ok ? null : result.error;
 };
+
+export async function launchInstancesAction(req: LaunchRequest) {
+  return errorOf(vws.launchInstances(req));
+}
 
 export async function startInstancesAction(ids: string[]) {
   return each(ids, vws.startInstance);

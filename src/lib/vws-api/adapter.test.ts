@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   nextPageToken,
   parseApiError,
+  parseImages,
   parseInstances,
   parseOperation,
   parseSubnets,
@@ -172,5 +173,11 @@ describe("console-api adapter", () => {
       parseSnapshots({ items: [{ snapshotId: "snap-1", ownerId: "1", volumeId: "vol-1", volumeSize: 4, state: "completed", description: "d" }] }),
     ).toEqual([{ id: "snap-1", name: "", volumeId: "vol-1", sizeGiB: 4, description: "d", state: "completed", started: "", owner: "1", region: "vws-1" }]);
     expect(parseAddresses({ items: null })).toEqual([]);
+  });
+
+  it("maps images", () => {
+    expect(parseImages({ items: [{ imageId: "ami-0123456789abcdef0", ownerId: "123456789012", name: "vws-1", state: "available" }] })).toEqual([
+      { id: "ami-0123456789abcdef0", name: "vws-1", state: "available", owner: "123456789012" },
+    ]);
   });
 });

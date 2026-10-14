@@ -21,7 +21,6 @@ export type Instance = {
   region: string;
   vpcId: string;
   subnetId: string;
-  securityGroupIds: string[];
   keyPair: string;
   imageId: string;
   launchedAt: string;
@@ -166,7 +165,6 @@ export type KeyPair = {
 export type Dataset = {
   instances: Instance[];
   volumes: Volume[];
-  securityGroups: SecurityGroup[];
   vpcs: Vpc[];
   subnets: Subnet[];
   routeTables: RouteTable[];
@@ -189,50 +187,4 @@ export type NavTree = {
   id: string;
   title: string;
   sections: NavNode[];
-};
-
-export type MachineImage = {
-  id: string;
-  name: string;
-  version: string;
-  mark: string;
-  swatch: string;
-  description: string;
-  arch: string;
-  boot: string;
-  virtualization: string;
-  ena: boolean;
-  rootDevice: string;
-  created: string;
-  username: string;
-  starter: boolean;
-};
-
-export type InstanceTypeOption = {
-  id: string;
-  family: string;
-  vcpu: number;
-  memoryGiB: number;
-  currentGen: boolean;
-  sampleHourly: string;
-};
-
-export type LaunchDraft = {
-  name: string;
-  tags: { key: string; value: string }[];
-  imageId: string;
-  instanceType: string;
-  keyPair: string;
-  vpcId: string;
-  subnet: string;
-  publicIp: boolean;
-  firewall: "create" | "select";
-  securityGroupId: string;
-  allowSsh: boolean;
-  sshCidr: string;
-  allowHttps: boolean;
-  allowHttp: boolean;
-  volumeGiB: number;
-  volumeType: string;
-  count: number;
 };
