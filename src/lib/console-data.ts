@@ -4,10 +4,8 @@ import type {
   BucketObject,
   Dataset,
   ElasticIp,
-  InstanceTypeOption,
   InternetGateway,
   KeyPair,
-  MachineImage,
   NavNode,
   NavTree,
   RouteTable,
@@ -33,13 +31,6 @@ export const HOME_REGION = REGIONS[0];
 
 const DEFAULT_VPC_ID = "vpc-0d4e5f6a7b8c9012";
 export const DEFAULT_SG_ID = "sg-0a1b2c3d4e5f6071";
-
-export function zonesFor(region: string) {
-  if (region === "Europe (North)") return ["north-a", "north-b", "north-c"];
-  if (region === "Europe (Central)") return ["central-a", "central-b"];
-  if (region === "US East") return ["east-a", "east-b"];
-  return ["west-a", "west-b"];
-}
 
 export const computeNav: NavTree = {
   id: "compute",
@@ -216,135 +207,6 @@ export function linksIn(tree: NavTree) {
   walk(tree.sections);
   return links;
 }
-
-export const machineImages: MachineImage[] = [
-  {
-    id: "img-4c91ab02e7d35510",
-    name: "Reference Linux",
-    version: "2025.12",
-    mark: "Lx",
-    swatch: "#232f3e",
-    description:
-      "A general-purpose Linux image for this console. It is built for current virtual machines and stays on support through 2029.",
-    arch: "64-bit",
-    boot: "uefi-preferred",
-    virtualization: "hvm",
-    ena: true,
-    rootDevice: "block",
-    created: "2026-09-29",
-    username: "console-user",
-    starter: true,
-  },
-  {
-    id: "img-88d10c44aa0192ef",
-    name: "Desktop Unix",
-    version: "15",
-    mark: "Dx",
-    swatch: "#8e8e93",
-    description: "A desktop-oriented Unix image for interactive sessions. Graphical packages are already installed.",
-    arch: "64-bit",
-    boot: "uefi",
-    virtualization: "hvm",
-    ena: true,
-    rootDevice: "block",
-    created: "2026-06-11",
-    username: "desktop",
-    starter: false,
-  },
-  {
-    id: "img-11ab90cc3456de01",
-    name: "Community Linux",
-    version: "24.04",
-    mark: "Cl",
-    swatch: "#e95420",
-    description: "A community Linux image with a long support window and a small default package set.",
-    arch: "64-bit",
-    boot: "uefi-preferred",
-    virtualization: "hvm",
-    ena: true,
-    rootDevice: "block",
-    created: "2026-04-02",
-    username: "console-user",
-    starter: true,
-  },
-  {
-    id: "img-77c0aa1288b34f60",
-    name: "Workstation",
-    version: "2025",
-    mark: "Ws",
-    swatch: "#0078d4",
-    description: "A workstation image with remote desktop enabled and a standard admin account.",
-    arch: "64-bit",
-    boot: "uefi",
-    virtualization: "hvm",
-    ena: true,
-    rootDevice: "block",
-    created: "2026-03-18",
-    username: "admin",
-    starter: false,
-  },
-  {
-    id: "img-55e21d90ccab7712",
-    name: "Enterprise Linux",
-    version: "9",
-    mark: "El",
-    swatch: "#cc0000",
-    description: "An enterprise Linux image aimed at long-lived services and predictable updates.",
-    arch: "64-bit",
-    boot: "uefi-preferred",
-    virtualization: "hvm",
-    ena: true,
-    rootDevice: "block",
-    created: "2026-01-20",
-    username: "console-user",
-    starter: false,
-  },
-  {
-    id: "img-22f0bb6719ac4408",
-    name: "Enterprise Server",
-    version: "15",
-    mark: "Es",
-    swatch: "#30ba78",
-    description: "A server image packaged for clustered workloads and automated patching.",
-    arch: "64-bit",
-    boot: "uefi",
-    virtualization: "hvm",
-    ena: true,
-    rootDevice: "block",
-    created: "2025-11-02",
-    username: "console-user",
-    starter: false,
-  },
-  {
-    id: "img-90aa44c812de6671",
-    name: "Universal Linux",
-    version: "13",
-    mark: "Ul",
-    swatch: "#a80030",
-    description: "A minimal universal Linux image. Add packages after the first boot.",
-    arch: "64-bit",
-    boot: "uefi-preferred",
-    virtualization: "hvm",
-    ena: true,
-    rootDevice: "block",
-    created: "2026-08-14",
-    username: "console-user",
-    starter: true,
-  },
-];
-
-export const instanceTypes: InstanceTypeOption[] = [
-  { id: "std.micro", family: "Standard", vcpu: 2, memoryGiB: 1, currentGen: true, sampleHourly: "0.0108" },
-  { id: "std.small", family: "Standard", vcpu: 2, memoryGiB: 2, currentGen: true, sampleHourly: "0.0216" },
-  { id: "std.medium", family: "Standard", vcpu: 2, memoryGiB: 4, currentGen: true, sampleHourly: "0.0432" },
-  { id: "mem.large", family: "Memory", vcpu: 2, memoryGiB: 8, currentGen: true, sampleHourly: "0.0920" },
-  { id: "std.micro-1", family: "Standard", vcpu: 1, memoryGiB: 1, currentGen: false, sampleHourly: "0.0080" },
-];
-
-export const volumeTypeOptions = [
-  { id: "General SSD", iops: 3000, throughput: "125 MB/s" },
-  { id: "Throughput HDD", iops: 250, throughput: "—" },
-];
 
 function defaultVpc(): Vpc {
   return {

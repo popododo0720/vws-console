@@ -97,3 +97,27 @@ test("lists a seeded instance by its Name tag and stops it", async ({ page, requ
   await expect(page.getByText(`${instanceId} (e2e-web)`).first()).toBeVisible();
   await expect(page.getByText(vpcId).first()).toBeVisible();
 });
+
+test("launches an instance from the launch screen", async ({ page, request }) => {
+  const api = `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
+  const headers = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+  const vpc = await (await request.post(`${api}/vpcs`, { headers: headers("launch-vpc"), data: { cidrBlock: "10.88.0.0/16" } })).json();
+  const vpcId = vpc.items[0].vpcId;
+  await expect.poll(async () => (await (await request.get(`${api}/vpcs`, { headers: headers("x") })).json()).items.find((v: { vpcId: string }) => v.vpcId === vpcId).state).toBe("available");
+  const subnet = await (await request.post(`${api}/subnets`, { headers: headers("launch-subnet"), data: { vpcId, cidrBlock: "10.88.1.0/24" } })).json();
+  const subnetId = subnet.items[0].subnetId;
+
+  await page.goto("/compute/launch");
+  await expect(page.getByText("Launch options could not be loaded")).toHaveCount(0);
+  await page.getByPlaceholder("e.g. My Web Server").fill("launched-web");
+  await expect(page.getByLabel("Image")).toHaveValue("ami-0123456789abcdef0");
+  await page.getByLabel("Instance type").selectOption("vws.medium");
+  await page.getByLabel("Network").selectOption(vpcId);
+  await expect(page.getByLabel("Subnet")).toHaveValue(subnetId);
+  await page.getByRole("button", { name: "Launch instance" }).click();
+
+  await expect(page).toHaveURL(/\/compute\/instances$/, { timeout: 60_000 });
+  const row = page.getByRole("row").filter({ hasText: "launched-web" });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("vws.medium");
+});
