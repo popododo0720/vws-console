@@ -42,6 +42,8 @@ test.describe("signed out", () => {
     await page.goto("/storage/volumes");
     await expect(page).toHaveURL(/\/login\?reason=expired&next=%2Fstorage%2Fvolumes$/);
     await expect(page.getByRole("status")).toContainText("Your session ended");
+    // The proxy deleted the rejected cookies once console-api confirmed the 401.
+    expect((await context.cookies()).filter((c) => c.name.startsWith("vws_"))).toEqual([]);
   });
 
   test("rejects an open redirect after sign-in", async ({ page }) => {
@@ -100,4 +102,11 @@ test("the account menu shows the signed-in user and account ID", async ({ page }
   await menu.click();
   await expect(page.getByRole("menuitem", { name: "root", exact: true })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Account 123456789012" })).toBeVisible();
+});
+
+test("a forged /login?reason=expired link does not drop a working session", async ({ page, context }) => {
+  await page.goto("/login?reason=expired");
+  expect((await context.cookies()).map((c) => c.name).sort()).toEqual(["vws_csrf", "vws_session"]);
+  await page.goto("/compute/instances");
+  await expect(page).toHaveURL(/\/compute\/instances$/);
 });

@@ -234,7 +234,7 @@ export function createEmptyAccount(): Dataset {
 
 export function createSampleAccount(): Dataset {
   const base = createEmptyAccount();
-  const keyPairs: KeyPair[] = [{ name: "demo-operator", fingerprint: "SHA256:9f3a1c0e7b24" }];
+  const keyPairs: KeyPair[] = [];
   const vpcs: Vpc[] = [
     ...base.vpcs,
     {
