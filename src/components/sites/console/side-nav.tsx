@@ -46,13 +46,13 @@ export function SideNav({
           <div key={node.id}>
             <button
               type="button"
-              className="flex w-full items-center gap-1 rounded px-1 py-1 text-left text-[13px] font-bold hover:bg-[#f4f5f6]"
+              className="flex w-full items-start gap-1 rounded px-1 py-1 text-left text-[13px] font-bold hover:bg-[#f4f5f6]"
               style={{ paddingLeft: 4 + depth * 12 }}
               aria-expanded={expanded}
               onClick={() => setOpen((prev) => ({ ...prev, [node.id]: !expanded }))}
             >
-              <span aria-hidden className="w-3 shrink-0 text-[9px] leading-none">{expanded ? "▼" : "▶"}</span>
-              <span className="truncate">{node.label}</span>
+              <span aria-hidden className="mt-[4px] w-3 shrink-0 text-[9px] leading-none">{expanded ? "▼" : "▶"}</span>
+              <span className="min-w-0 break-words">{node.label}</span>
             </button>
             {expanded ? renderNodes(node.children, depth + 1) : null}
           </div>
@@ -60,14 +60,14 @@ export function SideNav({
       }
       const active = node.href ? isActive(node.href, pathname, tab) : false;
       const className = cn(
-        "flex w-full items-center rounded py-[5px] pr-2 text-left text-[12.5px] hover:bg-[#f4f5f6]",
+        "flex w-full items-start rounded py-[5px] pr-2 text-left text-[12.5px] hover:bg-[#f4f5f6]",
         active && "font-semibold text-[#006ce0]",
       );
       const style = { paddingLeft: 20 + depth * 12 };
       const inner = (
         <>
-          <span className="truncate">{node.label}</span>
-          {node.badge ? <span className="ml-2 text-[11px] font-semibold text-[#006ce0]">{node.badge}</span> : null}
+          <span className="min-w-0 break-words">{node.label}</span>
+          {node.badge ? <span className="ml-2 shrink-0 text-[11px] font-semibold text-[#006ce0]">{node.badge}</span> : null}
         </>
       );
       if (node.href) {
