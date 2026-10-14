@@ -24,7 +24,7 @@ export default defineConfig({
   webServer: [
     {
       // -console-token stays only so specs can seed through the API directly; the console itself signs in with a session.
-      command: `go run ./cmd/vws-console-api -backend=fake -iam=fake -iam-addr=127.0.0.1:${ec2Port + 3} -root-password-file=${passwordFile} -console-addr=127.0.0.1:${ec2Port - 1} -ec2-addr=127.0.0.1:${ec2Port} -s3-addr=127.0.0.1:${ec2Port + 1} -ops-addr=127.0.0.1:${ec2Port + 2} -account=123456789012 -console-token=dev-token -access-key=AKIDEXAMPLE -secret=secret`,
+      command: `go run ./cmd/vws-console-api -backend=fake -iam=fake -iam-addr=127.0.0.1:${ec2Port + 3} -root-password-file=${passwordFile} -console-origins=http://127.0.0.1:${port} -console-addr=127.0.0.1:${ec2Port - 1} -ec2-addr=127.0.0.1:${ec2Port} -s3-addr=127.0.0.1:${ec2Port + 1} -ops-addr=127.0.0.1:${ec2Port + 2} -account=123456789012 -console-token=dev-token -access-key=AKIDEXAMPLE -secret=secret`,
       cwd: apiRepo,
       url: `http://127.0.0.1:${ec2Port + 2}/readyz`,
       reuseExistingServer: false,

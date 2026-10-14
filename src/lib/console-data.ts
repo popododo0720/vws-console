@@ -11,10 +11,8 @@ import type {
   Vpc,
 } from "@/types/console";
 
-export const ACCOUNT = {
-  name: "demo.operator",
-  id: "100200300400",
-};
+/** Owner ID on the sample route tables and gateways only; the account menu shows the signed-in account. */
+const SAMPLE_OWNER_ID = "100200300400";
 
 export const REGIONS = [
   "Europe (North)",
@@ -213,7 +211,7 @@ function defaultVpc(): Vpc {
     blockPublicAccess: "off",
     ipv4Cidr: "172.31.0.0/16",
     ipv6Cidr: "",
-    owner: ACCOUNT.id,
+    owner: SAMPLE_OWNER_ID,
     isDefault: true,
     region: HOME_REGION,
     tags: {},
@@ -248,7 +246,7 @@ export function createSampleAccount(): Dataset {
       blockPublicAccess: "on",
       ipv4Cidr: "10.20.0.0/16",
       ipv6Cidr: "",
-      owner: ACCOUNT.id,
+      owner: SAMPLE_OWNER_ID,
       isDefault: false,
       region: HOME_REGION,
       tags: {},

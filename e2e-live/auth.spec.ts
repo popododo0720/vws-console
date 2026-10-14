@@ -64,9 +64,10 @@ test("writes carry the CSRF token: the console creates a VPC, a cookie write wit
   const write = (headers: Record<string, string>) =>
     fetch(`${api}/api/v1/vpcs`, {
       method: "POST",
-      headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID(), cookie: `vws_session=${session}; vws_csrf=${csrf}`, ...headers },
+      headers: { "content-type": "application/json", origin: new URL(page.url()).origin, "idempotency-key": crypto.randomUUID(), cookie: `vws_session=${session}; vws_csrf=${csrf}`, ...headers },
       body: JSON.stringify({ cidrBlock: "10.78.0.0/16" }),
     });
+  // With an allowed Origin, so a 403 here comes from the missing or wrong CSRF token.
   expect((await write({})).status).toBe(403);
   expect((await write({ "x-csrf-token": "wrong" })).status).toBe(403);
   expect((await write({ "x-csrf-token": csrf })).status).toBe(202);
@@ -80,7 +81,7 @@ test("sign out revokes the session and returns to the login screen", async ({ pa
   await expect(page).toHaveURL(/\/compute\/instances/);
   const session = (await context.cookies()).find((c) => c.name === "vws_session")!.value;
 
-  await page.getByRole("button", { name: /demo\.operator/ }).click();
+  await page.getByRole("button", { name: /root.*123456789012/ }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login$/);
   expect((await context.cookies()).filter((c) => c.name.startsWith("vws_"))).toEqual([]);
@@ -89,4 +90,14 @@ test("sign out revokes the session and returns to the login screen", async ({ pa
   expect(after.status).toBe(401);
   await page.goto("/compute/instances");
   await expect(page).toHaveURL(/\/login\?next=/);
+});
+
+test("the account menu shows the signed-in user and account ID", async ({ page }) => {
+  await page.goto("/compute/instances");
+  const menu = page.getByRole("button", { name: /root.*123456789012/ });
+  await expect(menu).toBeVisible();
+  await expect(page.getByText("demo.operator")).toHaveCount(0);
+  await menu.click();
+  await expect(page.getByRole("menuitem", { name: "root", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Account 123456789012" })).toBeVisible();
 });

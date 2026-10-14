@@ -47,6 +47,16 @@ export const LOGIN_PATH = "/login";
 /** Header the proxy sets with the page being rendered, so a 401 can come back to it after sign-in. */
 export const PATH_HEADER = "x-vws-path";
 
+/**
+ * The browser's Origin for a write. console-api (PR #137) refuses cookie writes and sign-in without an
+ * allowed Origin, so the console forwards the one the browser sent; Next has already checked it against
+ * the console host for server actions. Run console-api with -console-origins set to the console origin.
+ */
+async function browserOrigin(): Promise<Record<string, string>> {
+  const origin = (await requestHeaders()).get("origin");
+  return origin ? { origin } : {};
+}
+
 async function toLogin(reason: "signin" | "expired"): Promise<never> {
   const path = (await requestHeaders()).get(PATH_HEADER);
   const query = new URLSearchParams({ ...(reason === "expired" ? { reason } : {}), ...(path ? { next: path } : {}) }).toString();
@@ -70,6 +80,7 @@ async function request(method: "GET" | "POST", path: string, body?: unknown): Pr
     headers["idempotency-key"] = randomUUID();
     headers["content-type"] = "application/json";
     headers["x-csrf-token"] = session.csrf;
+    Object.assign(headers, await browserOrigin());
   }
   let response: Response;
   let json: unknown;
@@ -246,7 +257,7 @@ export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
   try {
     response = await fetch(`${base}/api/v1/auth/login`, {
       method: "POST",
-      headers: { accept: "application/json", "content-type": "application/json" },
+      headers: { accept: "application/json", "content-type": "application/json", ...(await browserOrigin()) },
       body: JSON.stringify(input.mfaCode ? input : { account: input.account, userName: input.userName, password: input.password }),
       cache: "no-store",
     });
@@ -270,7 +281,13 @@ export async function logout(): Promise<void> {
   try {
     await fetch(`${base}/api/v1/auth/logout`, {
       method: "POST",
-      headers: { cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`, "x-csrf-token": session.csrf },
+      headers: {
+        "content-type": "application/json",
+        cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`,
+        "x-csrf-token": session.csrf,
+        ...(await browserOrigin()),
+      },
+      body: "{}",
       cache: "no-store",
     });
   } catch {
@@ -286,4 +303,26 @@ export async function getSession(): Promise<ApiResult<SessionInfo>> {
   const body = (result.value.json ?? {}) as Record<string, unknown>;
   const text = (value: unknown) => (typeof value === "string" ? value : "");
   return { ok: true, value: { principal: text(body.principal), account: text(body.account), root: body.root === true, expiresAt: text(body.expiresAt) } };
+}
+
+/**
+ * The signed-in session for display, without redirecting: null when console-api is not configured,
+ * there is no session, or it no longer answers. Pages still redirect through their own calls.
+ */
+export async function signedInSession(): Promise<SessionInfo | null> {
+  const base = apiBase();
+  const session = await currentSession();
+  if (typeof base !== "string" || !session) return null;
+  try {
+    const response = await fetch(`${base}/api/v1/auth/session`, {
+      headers: { accept: "application/json", cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}` },
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const body = ((await response.json()) ?? {}) as Record<string, unknown>;
+    const text = (value: unknown) => (typeof value === "string" ? value : "");
+    return { principal: text(body.principal), account: text(body.account), root: body.root === true, expiresAt: text(body.expiresAt) };
+  } catch {
+    return null;
+  }
 }

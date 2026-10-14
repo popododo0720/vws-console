@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  ACCOUNT,
   createEmptyAccount,
   createSampleAccount,
   HOME_REGION,
@@ -25,12 +24,14 @@ import type {
   Volume,
   Vpc,
 } from "@/types/console";
+import type { Identity } from "@/lib/vws-api/adapter";
 
 type Mode = "empty" | "sample";
 type Density = "comfortable" | "compact";
 
 type ConsoleApi = {
-  account: typeof ACCOUNT;
+  /** The signed-in user name and account ID, "—" where unknown. */
+  account: { name: string; id: string };
   regions: readonly string[];
   region: string;
   setRegion: (region: string) => void;
@@ -80,7 +81,9 @@ function isCidr(value: string) {
 }
 
 
-export function ConsoleProvider({ children }: { children: ReactNode }) {
+const UNKNOWN: Identity = { userName: "—", accountId: "—" };
+
+export function ConsoleProvider({ children, identity = UNKNOWN }: { children: ReactNode; identity?: Identity }) {
   const [region, setRegion] = useState<string>(HOME_REGION);
   const [mode, setMode] = useState<Mode>("empty");
   const [data, setData] = useState<Dataset>(() => createEmptyAccount());
@@ -95,7 +98,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     const internetGateways = data.internetGateways.filter((item) => item.region === region);
 
     return {
-      account: ACCOUNT,
+      account: { name: identity.userName, id: identity.accountId },
       regions: REGIONS,
       region,
       setRegion,
@@ -284,7 +287,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         }));
       },
     };
-  }, [data, density, mode, region]);
+  }, [data, density, identity.accountId, identity.userName, mode, region]);
 
   return <ConsoleContext.Provider value={api}>{children}</ConsoleContext.Provider>;
 }

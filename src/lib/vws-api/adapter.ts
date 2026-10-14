@@ -252,3 +252,14 @@ export function firstItem(body: unknown, key: string): string {
   const items = obj(body).items;
   return Array.isArray(items) && items.length > 0 ? str(obj(items[0])[key]) : "";
 }
+
+/** The signed-in user and account shown in the account menu. A missing field is "—", like the rest of the console. */
+export type Identity = { userName: string; accountId: string };
+
+/** Maps GET /auth/session to the menu identity: the user name is the last part of the principal ARN. */
+export function identityFromSession(session: { principal?: string; account?: string } | null): Identity {
+  const principal = session?.principal?.trim() ?? "";
+  const resource = principal.slice(principal.lastIndexOf(":") + 1);
+  const userName = resource.slice(resource.lastIndexOf("/") + 1);
+  return { userName: userName || "—", accountId: session?.account?.trim() || "—" };
+}

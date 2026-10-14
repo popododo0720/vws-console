@@ -10,10 +10,12 @@ vi.mock("next/navigation", () => ({
     throw new Error(`REDIRECT ${url}`);
   },
 }));
-vi.mock("next/headers", () => ({ headers: async () => new Headers(nav.path ? { "x-vws-path": nav.path } : {}) }));
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers({ ...(nav.path ? { "x-vws-path": nav.path } : {}), origin: "http://console.test" }),
+}));
 vi.mock("./session", () => ({ currentSession: async () => nav.session }));
 
-import { login, logout, createSubnet, createSubnetTags, createVpcTags, createInstanceTags, createSecurityGroup, createVpc, getVolume, getVpc, instanceBatch, launchInstances, listVpcs, modifyVolume } from "./client";
+import { login, logout, signedInSession, createSubnet, createSubnetTags, createVpcTags, createInstanceTags, createSecurityGroup, createVpc, getVolume, getVpc, instanceBatch, launchInstances, listVpcs, modifyVolume } from "./client";
 
 type Call = { url: string; init: RequestInit };
 
@@ -57,6 +59,7 @@ describe("console-api client", () => {
     expect(headers.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
     expect(headers.authorization).toBeUndefined();
     expect(headers["x-csrf-token"]).toBeUndefined();
+    expect(headers.origin).toBeUndefined();
   });
 
   it("sends an idempotency key and polls a 202 operation until it succeeds", async () => {
@@ -69,6 +72,7 @@ describe("console-api client", () => {
     const headers = calls[0].init.headers as Record<string, string>;
     expect(headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
     expect(headers["x-csrf-token"]).toBe("csrf-1");
+    expect(headers.origin).toBe("http://console.test");
     expect(headers.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
     expect(calls[0].init.body).toBe('{"cidrBlock":"10.9.0.0/16"}');
     expect(calls.slice(1).map((c) => c.url)).toEqual(["http://api.test/api/v1/operations/op-1", "http://api.test/api/v1/operations/op-1"]);
@@ -120,6 +124,7 @@ describe("console-api client", () => {
     expect(calls[0].url).toBe("http://api.test/api/v1/auth/login");
     expect(calls[0].init.body).toBe('{"account":"123456789012","userName":"root","password":"pw"}');
     expect((calls[0].init.headers as Record<string, string>).cookie).toBeUndefined();
+    expect((calls[0].init.headers as Record<string, string>).origin).toBe("http://console.test");
   });
 
   it("returns the uniform 401 from a failed sign-in instead of redirecting", async () => {
@@ -132,7 +137,12 @@ describe("console-api client", () => {
     serve(new Response(null, { status: 204 }));
     await logout();
     expect(calls[0].url).toBe("http://api.test/api/v1/auth/logout");
-    expect(calls[0].init.headers).toEqual({ cookie: "vws_session=sess-1; vws_csrf=csrf-1", "x-csrf-token": "csrf-1" });
+    expect(calls[0].init.headers).toEqual({
+      "content-type": "application/json",
+      cookie: "vws_session=sess-1; vws_csrf=csrf-1",
+      "x-csrf-token": "csrf-1",
+      origin: "http://console.test",
+    });
   });
 
   it("returns the new security group ID from the accepted request", async () => {
@@ -220,5 +230,23 @@ describe("console-api client", () => {
       ["/vpcs/vpc-1/tags", '{"tags":{"Name":"prod2"}}'],
       ["/subnets/subnet-1/tags", '{"tags":{"Name":"web"}}'],
     ]);
+  });
+
+  it("reads the signed-in session for the account menu with the session cookie", async () => {
+    serve(respond(200, { principal: "arn:vws:iam::123456789012:root", account: "123456789012", root: true, expiresAt: "t" }));
+    expect(await signedInSession()).toEqual({ principal: "arn:vws:iam::123456789012:root", account: "123456789012", root: true, expiresAt: "t" });
+    expect(calls[0].url).toBe("http://api.test/api/v1/auth/session");
+    expect((calls[0].init.headers as Record<string, string>).cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+  });
+
+  it("gives no session for the menu instead of redirecting", async () => {
+    serve(respond(401, { error: { code: "Unauthenticated", message: "authentication required" } }));
+    expect(await signedInSession()).toBeNull();
+    nav.session = null;
+    expect(await signedInSession()).toBeNull();
+    vi.stubEnv("VWS_CONSOLE_API_URL", "");
+    nav.session = { session: "s", csrf: "c" };
+    expect(await signedInSession()).toBeNull();
+    expect(calls).toHaveLength(1);
   });
 });

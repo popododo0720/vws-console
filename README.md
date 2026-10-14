@@ -29,7 +29,7 @@ Check it is up: `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:43123
 
 ## Connect to console-api
 
-The Instances, Volumes, VPCs and Subnets screens read and change resources through the vws-console-api JSON surface (`/api/v1`). Only the console server calls it. Users sign in at `/login`; the console server calls `POST /api/v1/auth/login`, keeps the returned `vws_session` and `vws_csrf` in its own httpOnly, SameSite=Lax cookies (Secure except plain HTTP on loopback), forwards them on every call and sends `X-CSRF-Token` on every write. Page scripts can read neither. A missing session or a 401 sends the browser to `/login`, and the account menu has Sign out (`POST /api/v1/auth/logout`). The console no longer uses a bearer token. Mutations send an `Idempotency-Key` and wait for the returned operation to finish.
+The Instances, Volumes, VPCs and Subnets screens read and change resources through the vws-console-api JSON surface (`/api/v1`). Only the console server calls it. Users sign in at `/login`; the console server calls `POST /api/v1/auth/login`, keeps the returned `vws_session` and `vws_csrf` in its own httpOnly, SameSite=Lax cookies (Secure except plain HTTP on loopback), forwards them on every call and sends `X-CSRF-Token` on every write. Page scripts can read neither. A missing session or a 401 sends the browser to `/login`, and the account menu has Sign out (`POST /api/v1/auth/logout`). The console no longer uses a bearer token. console-api only accepts sign-in and cookie writes from an allowed browser Origin, which the console forwards, so start console-api with `-console-origins` set to the console's public origin (for example `-console-origins=https://console.vws.example`). The account menu shows the signed-in user and account ID from `GET /api/v1/auth/session`. Mutations send an `Idempotency-Key` and wait for the returned operation to finish.
 
 | Variable | Meaning |
 | --- | --- |
@@ -37,7 +37,7 @@ The Instances, Volumes, VPCs and Subnets screens read and change resources throu
 
 Without it those screens show a `ConsoleNotConfigured` error. The other screens still use local data, and no sign-in is asked for.
 
-`npx playwright test -c playwright.live.config.ts` starts console-api with its fake backend (`VWS_CONSOLE_API_DIR`, default `../vws-console-api`, needs Go) with `-iam=fake` and a generated root password, signs in through `/login` and runs the live tests against it.
+`npx playwright test -c playwright.live.config.ts` starts console-api with its fake backend (`VWS_CONSOLE_API_DIR`, default `../vws-console-api`, needs Go) with `-iam=fake`, a generated root password and `-console-origins` for the test console, signs in through `/login` and runs the live tests against it.
 
 ## Screens
 
