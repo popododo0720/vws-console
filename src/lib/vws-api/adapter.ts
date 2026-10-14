@@ -8,6 +8,18 @@ export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: ApiError
 
 export type OperationState = "running" | "succeeded" | "failed";
 
+export type Image = { id: string; name: string; state: string; owner: string };
+
+/** Machine types vws-compute accepts (console-api resource/instance.go). The API has no list endpoint. */
+export const VWS_INSTANCE_TYPES = [
+  { id: "vws.small", vcpu: 1, memoryGiB: 1 },
+  { id: "vws.medium", vcpu: 2, memoryGiB: 4 },
+  { id: "vws.large", vcpu: 4, memoryGiB: 8 },
+  { id: "vws.xlarge", vcpu: 8, memoryGiB: 16 },
+] as const;
+
+export type LaunchRequest = { imageId: string; instanceType: string; subnetId: string; count: number; tags: Record<string, string> };
+
 export type Operation = { id: string; state: OperationState; error: ApiError | null };
 
 type Json = Record<string, unknown>;
@@ -136,6 +148,11 @@ export function toSubnet(item: Json): Subnet {
   };
 }
 
+export function toImage(item: Json): Image {
+  return { id: str(item.imageId), name: str(item.name), state: str(item.state), owner: str(item.ownerId) };
+}
+
+export const parseImages = (page: unknown) => list(page).map(toImage);
 export const parseInstances = (page: unknown) => list(page).map(toInstance);
 export const parseVolumes = (page: unknown) => list(page).map(toVolume);
 export const parseVpcs = (page: unknown) => list(page).map(toVpc);

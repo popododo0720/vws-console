@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   nextPageToken,
   parseApiError,
+  parseImages,
   parseInstances,
   parseOperation,
   parseSubnets,
@@ -114,5 +115,11 @@ describe("console-api adapter", () => {
       error: { code: "Conflict", message: "busy", requestId: null },
     });
     expect(() => parseOperation({ id: "op-3", state: "queued" })).toThrow("unknown operation state queued");
+  });
+
+  it("maps images", () => {
+    expect(parseImages({ items: [{ imageId: "ami-0123456789abcdef0", ownerId: "123456789012", name: "vws-1", state: "available" }] })).toEqual([
+      { id: "ami-0123456789abcdef0", name: "vws-1", state: "available", owner: "123456789012" },
+    ]);
   });
 });

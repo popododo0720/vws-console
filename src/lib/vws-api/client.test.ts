@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createVpc, listVpcs } from "./client";
+import { createVpc, launchInstances, listVpcs } from "./client";
 
 type Call = { url: string; init: RequestInit };
 
@@ -70,5 +70,16 @@ describe("console-api client", () => {
     const result = await listVpcs();
     expect(result).toEqual({ ok: false, error: { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_TOKEN on the console server.", requestId: null } });
     expect(calls).toEqual([]);
+  });
+
+  it("launches with tags only when there are some", async () => {
+    serve(respond(202, { operation: { id: "op-3", state: "succeeded" } }), respond(202, { operation: { id: "op-4", state: "succeeded" } }));
+    const req = { imageId: "ami-1", instanceType: "vws.small", subnetId: "subnet-1", count: 2 };
+    await launchInstances({ ...req, tags: { Name: "web" } });
+    await launchInstances({ ...req, tags: {} });
+    expect(calls.map((c) => [c.url, c.init.body])).toEqual([
+      ["http://api.test/api/v1/instances", '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2,"tags":{"Name":"web"}}'],
+      ["http://api.test/api/v1/instances", '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2}'],
+    ]);
   });
 });
