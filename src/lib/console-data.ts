@@ -216,6 +216,7 @@ function defaultVpc(): Vpc {
     owner: ACCOUNT.id,
     isDefault: true,
     region: HOME_REGION,
+    tags: {},
   };
 }
 
@@ -250,6 +251,7 @@ export function createSampleAccount(): Dataset {
       owner: ACCOUNT.id,
       isDefault: false,
       region: HOME_REGION,
+      tags: {},
     },
   ];
   // MOCK_SUBNETS: sample-only data, shown only when the console is switched to sample data.
@@ -265,6 +267,7 @@ export function createSampleAccount(): Dataset {
       routeTableId: "rtb-0a1b2c3d4e5f6071",
       autoAssignPublicIp: true,
       region: HOME_REGION,
+      tags: {},
     },
     {
       id: "subnet-0b2c3d4e5f607182",
@@ -277,6 +280,7 @@ export function createSampleAccount(): Dataset {
       routeTableId: "rtb-0a1b2c3d4e5f6071",
       autoAssignPublicIp: true,
       region: HOME_REGION,
+      tags: {},
     },
     {
       id: "subnet-0c3d4e5f60718293",
@@ -289,6 +293,7 @@ export function createSampleAccount(): Dataset {
       routeTableId: "rtb-0b2c3d4e5f607182",
       autoAssignPublicIp: false,
       region: HOME_REGION,
+      tags: {},
     },
   ];
   // MOCK_ROUTE_TABLES: sample-only data. Each VPC has one main table; "local" routes mirror the VPC CIDR.

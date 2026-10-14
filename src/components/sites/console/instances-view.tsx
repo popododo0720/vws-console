@@ -71,6 +71,7 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
     { key: "dns", header: "Public IPv4 DNS", minWidth: 200, sortValue: (row) => row.publicDns, cell: (row) => dash(row.publicDns) },
     { key: "ip", header: "Public IPv4 address", minWidth: 150, sortValue: (row) => row.publicIpv4, cell: (row) => dash(row.publicIpv4) },
     { key: "eip", header: "Elastic IP", minWidth: 120, sortValue: (row) => row.elasticIp, cell: (row) => dash(row.elasticIp) },
+    { key: "eipalloc", header: "Elastic IP allocation ID", minWidth: 210, sortValue: (row) => row.publicIpAllocationId, cell: (row) => dash(row.publicIpAllocationId) },
     { key: "ipv6", header: "IPv6 IPs", minWidth: 120, sortValue: (row) => row.ipv6, cell: (row) => dash(row.ipv6) },
   ];
 

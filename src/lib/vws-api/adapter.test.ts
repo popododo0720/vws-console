@@ -189,4 +189,22 @@ describe("console-api adapter", () => {
       { id: "ami-0123456789abcdef0", name: "vws-1", state: "available", owner: "123456789012" },
     ]);
   });
+
+  it("names VPCs and subnets from tags.Name and keeps their tags", () => {
+    const [vpc] = parseVpcs({ items: [{ vpcId: "vpc-1", cidrBlock: "10.0.0.0/16", state: "available", tags: { Name: "prod", team: "net", bad: 1 } }] });
+    expect([vpc.name, vpc.tags]).toEqual(["prod", { Name: "prod", team: "net" }]);
+    const [subnet] = parseSubnets({ items: [{ subnetId: "subnet-1", vpcId: "vpc-1", cidrBlock: "10.0.1.0/24", state: "available" }] });
+    expect([subnet.name, subnet.tags]).toEqual(["", {}]);
+  });
+
+  it("reads an instance's public IP and its Elastic IP allocation", () => {
+    const [withEip, plain] = parseInstances({
+      items: [
+        { ...instance, publicIpAddress: "203.0.113.5", publicIpAllocationId: "eipalloc-1" },
+        { ...instance, instanceId: "i-2" },
+      ],
+    });
+    expect([withEip.publicIpv4, withEip.elasticIp, withEip.publicIpAllocationId]).toEqual(["203.0.113.5", "203.0.113.5", "eipalloc-1"]);
+    expect([plain.publicIpv4, plain.elasticIp, plain.publicIpAllocationId]).toEqual(["", "", ""]);
+  });
 });

@@ -3,10 +3,11 @@
 import { useState } from "react";
 import type { Subnet, Vpc } from "@/types/console";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { createSubnetAction, deleteSubnetsAction } from "@/app/actions/resources";
+import { createSubnetAction, deleteSubnetsAction, renameSubnetAction } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { NetworkList } from "@/components/sites/console/network-list";
-import { Column } from "@/components/sites/console/resource-table";
+import { Column, NameCell } from "@/components/sites/console/resource-table";
+import { TagsTable } from "@/components/sites/console/tags-table";
 import {
   CopyText,
   DetailGrid,
@@ -24,10 +25,19 @@ function optional(value: number | boolean | null, show: (value: number | boolean
 export function SubnetsView({ subnets, vpcs, loadError }: { subnets: Subnet[]; vpcs: Vpc[]; loadError: ApiError | null }) {
   const action = useApiAction();
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ vpcId: "", ipv4Cidr: "" });
+  const [form, setForm] = useState({ vpcId: "", ipv4Cidr: "", name: "" });
 
   const columns: Column<Subnet>[] = [
-    { key: "name", header: "Name", minWidth: 140, sortValue: (row) => row.name, cell: (row) => dash(row.name) },
+    { key: "name", header: "Name", minWidth: 140, sortValue: (row) => row.name,
+      cell: (row) => (
+        <NameCell
+          value={row.name}
+          onRename={(name) => {
+            if (name !== row.name) action.run(() => renameSubnetAction(row.id, name));
+          }}
+        />
+      ),
+    },
     { key: "id", header: "Subnet ID", minWidth: 190, sortValue: (row) => row.id, cell: (row) => <CopyText value={row.id} /> },
     { key: "state", header: "State", minWidth: 100, sortValue: (row) => row.state, cell: (row) => (row.state === "available" ? "Available" : "Pending") },
     { key: "vpc", header: "VPC", minWidth: 190, sortValue: (row) => row.vpcId, cell: (row) => <CopyText value={row.vpcId} /> },
@@ -38,7 +48,7 @@ export function SubnetsView({ subnets, vpcs, loadError }: { subnets: Subnet[]; v
   ];
 
   const openCreate = () => {
-    setForm({ vpcId: vpcs[0]?.id ?? "", ipv4Cidr: "" });
+    setForm({ vpcId: vpcs[0]?.id ?? "", ipv4Cidr: "", name: "" });
     setCreateOpen(true);
   };
 
@@ -67,8 +77,9 @@ export function SubnetsView({ subnets, vpcs, loadError }: { subnets: Subnet[]; v
       emptyMessage="You do not have any subnets in this region"
       filterPlaceholder="Find subnets by attribute or tag"
       detailTitle={(row) => `${row.id}${row.name ? ` / ${row.name}` : ""}`}
-      detailTabs={[{ id: "details", label: "Details" }]}
-      renderDetail={(row) => {
+      detailTabs={[{ id: "details", label: "Details" }, { id: "tags", label: "Tags" }]}
+      renderDetail={(row, tab) => {
+        if (tab === "tags") return <TagsTable tags={row.tags} />;
         return (
           <DetailGrid
             items={[
@@ -93,13 +104,17 @@ export function SubnetsView({ subnets, vpcs, loadError }: { subnets: Subnet[]; v
         footer={
           <>
             <OutlineButton onClick={() => setCreateOpen(false)}>Cancel</OutlineButton>
-            <OrangeButton disabled={action.pending} onClick={() => action.run(() => createSubnetAction(form.vpcId, form.ipv4Cidr), () => setCreateOpen(false))}>
+            <OrangeButton disabled={action.pending} onClick={() => action.run(() => createSubnetAction(form.vpcId, form.ipv4Cidr, form.name), () => setCreateOpen(false))}>
               Create subnet
             </OrangeButton>
           </>
         }
       >
         <div className="space-y-3">
+          <div>
+            <FieldLabel>Name tag (optional)</FieldLabel>
+            <input className="field" aria-label="Subnet name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          </div>
           <div>
             <FieldLabel>VPC ID</FieldLabel>
             <select className="field" value={form.vpcId} onChange={(event) => setForm({ ...form, vpcId: event.target.value })}>

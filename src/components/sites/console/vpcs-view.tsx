@@ -2,12 +2,13 @@
 
 import { DetailLink } from "@/components/sites/console/resource-detail";
 import { useState } from "react";
+import { TagsTable } from "@/components/sites/console/tags-table";
 import { useSearchParams } from "next/navigation";
 import { CircleCheck } from "lucide-react";
 import type { Subnet, Vpc } from "@/types/console";
 import { networkNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { createVpcAction, deleteVpcsAction } from "@/app/actions/resources";
+import { createVpcAction, deleteVpcsAction, renameVpcAction } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
@@ -37,12 +38,21 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
   const [createOpen, setCreateOpen] = useState(false);
   const [vpcTab, setVpcTab] = useState("details");
   const [cidr, setCidr] = useState("10.1.0.0/16");
+  const [newName, setNewName] = useState("");
   const rows = vpcFilter === "all" ? vpcs : vpcs.filter((item) => item.id === vpcFilter);
   const selected = rows.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
 
   const columns: Column<Vpc>[] = [
-    { key: "name", header: "Name", minWidth: 120, sortValue: (row) => row.name, cell: (row) => <NameCell value={row.name} /> },
+    { key: "name", header: "Name", minWidth: 120, sortValue: (row) => row.name, cell: (row) => (
+        <NameCell
+          value={row.name}
+          onRename={(name) => {
+            if (name !== row.name) action.run(() => renameVpcAction(row.id, name));
+          }}
+        />
+      ),
+    },
     { key: "id", header: "VPC ID", minWidth: 190, sortValue: (row) => row.id, cell: (row) => <DetailLink href={`/network/vpcs/${row.id}`} id={row.id} /> },
     {
       key: "state",
@@ -134,14 +144,16 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
       />
       <DetailDock
         title={one ? one.name || one.id : "Select a VPC above"}
-        tabs={one ? [{ id: "details", label: "Details" }, { id: "cidrs", label: "CIDRs" }, { id: "map", label: "Resource map" }] : undefined}
+        tabs={one ? [{ id: "details", label: "Details" }, { id: "cidrs", label: "CIDRs" }, { id: "map", label: "Resource map" }, { id: "tags", label: "Tags" }] : undefined}
         tab={vpcTab}
         onTab={setVpcTab}
         height={dock}
         onHeight={setDock}
       >
         {one ? (
-          vpcTab === "map" ? (
+          vpcTab === "tags" ? (
+            <TagsTable tags={one.tags} />
+          ) : vpcTab === "map" ? (
             <dl className="grid gap-3 text-[13px] sm:grid-cols-3">
               <div>
                 <dt className="font-semibold text-[#5f6b7a]">Subnets</dt>
@@ -167,7 +179,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
         footer={
           <>
             <OutlineButton onClick={() => setCreateOpen(false)}>Cancel</OutlineButton>
-            <OrangeButton disabled={action.pending} onClick={() => action.run(() => createVpcAction(cidr), () => setCreateOpen(false))}>
+            <OrangeButton disabled={action.pending} onClick={() => action.run(() => createVpcAction(cidr, newName), () => setCreateOpen(false))}>
               Create VPC
             </OrangeButton>
           </>
@@ -175,8 +187,12 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
       >
         <div className="space-y-3">
           <div>
+            <FieldLabel>Name tag (optional)</FieldLabel>
+            <input className="field" aria-label="VPC name" value={newName} onChange={(event) => setNewName(event.target.value)} />
+          </div>
+          <div>
             <FieldLabel>IPv4 CIDR</FieldLabel>
-            <input className="field" value={cidr} onChange={(event) => setCidr(event.target.value)} />
+            <input className="field" aria-label="IPv4 CIDR" value={cidr} onChange={(event) => setCidr(event.target.value)} />
           </div>
           <ApiErrorAlert error={action.error} title="The VPC could not be created" />
         </div>

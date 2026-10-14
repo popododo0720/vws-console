@@ -33,10 +33,26 @@ export async function terminateInstancesAction(ids: string[]) {
 }
 
 /** Renames an instance through its Name tag. console-api has no DeleteTags, so a name cannot be cleared. */
-export async function renameInstanceAction(id: string, name: string): Promise<ApiError | null> {
+const NAME_REQUIRED: ApiError = { code: "NameRequired", message: "The VWS API cannot remove a Name tag yet, so enter a name.", requestId: null };
+
+/** Writes the Name tag through one of the tags endpoints. console-api has no DeleteTags, so a name cannot be cleared. */
+async function rename(write: (id: string, tags: Record<string, string>) => Promise<ApiResult<void>>, id: string, name: string) {
   const trimmed = name.trim();
-  if (!trimmed) return { code: "NameRequired", message: "The VWS API cannot remove a Name tag yet, so enter a name.", requestId: null };
-  return errorOf(vws.createInstanceTags(id, { Name: trimmed }));
+  return trimmed ? errorOf(write(id, { Name: trimmed })) : NAME_REQUIRED;
+}
+
+const nameTag = (name: string): Record<string, string> => (name.trim() ? { Name: name.trim() } : {});
+
+export async function renameInstanceAction(id: string, name: string): Promise<ApiError | null> {
+  return rename(vws.createInstanceTags, id, name);
+}
+
+export async function renameVpcAction(id: string, name: string): Promise<ApiError | null> {
+  return rename(vws.createVpcTags, id, name);
+}
+
+export async function renameSubnetAction(id: string, name: string): Promise<ApiError | null> {
+  return rename(vws.createSubnetTags, id, name);
 }
 
 export async function createVolumeAction(sizeGiB: number, volumeType: string) {
@@ -51,16 +67,16 @@ export async function createSnapshotAction(volumeId: string, description: string
   return errorOf(vws.createSnapshot(volumeId, description));
 }
 
-export async function createVpcAction(cidr: string) {
-  return errorOf(vws.createVpc(cidr));
+export async function createVpcAction(cidr: string, name = "") {
+  return errorOf(vws.createVpc(cidr, nameTag(name)));
 }
 
 export async function deleteVpcsAction(ids: string[]) {
   return each(ids, vws.deleteVpc);
 }
 
-export async function createSubnetAction(vpcId: string, cidr: string) {
-  return errorOf(vws.createSubnet(vpcId, cidr));
+export async function createSubnetAction(vpcId: string, cidr: string, name = "") {
+  return errorOf(vws.createSubnet(vpcId, cidr, nameTag(name)));
 }
 
 export async function deleteSubnetsAction(ids: string[]) {
