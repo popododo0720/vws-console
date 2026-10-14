@@ -2,11 +2,17 @@
  * Structured server logs for the sign-in, sign-out and session paths. Only these fields are ever
  * written, so passwords, MFA codes, session tokens, cookies and CSRF values cannot reach the log.
  */
-export type AuthEvent = "auth.login" | "auth.logout" | "auth.session" | "auth.expired_cookie_cleared";
+export type AuthEvent =
+  | "auth.login"
+  | "auth.logout"
+  | "auth.session"
+  | "auth.expired_cookie_cleared"
+  | "iam.mode_detect"
+  | "config.invalid";
 
 export type AuthLogFields = {
   event: AuthEvent;
-  outcome: "success" | "failure" | "error" | "skipped";
+  outcome: "success" | "failure" | "error" | "skipped" | "stale";
   status: number | null;
   requestId: string | null;
   durationMs: number;

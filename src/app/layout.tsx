@@ -3,7 +3,7 @@ import "./globals.css";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { identityFromSession } from "@/lib/vws-api/adapter";
 import { signedInSession } from "@/lib/vws-api/client";
-import { iamEnabled } from "@/lib/vws-api/mode";
+import { iamState } from "@/lib/vws-api/mode";
 
 export const metadata: Metadata = {
   title: "VWS console",
@@ -15,8 +15,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const signIn = await iamEnabled();
-  const identity = identityFromSession(await signedInSession(), { iam: signIn });
+  const state = await iamState();
+  const signIn = state === "on";
+  const identity = identityFromSession(await signedInSession(), { iam: state !== "off" });
   return (
     <html lang="en" className="h-full antialiased">
       <body className="console min-h-full">

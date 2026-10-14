@@ -415,4 +415,32 @@ describe("console-api client", () => {
       expect((calls[0].init.headers as Record<string, string>).cookie).toBeUndefined();
     });
   });
+
+  describe("IAM mode unknown", () => {
+    it("refuses the call instead of using the token when detection fails and nothing is known", async () => {
+      const { resetIamModeCache } = await import("./mode");
+      resetIamModeCache();
+      vi.stubEnv("VWS_CONSOLE_IAM", "");
+      vi.stubEnv("VWS_CONSOLE_API_TOKEN", "tok");
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        throw new TypeError("fetch failed");
+      });
+      expect(await createVpc("10.9.0.0/16")).toMatchObject({ ok: false, error: { code: "ServiceUnavailable" } });
+      expect(calls.every((c) => c.url.endsWith("/api/v1/auth/session"))).toBe(true);
+      expect(calls.some((c) => (c.init.headers as Record<string, string>).authorization)).toBe(false);
+      warn.mockRestore();
+      resetIamModeCache();
+    });
+
+    it("reports an invalid VWS_CONSOLE_IAM as ConsoleNotConfigured", async () => {
+      vi.stubEnv("VWS_CONSOLE_IAM", "1");
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      serve();
+      expect(await listVpcs()).toMatchObject({ ok: false, error: { code: "ConsoleNotConfigured" } });
+      expect(calls).toEqual([]);
+      warn.mockRestore();
+    });
+  });
 });

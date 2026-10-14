@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { iamMode, modeFromSession, noteLoginEnabled, resetIamModeCache } from "./mode";
+import { iamMode, iamState, IamUnavailableError, modeFromSession, noteLoginEnabled, resetIamModeCache } from "./mode";
 
 describe("modeFromSession", () => {
   it("maps console-api answers to the mode", () => {
@@ -57,14 +57,49 @@ describe("iamMode", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("falls back to off, uncached, when console-api is unreachable or says nothing", async () => {
+  it("fails closed with no last-known mode: a timeout, network error or unclear answer is unknown, never off", async () => {
+    const lines: string[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation((line: unknown) => void lines.push(String(line)));
     fetchMock.mockRejectedValue(new TypeError("fetch failed"));
-    expect(await iamMode()).toBe("off");
+    expect(await iamState()).toBe("unknown");
+    await expect(iamMode()).rejects.toBeInstanceOf(IamUnavailableError);
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
-    expect(await iamMode()).toBe("off");
+    expect(await iamState()).toBe("unknown");
+    fetchMock.mockResolvedValue(new Response("", { status: 503 }));
+    expect(await iamState()).toBe("unknown");
+    warn.mockRestore();
+    expect(JSON.parse(lines[0])).toMatchObject({ event: "iam.mode_detect", outcome: "error", code: "IamModeUnknown" });
+  });
+
+  it("keeps the last-known mode when a later detection fails", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
     fetchMock.mockResolvedValue(new Response("{}", { status: 401 }));
-    expect(await iamMode()).toBe("on");
+    expect(await iamState()).toBe("on");
+    vi.setSystemTime(Date.now() + 31_000);
+    fetchMock.mockReset();
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    expect(await iamState()).toBe("on");
+    warn.mockRestore();
+    info.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it("treats an invalid VWS_CONSOLE_IAM as a config error, logs it once without the value, and never detects", async () => {
+    const lines: string[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation((line: unknown) => void lines.push(String(line)));
+    for (const value of ["true", "1", "yes", "enabled"]) {
+      vi.stubEnv("VWS_CONSOLE_IAM", value);
+      expect(await iamState()).toBe("invalid");
+      await expect(iamMode()).rejects.toMatchObject({ state: "invalid" });
+    }
+    warn.mockRestore();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0])).toMatchObject({ event: "config.invalid", outcome: "error", code: "InvalidVwsConsoleIam" });
+    expect(lines[0]).not.toContain("enabled");
   });
 
   it("is off with no console-api URL", async () => {

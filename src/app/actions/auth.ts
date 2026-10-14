@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import * as vws from "@/lib/vws-api/client";
 import { clearSession, storeSession } from "@/lib/vws-api/session";
-import { iamEnabled } from "@/lib/vws-api/mode";
+import { iamState } from "@/lib/vws-api/mode";
 import { safeNext } from "@/lib/vws-api/session-cookies";
 
 /** On success `next` is the page to open; the form loads it as a full page so the layout reads the new session. */
@@ -28,7 +28,7 @@ export async function loginAction(_prev: LoginState, form: FormData): Promise<Lo
 }
 
 export async function logoutAction() {
-  if (!(await iamEnabled())) redirect("/");
+  if ((await iamState()) === "off") redirect("/");
   await vws.logout();
   await clearSession();
   redirect("/login");

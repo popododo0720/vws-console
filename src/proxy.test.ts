@@ -81,4 +81,29 @@ describe("proxy", () => {
     expect((await proxy(req("/network/vpcs"))).headers.get("location")).toContain("/login?next=");
     resetIamModeCache();
   });
+
+  it("answers 503 and never passes the request through when the mode is unknown", async () => {
+    const { resetIamModeCache } = await import("@/lib/vws-api/mode");
+    resetIamModeCache();
+    vi.stubEnv("VWS_CONSOLE_IAM", "");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    const response = await proxy(req("/network/vpcs"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("x-middleware-next")).toBeNull();
+    warn.mockRestore();
+    resetIamModeCache();
+  });
+
+  it("answers 503 for an invalid VWS_CONSOLE_IAM", async () => {
+    const { resetIamModeCache } = await import("@/lib/vws-api/mode");
+    resetIamModeCache();
+    vi.stubEnv("VWS_CONSOLE_IAM", "true");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const response = await proxy(req("/network/vpcs"));
+    expect(response.status).toBe(503);
+    expect(await response.text()).toContain("VWS_CONSOLE_IAM");
+    warn.mockRestore();
+    resetIamModeCache();
+  });
 });

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { logAuth } from "@/lib/vws-api/log";
-import { iamEnabled } from "@/lib/vws-api/mode";
+import { iamState } from "@/lib/vws-api/mode";
 import { CSRF_COOKIE, SESSION_COOKIE } from "@/lib/vws-api/session-cookies";
 import { apiFetch } from "@/lib/vws-api/transport";
 
@@ -45,7 +45,18 @@ export async function proxy(request: NextRequest) {
   const base = process.env.VWS_CONSOLE_API_URL;
   // IAM off (the default) uses the server-side token and asks for no sign-in; without console-api
   // there is nothing to sign in to either, and the screens report ConsoleNotConfigured.
-  if (!base || !(await iamEnabled())) return NextResponse.next();
+  if (!base) return NextResponse.next();
+  const state = await iamState();
+  // Fail closed: if the mode is unknown (console-api unclear, no last-known mode) or VWS_CONSOLE_IAM is
+  // invalid, refuse rather than let the page run with the root token.
+  if (state === "unknown" || state === "invalid") {
+    const message =
+      state === "invalid"
+        ? 'The console is misconfigured: VWS_CONSOLE_IAM must be "on", "off" or unset.'
+        : "The console cannot reach console-api to learn whether sign-in is on. Try again shortly.";
+    return new NextResponse(message, { status: 503, headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "5", "cache-control": "no-store" } });
+  }
+  if (state === "off") return NextResponse.next();
   const session = request.cookies.get(SESSION_COOKIE)?.value;
 
   if (request.nextUrl.pathname === "/login") {

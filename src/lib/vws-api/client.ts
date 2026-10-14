@@ -4,7 +4,7 @@ import { headers as requestHeaders } from "next/headers";
 import { redirect } from "next/navigation";
 import { currentSession } from "./session";
 import { logAuth } from "./log";
-import { iamEnabled, noteLoginEnabled } from "./mode";
+import { iamMode, iamState, IamUnavailableError, noteLoginEnabled, type IamMode } from "./mode";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
 import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type { ElasticIp, Instance, SecurityGroup, Snapshot, Subnet, Volume, Vpc } from "@/types/console";
@@ -41,6 +41,18 @@ function bearer(): string | ApiError {
   const token = process.env.VWS_CONSOLE_API_TOKEN;
   if (token) return token;
   return { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_TOKEN on the console server.", requestId: null };
+}
+
+/** The IAM mode, or the error to show when it is unknown or misconfigured. Never falls back to the token. */
+async function modeOrError(): Promise<IamMode | ApiError> {
+  try {
+    return await iamMode();
+  } catch (error) {
+    if (error instanceof IamUnavailableError && error.state === "invalid") {
+      return { code: "ConsoleNotConfigured", message: error.message, requestId: null };
+    }
+    return { code: "ServiceUnavailable", message: "The console could not tell whether sign-in is on; try again shortly.", requestId: null };
+  }
 }
 
 function apiBase(): string | ApiError {
@@ -95,7 +107,9 @@ async function toLogin(reason: "signin" | "expired"): Promise<never> {
 async function request(method: "GET" | "POST", path: string, body?: unknown): Promise<ApiResult<{ status: number; json: unknown }>> {
   const base = apiBase();
   if (typeof base !== "string") return { ok: false, error: base };
-  const iam = await iamEnabled();
+  const mode = await modeOrError();
+  if (typeof mode !== "string") return { ok: false, error: mode };
+  const iam = mode === "on";
   const headers: Record<string, string> = { accept: "application/json" };
   if (iam) {
     const session = await currentSession();
@@ -282,7 +296,9 @@ export type LoginInput = { account: string; userName: string; password: string; 
 
 /** Signs in with POST /auth/login and returns the session cookies console-api set. Never retried. */
 export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
-  if (!(await iamEnabled())) return { ok: false, error: { code: "SignInDisabled", message: "Sign-in is off on this console.", requestId: null } };
+  const mode = await modeOrError();
+  if (typeof mode !== "string") return { ok: false, error: mode };
+  if (mode === "off") return { ok: false, error: { code: "SignInDisabled", message: "Sign-in is off on this console.", requestId: null } };
   const base = apiBase();
   if (typeof base !== "string") return { ok: false, error: base };
   const started = performance.now();
@@ -324,7 +340,7 @@ export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
 /** Revokes the session with POST /auth/logout. A missing or expired session is already signed out. Never retried. */
 export async function logout(): Promise<void> {
   const base = apiBase();
-  const session = (await iamEnabled()) ? await currentSession() : null;
+  const session = (await iamState()) === "on" ? await currentSession() : null;
   const started = performance.now();
   if (typeof base !== "string" || !session) {
     logAuth({ event: "auth.logout", outcome: "skipped", status: null, requestId: null, durationMs: performance.now() - started });
@@ -365,7 +381,9 @@ export async function getSession(): Promise<ApiResult<SessionInfo>> {
  * there is no session, or it no longer answers. Pages still redirect through their own calls.
  */
 export async function signedInSession(): Promise<SessionInfo | null> {
-  const iam = await iamEnabled();
+  const state = await iamState();
+  if (state !== "on" && state !== "off") return null;
+  const iam = state === "on";
   const base = apiBase();
   if (typeof base !== "string") return null;
   let credentials: Record<string, string>;
