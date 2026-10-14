@@ -1,5 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createSubnet, createSubnetTags, createVpcTags, createInstanceTags, createSecurityGroup, createVpc, getVolume, getVpc, instanceBatch, launchInstances, listVpcs, modifyVolume } from "./client";
+const nav = vi.hoisted(() => ({
+  session: { session: "sess-1", csrf: "csrf-1" } as { session: string; csrf: string } | null,
+  path: "/network/vpcs" as string | null,
+}));
+
+vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({
+  redirect: (url: string) => {
+    throw new Error(`REDIRECT ${url}`);
+  },
+}));
+vi.mock("next/headers", () => ({ headers: async () => new Headers(nav.path ? { "x-vws-path": nav.path } : {}) }));
+vi.mock("./session", () => ({ currentSession: async () => nav.session }));
+
+import { login, logout, createSubnet, createSubnetTags, createVpcTags, createInstanceTags, createSecurityGroup, createVpc, getVolume, getVpc, instanceBatch, launchInstances, listVpcs, modifyVolume } from "./client";
 
 type Call = { url: string; init: RequestInit };
 
@@ -13,7 +27,8 @@ describe("console-api client", () => {
   beforeEach(() => {
     calls = [];
     vi.stubEnv("VWS_CONSOLE_API_URL", "http://api.test/");
-    vi.stubEnv("VWS_CONSOLE_API_TOKEN", "tok");
+    nav.session = { session: "sess-1", csrf: "csrf-1" };
+    nav.path = "/network/vpcs";
   });
 
   afterEach(() => {
@@ -30,7 +45,7 @@ describe("console-api client", () => {
     });
   }
 
-  it("follows page tokens with the bearer token", async () => {
+  it("follows page tokens with the forwarded session cookie and no bearer token", async () => {
     serve(
       respond(200, { items: [{ vpcId: "vpc-1", cidrBlock: "10.0.0.0/16", state: "available" }], nextPageToken: "p2" }),
       respond(200, { items: [{ vpcId: "vpc-2", cidrBlock: "10.1.0.0/16", state: "pending" }] }),
@@ -38,7 +53,10 @@ describe("console-api client", () => {
     const result = await listVpcs();
     expect(result.ok && result.value.map((v) => v.id)).toEqual(["vpc-1", "vpc-2"]);
     expect(calls.map((c) => c.url)).toEqual(["http://api.test/api/v1/vpcs", "http://api.test/api/v1/vpcs?pageToken=p2"]);
-    expect((calls[0].init.headers as Record<string, string>).authorization).toBe("Bearer tok");
+    const headers = calls[0].init.headers as Record<string, string>;
+    expect(headers.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+    expect(headers.authorization).toBeUndefined();
+    expect(headers["x-csrf-token"]).toBeUndefined();
   });
 
   it("sends an idempotency key and polls a 202 operation until it succeeds", async () => {
@@ -50,6 +68,8 @@ describe("console-api client", () => {
     expect(await createVpc("10.9.0.0/16")).toEqual({ ok: true, value: undefined });
     const headers = calls[0].init.headers as Record<string, string>;
     expect(headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(headers["x-csrf-token"]).toBe("csrf-1");
+    expect(headers.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
     expect(calls[0].init.body).toBe('{"cidrBlock":"10.9.0.0/16"}');
     expect(calls.slice(1).map((c) => c.url)).toEqual(["http://api.test/api/v1/operations/op-1", "http://api.test/api/v1/operations/op-1"]);
   });
@@ -65,11 +85,54 @@ describe("console-api client", () => {
   });
 
   it("reports missing configuration without calling the API", async () => {
-    vi.stubEnv("VWS_CONSOLE_API_TOKEN", "");
+    vi.stubEnv("VWS_CONSOLE_API_URL", "");
     serve();
     const result = await listVpcs();
-    expect(result).toEqual({ ok: false, error: { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_TOKEN on the console server.", requestId: null } });
+    expect(result).toEqual({ ok: false, error: { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_URL on the console server.", requestId: null } });
     expect(calls).toEqual([]);
+  });
+
+  it("redirects to the login screen without calling the API when there is no session", async () => {
+    nav.session = null;
+    serve();
+    await expect(listVpcs()).rejects.toThrow("REDIRECT /login?next=%2Fnetwork%2Fvpcs");
+    expect(calls).toEqual([]);
+  });
+
+  it("redirects to the login screen when console-api answers 401", async () => {
+    serve(respond(401, { error: { code: "Unauthenticated", message: "authentication required" } }));
+    await expect(listVpcs()).rejects.toThrow("REDIRECT /login?reason=expired&next=%2Fnetwork%2Fvpcs");
+  });
+
+  it("redirects a write that gets 401 too", async () => {
+    nav.path = null;
+    serve(respond(401, { error: { code: "Unauthenticated", message: "authentication required" } }));
+    await expect(createVpc("10.9.0.0/16")).rejects.toThrow("REDIRECT /login?reason=expired");
+  });
+
+  it("signs in without a session and returns the cookies console-api set", async () => {
+    nav.session = null;
+    const reply = respond(200, { principal: "root", account: "123456789012", root: true, expiresAt: "x", csrfToken: "c" });
+    reply.headers.append("set-cookie", "vws_session=s2; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict");
+    reply.headers.append("set-cookie", "vws_csrf=c2; Path=/; Max-Age=43200; Secure; SameSite=Strict");
+    serve(reply);
+    expect(await login({ account: "123456789012", userName: "root", password: "pw" })).toEqual({ ok: true, value: { session: "s2", csrf: "c2", maxAge: 43200 } });
+    expect(calls[0].url).toBe("http://api.test/api/v1/auth/login");
+    expect(calls[0].init.body).toBe('{"account":"123456789012","userName":"root","password":"pw"}');
+    expect((calls[0].init.headers as Record<string, string>).cookie).toBeUndefined();
+  });
+
+  it("returns the uniform 401 from a failed sign-in instead of redirecting", async () => {
+    serve(respond(401, { error: { code: "Unauthenticated", message: "authentication failed" } }));
+    const result = await login({ account: "123456789012", userName: "root", password: "bad" });
+    expect(result.ok).toBe(false);
+  });
+
+  it("signs out with the session cookie and CSRF token", async () => {
+    serve(new Response(null, { status: 204 }));
+    await logout();
+    expect(calls[0].url).toBe("http://api.test/api/v1/auth/logout");
+    expect(calls[0].init.headers).toEqual({ cookie: "vws_session=sess-1; vws_csrf=csrf-1", "x-csrf-token": "csrf-1" });
   });
 
   it("returns the new security group ID from the accepted request", async () => {

@@ -58,3 +58,4 @@ docs/design-references/comparison.png
 docs/design-references/**/*.local.png
 /test-results/
 /playwright-report/
+e2e-live/.auth/

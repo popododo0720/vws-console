@@ -1,5 +1,9 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import { headers as requestHeaders } from "next/headers";
+import { redirect } from "next/navigation";
+import { currentSession } from "./session";
+import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type { ElasticIp, Instance, SecurityGroup, Snapshot, Subnet, Volume, Vpc } from "@/types/console";
 import {
   firstItem,
@@ -29,30 +33,48 @@ import {
 const POLL_INTERVAL_MS = 500;
 const POLL_TIMEOUT_MS = 60_000;
 
-type Config = { base: string; token: string };
-
-function config(): Config | ApiError {
+function apiBase(): string | ApiError {
   const base = process.env.VWS_CONSOLE_API_URL;
-  const token = process.env.VWS_CONSOLE_API_TOKEN;
-  if (base && token) return { base: base.replace(/\/+$/, ""), token };
-  const missing = [!base && "VWS_CONSOLE_API_URL", !token && "VWS_CONSOLE_API_TOKEN"].filter(Boolean).join(", ");
-  return { code: "ConsoleNotConfigured", message: `Set ${missing} on the console server.`, requestId: null };
+  if (base) return base.replace(/\/+$/, "");
+  return { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_URL on the console server.", requestId: null };
 }
 
 const unavailable: ApiError = { code: "ServiceUnavailable", message: "The VWS console API did not answer.", requestId: null };
 
+/** Where a request with no session, or one console-api answers 401, is sent. */
+export const LOGIN_PATH = "/login";
+
+/** Header the proxy sets with the page being rendered, so a 401 can come back to it after sign-in. */
+export const PATH_HEADER = "x-vws-path";
+
+async function toLogin(reason: "signin" | "expired"): Promise<never> {
+  const path = (await requestHeaders()).get(PATH_HEADER);
+  const query = new URLSearchParams({ ...(reason === "expired" ? { reason } : {}), ...(path ? { next: path } : {}) }).toString();
+  redirect(query ? `${LOGIN_PATH}?${query}` : LOGIN_PATH);
+}
+
+/**
+ * Calls console-api as the signed-in user. The session cookie is forwarded from this server only,
+ * and every write carries X-CSRF-Token. A missing session or a 401 redirects to the login screen.
+ */
 async function request(method: "GET" | "POST", path: string, body?: unknown): Promise<ApiResult<{ status: number; json: unknown }>> {
-  const cfg = config();
-  if ("code" in cfg) return { ok: false, error: cfg };
-  const headers: Record<string, string> = { authorization: `Bearer ${cfg.token}`, accept: "application/json" };
+  const base = apiBase();
+  if (typeof base !== "string") return { ok: false, error: base };
+  const session = await currentSession();
+  if (!session) return toLogin("signin");
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`,
+  };
   if (method === "POST") {
     headers["idempotency-key"] = randomUUID();
     headers["content-type"] = "application/json";
+    headers["x-csrf-token"] = session.csrf;
   }
   let response: Response;
   let json: unknown;
   try {
-    response = await fetch(`${cfg.base}/api/v1${path}`, {
+    response = await fetch(`${base}/api/v1${path}`, {
       method,
       headers,
       body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
@@ -63,6 +85,7 @@ async function request(method: "GET" | "POST", path: string, body?: unknown): Pr
   } catch {
     return { ok: false, error: unavailable };
   }
+  if (response.status === 401) return toLogin("expired");
   if (!response.ok) {
     return {
       ok: false,
@@ -211,3 +234,56 @@ export const releaseAddress = (allocationId: string) => mutate(`/addresses/${seg
 
 export const listSnapshots = (): Promise<ApiResult<Snapshot[]>> => listAll("/snapshots", parseSnapshots);
 export const deleteSnapshot = (id: string) => mutate(`/snapshots/${seg(id)}/delete`);
+
+export type LoginInput = { account: string; userName: string; password: string; mfaCode?: string };
+
+/** Signs in with POST /auth/login and returns the session cookies console-api set. */
+export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
+  const base = apiBase();
+  if (typeof base !== "string") return { ok: false, error: base };
+  let response: Response;
+  let json: unknown = null;
+  try {
+    response = await fetch(`${base}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json" },
+      body: JSON.stringify(input.mfaCode ? input : { account: input.account, userName: input.userName, password: input.password }),
+      cache: "no-store",
+    });
+    const text = await response.text();
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    return { ok: false, error: unavailable };
+  }
+  if (!response.ok) {
+    return { ok: false, error: parseApiError(json) ?? { code: "InternalError", message: `Sign-in answered HTTP ${response.status}.`, requestId: null } };
+  }
+  const session = sessionFromSetCookie(response.headers.getSetCookie());
+  return session ? { ok: true, value: session } : { ok: false, error: malformed("/auth/login") };
+}
+
+/** Revokes the session with POST /auth/logout. A missing or expired session is already signed out. */
+export async function logout(): Promise<void> {
+  const base = apiBase();
+  const session = await currentSession();
+  if (typeof base !== "string" || !session) return;
+  try {
+    await fetch(`${base}/api/v1/auth/logout`, {
+      method: "POST",
+      headers: { cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`, "x-csrf-token": session.csrf },
+      cache: "no-store",
+    });
+  } catch {
+    // The console still drops its cookies; the API session then expires on its own.
+  }
+}
+
+export type SessionInfo = { principal: string; account: string; root: boolean; expiresAt: string };
+
+export async function getSession(): Promise<ApiResult<SessionInfo>> {
+  const result = await request("GET", "/auth/session");
+  if (!result.ok) return result;
+  const body = (result.value.json ?? {}) as Record<string, unknown>;
+  const text = (value: unknown) => (typeof value === "string" ? value : "");
+  return { ok: true, value: { principal: text(body.principal), account: text(body.account), root: body.root === true, expiresAt: text(body.expiresAt) } };
+}
