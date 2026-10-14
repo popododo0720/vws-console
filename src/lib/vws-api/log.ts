@@ -27,5 +27,6 @@ export function logAuth(fields: AuthLogFields): void {
     ...(fields.code && /^[A-Za-z][A-Za-z0-9.]{0,63}$/.test(fields.code) ? { code: fields.code } : {}),
     ...(fields.attempts && fields.attempts > 1 ? { attempts: fields.attempts } : {}),
   };
+  // eslint-disable-next-line no-console -- the single server sink for auth logs; stdout is collected as structured JSON
   (line.level === "warn" ? console.warn : console.info)(JSON.stringify(line));
 }
