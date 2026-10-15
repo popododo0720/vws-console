@@ -66,7 +66,9 @@ describe("console-api adapter", () => {
   });
 
   it("rejects an instance state it does not know", () => {
-    expect(() => parseInstances({ items: [{ ...instance, state: "rebooting" }] })).toThrow("unknown instance state rebooting");
+    expect(() => parseInstances({ items: [{ ...instance, state: "rebooting" }] })).toThrow(
+      "unknown instance state rebooting",
+    );
   });
 
   it("rejects a page without items", () => {
@@ -78,11 +80,32 @@ describe("console-api adapter", () => {
   it("maps volumes and treats an empty instanceId as unattached", () => {
     const rows = parseVolumes({
       items: [
-        { volumeId: "vol-1", ownerId: "123456789012", size: 8, availabilityZone: "vws-1a", volumeType: "gp3", state: "available", instanceId: "", createTime: "2026-10-14T05:30:19Z" },
-        { volumeId: "vol-2", ownerId: "123456789012", size: 20, availabilityZone: "vws-1a", volumeType: "gp2", state: "in-use", instanceId: "i-1", snapshotId: "snap-1", createTime: "2026-10-14T05:31:00Z" },
+        {
+          volumeId: "vol-1",
+          ownerId: "123456789012",
+          size: 8,
+          availabilityZone: "vws-1a",
+          volumeType: "gp3",
+          state: "available",
+          instanceId: "",
+          createTime: "2026-10-14T05:30:19Z",
+        },
+        {
+          volumeId: "vol-2",
+          ownerId: "123456789012",
+          size: 20,
+          availabilityZone: "vws-1a",
+          volumeType: "gp2",
+          state: "in-use",
+          instanceId: "i-1",
+          snapshotId: "snap-1",
+          createTime: "2026-10-14T05:31:00Z",
+        },
       ],
     });
-    expect(rows.map((v) => [v.id, v.state, v.sizeGiB, v.volumeType, v.attachedTo, v.snapshotId, v.owner, v.iops, v.name])).toEqual([
+    expect(
+      rows.map((v) => [v.id, v.state, v.sizeGiB, v.volumeType, v.attachedTo, v.snapshotId, v.owner, v.iops, v.name]),
+    ).toEqual([
       ["vol-1", "available", 8, "gp3", "", "", "123456789012", null, ""],
       ["vol-2", "in-use", 20, "gp2", "i-1", "snap-1", "123456789012", null, ""],
     ]);
@@ -96,23 +119,52 @@ describe("console-api adapter", () => {
       ],
     });
     expect([vpc.id, vpc.state, vpc.ipv4Cidr, vpc.owner, vpc.isDefault, vpc.blockPublicAccess, vpc.name]).toEqual([
-      "vpc-1", "available", "10.0.0.0/16", "123456789012", false, "", "",
+      "vpc-1",
+      "available",
+      "10.0.0.0/16",
+      "123456789012",
+      false,
+      "",
+      "",
     ]);
     expect(older.isDefault).toBeNull();
     const [subnet] = parseSubnets({
-      items: [{ subnetId: "subnet-1", ownerId: "123456789012", vpcId: "vpc-1", cidrBlock: "10.0.1.0/24", state: "pending", availabilityZone: "vws-1a", mapPublicIpOnLaunch: true }],
+      items: [
+        {
+          subnetId: "subnet-1",
+          ownerId: "123456789012",
+          vpcId: "vpc-1",
+          cidrBlock: "10.0.1.0/24",
+          state: "pending",
+          availabilityZone: "vws-1a",
+          mapPublicIpOnLaunch: true,
+        },
+      ],
     });
-    expect([subnet.id, subnet.vpcId, subnet.ipv4Cidr, subnet.state, subnet.availabilityZone, subnet.autoAssignPublicIp, subnet.availableIps]).toEqual([
-      "subnet-1", "vpc-1", "10.0.1.0/24", "pending", "vws-1a", true, null,
-    ]);
+    expect([
+      subnet.id,
+      subnet.vpcId,
+      subnet.ipv4Cidr,
+      subnet.state,
+      subnet.availabilityZone,
+      subnet.autoAssignPublicIp,
+      subnet.availableIps,
+    ]).toEqual(["subnet-1", "vpc-1", "10.0.1.0/24", "pending", "vws-1a", true, null]);
   });
 
   it("maps instance types from the catalog", () => {
-    expect(parseInstanceTypes({ items: [{ instanceType: "vws.medium", vcpus: 2, memoryMiB: 4096 }] })).toEqual([{ id: "vws.medium", vcpus: 2, memoryMiB: 4096 }]);
+    expect(parseInstanceTypes({ items: [{ instanceType: "vws.medium", vcpus: 2, memoryMiB: 4096 }] })).toEqual([
+      { id: "vws.medium", vcpus: 2, memoryMiB: 4096 },
+    ]);
   });
 
   it("reads the error envelope and the page token", () => {
-    expect(parseApiError({ error: { code: "Conflict", kind: "vpc", id: "vpc-1", message: "vpc has dependents" }, requestId: "33e6e2d8794777e5" })).toEqual({
+    expect(
+      parseApiError({
+        error: { code: "Conflict", kind: "vpc", id: "vpc-1", message: "vpc has dependents" },
+        requestId: "33e6e2d8794777e5",
+      }),
+    ).toEqual({
       code: "Conflict",
       message: "vpc has dependents",
       requestId: "33e6e2d8794777e5",
@@ -149,7 +201,14 @@ describe("console-api adapter", () => {
         },
       ],
     });
-    expect(group).toMatchObject({ id: "sg-1", groupName: "web", vpcId: "vpc-1", owner: "123456789012", description: "", name: "" });
+    expect(group).toMatchObject({
+      id: "sg-1",
+      groupName: "web",
+      vpcId: "vpc-1",
+      owner: "123456789012",
+      description: "",
+      name: "",
+    });
     expect(group.rules.map((rule) => [rule.id, rule.direction, rule.protocol, rule.port, rule.source])).toEqual([
       ["", "in", "TCP", "22", "0.0.0.0/0"],
       ["", "in", "UDP", "1000-2000", "10.0.0.0/8"],
@@ -168,7 +227,9 @@ describe("console-api adapter", () => {
       ok: true,
       value: { ipProtocol: "-1", fromPort: 0, toPort: 0, cidrIp: "0.0.0.0/0" },
     });
-    expect(toIngressPermission(makeRule("in", "ICMP", "All", "0.0.0.0/0"))).toMatchObject({ value: { ipProtocol: "icmp", fromPort: 0, toPort: 0 } });
+    expect(toIngressPermission(makeRule("in", "ICMP", "All", "0.0.0.0/0"))).toMatchObject({
+      value: { ipProtocol: "icmp", fromPort: 0, toPort: 0 },
+    });
     expect(toIngressPermission(makeRule("in", "TCP", "22", "sg-0123456789abcdef"))).toEqual({
       ok: false,
       error: "The VWS API only takes CIDR sources, not security group IDs.",
@@ -176,25 +237,66 @@ describe("console-api adapter", () => {
   });
 
   it("maps addresses and snapshots", () => {
-    expect(parseAddresses({ items: [{ allocationId: "eipalloc-1", ownerId: "1", publicIp: "203.0.113.2", domain: "vpc" }] })).toEqual([
-      { allocationId: "eipalloc-1", name: "", address: "203.0.113.2", instanceId: "", privateIp: "", owner: "1", region: "vws-1" },
+    expect(
+      parseAddresses({ items: [{ allocationId: "eipalloc-1", ownerId: "1", publicIp: "203.0.113.2", domain: "vpc" }] }),
+    ).toEqual([
+      {
+        allocationId: "eipalloc-1",
+        name: "",
+        address: "203.0.113.2",
+        instanceId: "",
+        privateIp: "",
+        owner: "1",
+        region: "vws-1",
+      },
     ]);
     expect(
-      parseSnapshots({ items: [{ snapshotId: "snap-1", ownerId: "1", volumeId: "vol-1", volumeSize: 4, state: "completed", description: "d" }] }),
-    ).toEqual([{ id: "snap-1", name: "", volumeId: "vol-1", sizeGiB: 4, description: "d", state: "completed", started: "", owner: "1", region: "vws-1" }]);
+      parseSnapshots({
+        items: [
+          {
+            snapshotId: "snap-1",
+            ownerId: "1",
+            volumeId: "vol-1",
+            volumeSize: 4,
+            state: "completed",
+            description: "d",
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        id: "snap-1",
+        name: "",
+        volumeId: "vol-1",
+        sizeGiB: 4,
+        description: "d",
+        state: "completed",
+        started: "",
+        owner: "1",
+        region: "vws-1",
+      },
+    ]);
     expect(parseAddresses({ items: [] })).toEqual([]);
   });
 
   it("maps images", () => {
-    expect(parseImages({ items: [{ imageId: "ami-0123456789abcdef0", ownerId: "123456789012", name: "vws-1", state: "available" }] })).toEqual([
-      { id: "ami-0123456789abcdef0", name: "vws-1", state: "available", owner: "123456789012" },
-    ]);
+    expect(
+      parseImages({
+        items: [{ imageId: "ami-0123456789abcdef0", ownerId: "123456789012", name: "vws-1", state: "available" }],
+      }),
+    ).toEqual([{ id: "ami-0123456789abcdef0", name: "vws-1", state: "available", owner: "123456789012" }]);
   });
 
   it("names VPCs and subnets from tags.Name and keeps their tags", () => {
-    const [vpc] = parseVpcs({ items: [{ vpcId: "vpc-1", cidrBlock: "10.0.0.0/16", state: "available", tags: { Name: "prod", team: "net", bad: 1 } }] });
+    const [vpc] = parseVpcs({
+      items: [
+        { vpcId: "vpc-1", cidrBlock: "10.0.0.0/16", state: "available", tags: { Name: "prod", team: "net", bad: 1 } },
+      ],
+    });
     expect([vpc.name, vpc.tags]).toEqual(["prod", { Name: "prod", team: "net" }]);
-    const [subnet] = parseSubnets({ items: [{ subnetId: "subnet-1", vpcId: "vpc-1", cidrBlock: "10.0.1.0/24", state: "available" }] });
+    const [subnet] = parseSubnets({
+      items: [{ subnetId: "subnet-1", vpcId: "vpc-1", cidrBlock: "10.0.1.0/24", state: "available" }],
+    });
     expect([subnet.name, subnet.tags]).toEqual(["", {}]);
   });
 
@@ -205,20 +307,32 @@ describe("console-api adapter", () => {
         { ...instance, instanceId: "i-2" },
       ],
     });
-    expect([withEip.publicIpv4, withEip.elasticIp, withEip.publicIpAllocationId]).toEqual(["203.0.113.5", "203.0.113.5", "eipalloc-1"]);
+    expect([withEip.publicIpv4, withEip.elasticIp, withEip.publicIpAllocationId]).toEqual([
+      "203.0.113.5",
+      "203.0.113.5",
+      "eipalloc-1",
+    ]);
     expect([plain.publicIpv4, plain.elasticIp, plain.publicIpAllocationId]).toEqual(["", "", ""]);
   });
 });
 
 describe("identityFromSession", () => {
   it("shows the root user and account", () => {
-    expect(identityFromSession({ principal: "arn:vws:iam::123456789012:root", account: "123456789012" })).toEqual({ userName: "root", accountId: "123456789012" });
+    expect(identityFromSession({ principal: "arn:vws:iam::123456789012:root", account: "123456789012" })).toEqual({
+      userName: "root",
+      accountId: "123456789012",
+    });
   });
   it("takes the user name from an IAM user ARN with a path", () => {
-    expect(identityFromSession({ principal: "arn:vws:iam::123456789012:user/ops/alice", account: "123456789012" })).toEqual({ userName: "alice", accountId: "123456789012" });
+    expect(
+      identityFromSession({ principal: "arn:vws:iam::123456789012:user/ops/alice", account: "123456789012" }),
+    ).toEqual({ userName: "alice", accountId: "123456789012" });
   });
   it("shows a dash for a missing field or session", () => {
-    expect(identityFromSession({ principal: "", account: "123456789012" })).toEqual({ userName: "—", accountId: "123456789012" });
+    expect(identityFromSession({ principal: "", account: "123456789012" })).toEqual({
+      userName: "—",
+      accountId: "123456789012",
+    });
     expect(identityFromSession({ principal: "arn:vws:iam::1:root" })).toEqual({ userName: "root", accountId: "—" });
     expect(identityFromSession(null)).toEqual({ userName: "—", accountId: "—" });
   });
@@ -226,7 +340,9 @@ describe("identityFromSession", () => {
 
 describe("identityFromSession with IAM off", () => {
   it("names the bearer root and keeps the account", () => {
-    expect(identityFromSession({ principal: "arn:vws:iam::123456789012:root", account: "123456789012" }, { iam: false })).toEqual({ userName: "root (IAM off)", accountId: "123456789012" });
+    expect(
+      identityFromSession({ principal: "arn:vws:iam::123456789012:root", account: "123456789012" }, { iam: false }),
+    ).toEqual({ userName: "root (IAM off)", accountId: "123456789012" });
     expect(identityFromSession(null, { iam: false })).toEqual({ userName: "root (IAM off)", accountId: "—" });
   });
 });

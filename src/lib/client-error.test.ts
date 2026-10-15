@@ -17,9 +17,11 @@ describe("normalizeClientError", () => {
   });
 
   it("reads camelCase code, message and requestId", () => {
-    expect(
-      normalizeClientError({ code: "Throttling", message: "Slow down", requestId: "req-9" }),
-    ).toEqual({ code: "Throttling", message: "Slow down", requestId: "req-9" });
+    expect(normalizeClientError({ code: "Throttling", message: "Slow down", requestId: "req-9" })).toEqual({
+      code: "Throttling",
+      message: "Slow down",
+      requestId: "req-9",
+    });
   });
 
   it("maps a plain Error to InternalError with its message", () => {

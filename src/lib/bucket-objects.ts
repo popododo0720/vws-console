@@ -17,10 +17,25 @@ export function listAtPrefix(objects: BucketObject[], prefix: string): ObjectRow
     const rest = item.key.slice(prefix.length);
     const slash = rest.indexOf("/");
     if (slash === -1) {
-      rows.set(item.key, { key: item.key, name: rest, isFolder: false, sizeBytes: item.sizeBytes, modified: item.modified, storageClass: item.storageClass });
+      rows.set(item.key, {
+        key: item.key,
+        name: rest,
+        isFolder: false,
+        sizeBytes: item.sizeBytes,
+        modified: item.modified,
+        storageClass: item.storageClass,
+      });
     } else {
       const folder = prefix + rest.slice(0, slash + 1);
-      if (!rows.has(folder)) rows.set(folder, { key: folder, name: rest.slice(0, slash + 1), isFolder: true, sizeBytes: 0, modified: "", storageClass: "" });
+      if (!rows.has(folder))
+        rows.set(folder, {
+          key: folder,
+          name: rest.slice(0, slash + 1),
+          isFolder: true,
+          sizeBytes: 0,
+          modified: "",
+          storageClass: "",
+        });
     }
   }
   return [...rows.values()];

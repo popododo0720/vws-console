@@ -4,17 +4,37 @@ import { useState } from "react";
 import Link from "next/link";
 import { computeNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { renameInstanceAction, startInstancesAction, stopInstancesAction, terminateInstancesAction } from "@/app/actions/resources";
+import {
+  renameInstanceAction,
+  startInstancesAction,
+  stopInstancesAction,
+  terminateInstancesAction,
+} from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import type { Instance } from "@/types/console";
 import { InstanceDetails, InstanceTab, instanceTabs } from "@/components/sites/console/instance-detail";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
-import { FieldLabel, MenuButton, OrangeButton, OutlineButton, PanelDialog, blueMenuTriggerClass } from "@/components/sites/console/ui";
+import {
+  FieldLabel,
+  MenuButton,
+  OrangeButton,
+  OutlineButton,
+  PanelDialog,
+  blueMenuTriggerClass,
+} from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 
-export function InstanceDetailView({ id, instance, loadError }: { id: string; instance: Instance | null; loadError: ApiError | null }) {
+export function InstanceDetailView({
+  id,
+  instance,
+  loadError,
+}: {
+  id: string;
+  instance: Instance | null;
+  loadError: ApiError | null;
+}) {
   const action = useApiAction();
   const [tab, setTab] = useState("details");
   const [renameOpen, setRenameOpen] = useState(false);
@@ -23,7 +43,13 @@ export function InstanceDetailView({ id, instance, loadError }: { id: string; in
   if (loadError) {
     return (
       <Shell tree={computeNav}>
-        <PageHeader crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: "Instances", href: "/compute/instances" }, { label: id }]} />
+        <PageHeader
+          crumbs={[
+            { label: "EC2", href: "/compute/instances" },
+            { label: "Instances", href: "/compute/instances" },
+            { label: id },
+          ]}
+        />
         <ApiErrorAlert error={loadError} title="The instance could not be loaded" />
       </Shell>
     );
@@ -32,7 +58,13 @@ export function InstanceDetailView({ id, instance, loadError }: { id: string; in
   if (!instance) {
     return (
       <Shell tree={computeNav}>
-        <PageHeader crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: "Instances", href: "/compute/instances" }, { label: id }]} />
+        <PageHeader
+          crumbs={[
+            { label: "EC2", href: "/compute/instances" },
+            { label: "Instances", href: "/compute/instances" },
+            { label: id },
+          ]}
+        />
         <div className="px-4 py-6 text-[13px]">
           <p className="font-semibold">Instance not found</p>
           <p className="mt-1 text-[#5f6b7a]">{id} is not in this region.</p>
@@ -59,16 +91,42 @@ export function InstanceDetailView({ id, instance, loadError }: { id: string; in
             <OutlineButton>Connect</OutlineButton>
             <MenuButton
               className={blueMenuTriggerClass()}
-              label={<>Instance state <span aria-hidden className="text-[9px]">▼</span></>}
+              label={
+                <>
+                  Instance state{" "}
+                  <span aria-hidden className="text-[9px]">
+                    ▼
+                  </span>
+                </>
+              }
               items={[
-                { label: "Start", disabled: action.pending || instance.state !== "stopped", onSelect: () => action.run(() => startInstancesAction([instance.id])) },
-                { label: "Stop", disabled: action.pending || instance.state !== "running", onSelect: () => action.run(() => stopInstancesAction([instance.id])) },
-                { label: "Terminate", disabled: action.pending || instance.state === "terminated", onSelect: () => action.run(() => terminateInstancesAction([instance.id])) },
+                {
+                  label: "Start",
+                  disabled: action.pending || instance.state !== "stopped",
+                  onSelect: () => action.run(() => startInstancesAction([instance.id])),
+                },
+                {
+                  label: "Stop",
+                  disabled: action.pending || instance.state !== "running",
+                  onSelect: () => action.run(() => stopInstancesAction([instance.id])),
+                },
+                {
+                  label: "Terminate",
+                  disabled: action.pending || instance.state === "terminated",
+                  onSelect: () => action.run(() => terminateInstancesAction([instance.id])),
+                },
               ]}
             />
             <MenuButton
               className={blueMenuTriggerClass()}
-              label={<>Actions <span aria-hidden className="text-[9px]">▼</span></>}
+              label={
+                <>
+                  Actions{" "}
+                  <span aria-hidden className="text-[9px]">
+                    ▼
+                  </span>
+                </>
+              }
               items={[
                 {
                   label: "Edit Name tag",
@@ -77,7 +135,10 @@ export function InstanceDetailView({ id, instance, loadError }: { id: string; in
                     setRenameOpen(true);
                   },
                 },
-                { label: "Copy instance ID", onSelect: () => void copyToClipboard(instance.id, "instance-detail-view") },
+                {
+                  label: "Copy instance ID",
+                  onSelect: () => void copyToClipboard(instance.id, "instance-detail-view"),
+                },
               ]}
             />
           </>
@@ -93,7 +154,12 @@ export function InstanceDetailView({ id, instance, loadError }: { id: string; in
             <OutlineButton onClick={() => setRenameOpen(false)}>Cancel</OutlineButton>
             <OrangeButton
               disabled={action.pending || !newName.trim()}
-              onClick={() => action.run(() => renameInstanceAction(instance.id, newName), () => setRenameOpen(false))}
+              onClick={() =>
+                action.run(
+                  () => renameInstanceAction(instance.id, newName),
+                  () => setRenameOpen(false),
+                )
+              }
             >
               Save
             </OrangeButton>
@@ -101,8 +167,15 @@ export function InstanceDetailView({ id, instance, loadError }: { id: string; in
         }
       >
         <FieldLabel>Name</FieldLabel>
-        <input className="field" aria-label="Instance name" value={newName} onChange={(event) => setNewName(event.target.value)} />
-        <p className="mt-1 text-[12px] text-[#5f6b7a]">Saved as the Name tag. The VWS API cannot remove a tag yet, so a name cannot be cleared.</p>
+        <input
+          className="field"
+          aria-label="Instance name"
+          value={newName}
+          onChange={(event) => setNewName(event.target.value)}
+        />
+        <p className="mt-1 text-[12px] text-[#5f6b7a]">
+          Saved as the Name tag. The VWS API cannot remove a tag yet, so a name cannot be cleared.
+        </p>
       </PanelDialog>
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-6">
         <section className="rounded-lg border border-[#d5dbdb] p-4">

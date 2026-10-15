@@ -22,9 +22,16 @@ describe("apiFetch", () => {
 
   it("sleeps between GET attempts and gives up with a timeout error after the last one", async () => {
     const sleeps: number[] = [];
-    const fetchMock = vi.fn((_url: string, init: RequestInit) => new Promise((_, reject) => init.signal!.addEventListener("abort", () => reject(init.signal!.reason))));
+    const fetchMock = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise((_, reject) => init.signal!.addEventListener("abort", () => reject(init.signal!.reason))),
+    );
     vi.stubGlobal("fetch", fetchMock);
-    const error = await apiFetch("http://api.test/x", {}, { timeoutMs: 5, sleep: async (ms) => void sleeps.push(ms), random: () => 0.5 }).catch((e) => e);
+    const error = await apiFetch(
+      "http://api.test/x",
+      {},
+      { timeoutMs: 5, sleep: async (ms) => void sleeps.push(ms), random: () => 0.5 },
+    ).catch((e) => e);
     expect(error).toBeInstanceOf(ApiTransportError);
     expect(error.kind).toBe("timeout");
     expect(error.attempts).toBe(GET_ATTEMPTS);

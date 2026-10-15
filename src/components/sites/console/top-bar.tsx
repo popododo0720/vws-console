@@ -10,10 +10,9 @@ import { Mark, MenuButton, MenuChevron, PanelDialog } from "@/components/sites/c
 
 const pageLinks = Array.from(
   new Map(
-    [
-      ...navTrees.flatMap((tree) => linksIn(tree)),
-      { label: "Launch instance", href: "/compute/launch" },
-    ].map((link) => [link.href, link]),
+    [...navTrees.flatMap((tree) => linksIn(tree)), { label: "Launch instance", href: "/compute/launch" }].map(
+      (link) => [link.href, link],
+    ),
   ).values(),
 );
 
@@ -198,15 +197,7 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
   );
 }
 
-function HeaderIcon({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function HeaderIcon({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"

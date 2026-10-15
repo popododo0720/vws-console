@@ -50,7 +50,10 @@ function check(id: string, ok: boolean, message: string, field?: string): Prefli
   return { id, severity: "error", status: ok ? "pass" : "fail", message, field };
 }
 
-function validate<S extends StepId>(step: S, value: StepValues[S]): { errors: FieldError[]; preflight: PreflightReport } {
+function validate<S extends StepId>(
+  step: S,
+  value: StepValues[S],
+): { errors: FieldError[]; preflight: PreflightReport } {
   const ranAt = new Date().toISOString();
   const v = value as StepValues[StepId];
   let errors: FieldError[] = [];
@@ -60,22 +63,56 @@ function validate<S extends StepId>(step: S, value: StepValues[S]): { errors: Fi
     errors = (["tunnel", "external"] as const)
       .filter((k) => !n[k].nic)
       .map((k) => ({ field: `spec.network.nodes.${k}.nic`, code: "required", message: "Choose a NIC." }));
-    checks = [check("nic.exists", errors.length === 0, "NIC is present on every node.", "spec.network.nodes.tunnel.nic")];
+    checks = [
+      check("nic.exists", errors.length === 0, "NIC is present on every node.", "spec.network.nodes.tunnel.nic"),
+    ];
   }
   if (step === "storage") {
     const s = v as StorageSpec;
     errors = validateStorage(s, MOCK_STORAGE_CLASSES);
-    if (s.driver === "nfs") checks = [{ id: "storage.nfs.reachable", severity: "error", status: "unknown", message: "Mockup cannot reach the NFS server; the installer checks this." }];
-    if (s.driver === "existing") checks = [check("storage.class.exists", errors.length === 0, "StorageClass exists.", "spec.storage.storageClass")];
+    if (s.driver === "nfs")
+      checks = [
+        {
+          id: "storage.nfs.reachable",
+          severity: "error",
+          status: "unknown",
+          message: "Mockup cannot reach the NFS server; the installer checks this.",
+        },
+      ];
+    if (s.driver === "existing")
+      checks = [
+        check("storage.class.exists", errors.length === 0, "StorageClass exists.", "spec.storage.storageClass"),
+      ];
   }
   if (step === "eip") {
     const pool = (v as StepValues["eip"]).eipPool.trim();
-    if (!pool) errors = [{ field: "spec.network.nodes.external.eipPool", code: "required", message: "Enter the EIP pool. It has no default." }];
-    else if (!CIDR.test(pool)) errors = [{ field: "spec.network.nodes.external.eipPool", code: "invalid", message: "Enter a CIDR such as 203.0.113.0/28." }];
+    if (!pool)
+      errors = [
+        {
+          field: "spec.network.nodes.external.eipPool",
+          code: "required",
+          message: "Enter the EIP pool. It has no default.",
+        },
+      ];
+    else if (!CIDR.test(pool))
+      errors = [
+        {
+          field: "spec.network.nodes.external.eipPool",
+          code: "invalid",
+          message: "Enter a CIDR such as 203.0.113.0/28.",
+        },
+      ];
   }
   if (step === "observability") {
     const url = (v as StepValues["observability"]).otlpEndpoint.trim();
-    if (url && !/^https?:\/\/\S+$/.test(url)) errors = [{ field: "spec.observability.otlpEndpoint", code: "invalid", message: "Enter an http(s) URL, or leave it empty to turn exporting off." }];
+    if (url && !/^https?:\/\/\S+$/.test(url))
+      errors = [
+        {
+          field: "spec.observability.otlpEndpoint",
+          code: "invalid",
+          message: "Enter an http(s) URL, or leave it empty to turn exporting off.",
+        },
+      ];
   }
   return { errors, preflight: { ranAt, checks } };
 }
@@ -96,7 +133,10 @@ function fail(code: string, message: string, retryable = false): never {
 export function createMockInstaller() {
   let session: SessionState = "editing";
   let credentialTaken = false;
-  const status = Object.fromEntries(STEP_IDS.map((s) => [s, s === "roles" ? "valid" : "pending"])) as Record<StepId, StepStatus>;
+  const status = Object.fromEntries(STEP_IDS.map((s) => [s, s === "roles" ? "valid" : "pending"])) as Record<
+    StepId,
+    StepStatus
+  >;
   const values: StepValues = {
     roles: {},
     network: { nodes: { tunnel: { nic: "" }, external: { nic: "" } } },
@@ -124,7 +164,12 @@ export function createMockInstaller() {
       const spec = {
         profile: values.profile.profile,
         storage: values.storage,
-        network: { nodes: { ...values.network.nodes, external: { ...values.network.nodes.external, eipPool: values.eip.eipPool } } },
+        network: {
+          nodes: {
+            ...values.network.nodes,
+            external: { ...values.network.nodes.external, eipPool: values.eip.eipPool },
+          },
+        },
         observability: values.observability,
       };
       return { cr: { kind: "VWSCluster", spec }, specHash: JSON.stringify(spec), warnings: [] as string[] };

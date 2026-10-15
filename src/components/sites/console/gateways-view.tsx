@@ -26,9 +26,27 @@ export function GatewaysView() {
 
   const columns: Column<InternetGateway>[] = [
     { key: "name", header: "Name", minWidth: 150, sortValue: (row) => row.name, cell: (row) => dash(row.name) },
-    { key: "id", header: "Internet gateway ID", minWidth: 200, sortValue: (row) => row.id, cell: (row) => <CopyText value={row.id} /> },
-    { key: "state", header: "State", minWidth: 110, sortValue: (row) => row.state, cell: (row) => (row.state === "attached" ? "Attached" : "Detached") },
-    { key: "vpc", header: "VPC ID", minWidth: 190, sortValue: (row) => row.vpcId, cell: (row) => <CopyText value={row.vpcId} /> },
+    {
+      key: "id",
+      header: "Internet gateway ID",
+      minWidth: 200,
+      sortValue: (row) => row.id,
+      cell: (row) => <CopyText value={row.id} />,
+    },
+    {
+      key: "state",
+      header: "State",
+      minWidth: 110,
+      sortValue: (row) => row.state,
+      cell: (row) => (row.state === "attached" ? "Attached" : "Detached"),
+    },
+    {
+      key: "vpc",
+      header: "VPC ID",
+      minWidth: 190,
+      sortValue: (row) => row.vpcId,
+      cell: (row) => <CopyText value={row.vpcId} />,
+    },
     { key: "owner", header: "Owner", minWidth: 130, sortValue: () => api.account.id, cell: () => api.account.id },
   ];
 
@@ -135,7 +153,11 @@ export function GatewaysView() {
               </option>
             ))}
           </select>
-          {error ? <p role="alert" className="text-[13px] text-[#d91515]">{error}</p> : null}
+          {error ? (
+            <p role="alert" className="text-[13px] text-[#d91515]">
+              {error}
+            </p>
+          ) : null}
         </div>
       </PanelDialog>
     </NetworkList>

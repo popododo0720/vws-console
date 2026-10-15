@@ -7,12 +7,25 @@ import { TagsTable } from "@/components/sites/console/tags-table";
 import { ResourceDetail } from "@/components/sites/console/resource-detail";
 import { CopyText, dash } from "@/components/sites/console/ui";
 
-export function VpcDetailView({ id, vpc, subnets, loadError }: { id: string; vpc: Vpc | null; subnets: Subnet[]; loadError: ApiError | null }) {
+export function VpcDetailView({
+  id,
+  vpc,
+  subnets,
+  loadError,
+}: {
+  id: string;
+  vpc: Vpc | null;
+  subnets: Subnet[];
+  loadError: ApiError | null;
+}) {
   const own = vpc ? subnets.filter((item) => item.vpcId === vpc.id) : [];
   return (
     <ResourceDetail
       tree={networkNav}
-      crumbs={[{ label: "VPC", href: "/network/vpcs" }, { label: "Your VPCs", href: "/network/vpcs" }]}
+      crumbs={[
+        { label: "VPC", href: "/network/vpcs" },
+        { label: "Your VPCs", href: "/network/vpcs" },
+      ]}
       kind="VPC"
       id={id}
       backHref="/network/vpcs"
@@ -45,7 +58,8 @@ export function VpcDetailView({ id, vpc, subnets, loadError }: { id: string; vpc
           <ul className="space-y-1">
             {own.map((item) => (
               <li key={item.id}>
-                {item.id}{item.name ? ` (${item.name})` : ""} · {item.ipv4Cidr}
+                {item.id}
+                {item.name ? ` (${item.name})` : ""} · {item.ipv4Cidr}
               </li>
             ))}
           </ul>

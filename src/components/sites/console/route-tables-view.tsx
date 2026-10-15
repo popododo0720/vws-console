@@ -16,10 +16,7 @@ import {
 } from "@/components/sites/console/ui";
 
 type Dialog =
-  | { kind: "create" }
-  | { kind: "route"; table: RouteTable }
-  | { kind: "associate"; table: RouteTable }
-  | null;
+  { kind: "create" } | { kind: "route"; table: RouteTable } | { kind: "associate"; table: RouteTable } | null;
 
 export function RouteTablesView() {
   const api = useConsole();
@@ -33,11 +30,42 @@ export function RouteTablesView() {
 
   const columns: Column<RouteTable>[] = [
     { key: "name", header: "Name", minWidth: 150, sortValue: (row) => row.name, cell: (row) => dash(row.name) },
-    { key: "id", header: "Route table ID", minWidth: 190, sortValue: (row) => row.id, cell: (row) => <CopyText value={row.id} /> },
-    { key: "assoc", header: "Explicit subnet associations", minWidth: 200, sortValue: (row) => String(row.subnetIds.length), cell: (row) => (row.subnetIds.length ? `${row.subnetIds.length} subnet${row.subnetIds.length === 1 ? "" : "s"}` : "—") },
-    { key: "main", header: "Main", minWidth: 80, sortValue: (row) => String(row.main), cell: (row) => (row.main ? "Yes" : "No") },
-    { key: "vpc", header: "VPC", minWidth: 190, sortValue: (row) => row.vpcId, cell: (row) => <CopyText value={row.vpcId} /> },
-    { key: "routes", header: "Routes", minWidth: 90, sortValue: (row) => String(row.routes.length), cell: (row) => String(row.routes.length) },
+    {
+      key: "id",
+      header: "Route table ID",
+      minWidth: 190,
+      sortValue: (row) => row.id,
+      cell: (row) => <CopyText value={row.id} />,
+    },
+    {
+      key: "assoc",
+      header: "Explicit subnet associations",
+      minWidth: 200,
+      sortValue: (row) => String(row.subnetIds.length),
+      cell: (row) =>
+        row.subnetIds.length ? `${row.subnetIds.length} subnet${row.subnetIds.length === 1 ? "" : "s"}` : "—",
+    },
+    {
+      key: "main",
+      header: "Main",
+      minWidth: 80,
+      sortValue: (row) => String(row.main),
+      cell: (row) => (row.main ? "Yes" : "No"),
+    },
+    {
+      key: "vpc",
+      header: "VPC",
+      minWidth: 190,
+      sortValue: (row) => row.vpcId,
+      cell: (row) => <CopyText value={row.vpcId} />,
+    },
+    {
+      key: "routes",
+      header: "Routes",
+      minWidth: 90,
+      sortValue: (row) => String(row.routes.length),
+      cell: (row) => String(row.routes.length),
+    },
   ];
 
   const open = (next: Dialog) => {
@@ -51,8 +79,11 @@ export function RouteTablesView() {
   };
   const close = () => setDialog(null);
   const targetsFor = (table: RouteTable) =>
-    api.internetGateways.filter((item) => item.state === "attached" && item.vpcId === table.vpcId).map((item) => item.id);
-  const freeSubnets = (table: RouteTable) => api.subnets.filter((item) => item.vpcId === table.vpcId && item.routeTableId !== table.id);
+    api.internetGateways
+      .filter((item) => item.state === "attached" && item.vpcId === table.vpcId)
+      .map((item) => item.id);
+  const freeSubnets = (table: RouteTable) =>
+    api.subnets.filter((item) => item.vpcId === table.vpcId && item.routeTableId !== table.id);
 
   return (
     <NetworkList
@@ -171,7 +202,11 @@ export function RouteTablesView() {
               ))}
             </select>
           </div>
-          {error ? <p role="alert" className="text-[13px] text-[#d91515]">{error}</p> : null}
+          {error ? (
+            <p role="alert" className="text-[13px] text-[#d91515]">
+              {error}
+            </p>
+          ) : null}
         </div>
       </PanelDialog>
       <PanelDialog
@@ -211,10 +246,16 @@ export function RouteTablesView() {
                 ))}
               </select>
               {targetsFor(dialog.table).length === 0 ? (
-                <p className="mt-1 text-[12px] text-[#5f6b7a]">Attach an internet gateway to this VPC to route to it.</p>
+                <p className="mt-1 text-[12px] text-[#5f6b7a]">
+                  Attach an internet gateway to this VPC to route to it.
+                </p>
               ) : null}
             </div>
-            {error ? <p role="alert" className="text-[13px] text-[#d91515]">{error}</p> : null}
+            {error ? (
+              <p role="alert" className="text-[13px] text-[#d91515]">
+                {error}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </PanelDialog>
@@ -251,7 +292,11 @@ export function RouteTablesView() {
                   </option>
                 ))}
               </select>
-              {error ? <p role="alert" className="text-[13px] text-[#d91515]">{error}</p> : null}
+              {error ? (
+                <p role="alert" className="text-[13px] text-[#d91515]">
+                  {error}
+                </p>
+              ) : null}
             </div>
           )
         ) : null}

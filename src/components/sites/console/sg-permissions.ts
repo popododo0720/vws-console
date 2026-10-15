@@ -2,7 +2,10 @@ import type { SecurityGroupRule } from "@/types/console";
 import { toIngressPermission, type IngressPermission } from "@/lib/vws-api/adapter";
 
 /** Maps inbound rules onto authorize-ingress bodies; the first rule the API cannot take stops it. */
-export function ingressPermissions(rules: SecurityGroupRule[]): { permissions: IngressPermission[]; error: string | null } {
+export function ingressPermissions(rules: SecurityGroupRule[]): {
+  permissions: IngressPermission[];
+  error: string | null;
+} {
   const permissions: IngressPermission[] = [];
   for (const [index, rule] of rules.entries()) {
     const mapped = toIngressPermission(rule);

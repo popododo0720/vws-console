@@ -15,7 +15,23 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("./session", () => ({ currentSession: async () => nav.session }));
 
-import { login, logout, signedInSession, createSubnet, createSubnetTags, createVpcTags, createInstanceTags, createSecurityGroup, createVpc, getVolume, getVpc, instanceBatch, launchInstances, listVpcs, modifyVolume } from "./client";
+import {
+  login,
+  logout,
+  signedInSession,
+  createSubnet,
+  createSubnetTags,
+  createVpcTags,
+  createInstanceTags,
+  createSecurityGroup,
+  createVpc,
+  getVolume,
+  getVpc,
+  instanceBatch,
+  launchInstances,
+  listVpcs,
+  modifyVolume,
+} from "./client";
 
 type Call = { url: string; init: RequestInit };
 
@@ -55,7 +71,10 @@ describe("console-api client", () => {
     );
     const result = await listVpcs();
     expect(result.ok && result.value.map((v) => v.id)).toEqual(["vpc-1", "vpc-2"]);
-    expect(calls.map((c) => c.url)).toEqual(["http://api.test/api/v1/vpcs", "http://api.test/api/v1/vpcs?pageToken=p2"]);
+    expect(calls.map((c) => c.url)).toEqual([
+      "http://api.test/api/v1/vpcs",
+      "http://api.test/api/v1/vpcs?pageToken=p2",
+    ]);
     const headers = calls[0].init.headers as Record<string, string>;
     expect(headers.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
     expect(headers.authorization).toBeUndefined();
@@ -76,24 +95,48 @@ describe("console-api client", () => {
     expect(headers.origin).toBe("http://console.test");
     expect(headers.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
     expect(calls[0].init.body).toBe('{"cidrBlock":"10.9.0.0/16"}');
-    expect(calls.slice(1).map((c) => c.url)).toEqual(["http://api.test/api/v1/operations/op-1", "http://api.test/api/v1/operations/op-1"]);
+    expect(calls.slice(1).map((c) => c.url)).toEqual([
+      "http://api.test/api/v1/operations/op-1",
+      "http://api.test/api/v1/operations/op-1",
+    ]);
   });
 
   it("returns the operation error when the operation fails", async () => {
-    serve(respond(202, { operation: { id: "op-2", state: "running" } }), respond(200, { id: "op-2", state: "failed", error: { code: "Conflict", message: "cidr overlaps" } }));
-    expect(await createVpc("10.9.0.0/16")).toEqual({ ok: false, error: { code: "Conflict", message: "cidr overlaps", requestId: null } });
+    serve(
+      respond(202, { operation: { id: "op-2", state: "running" } }),
+      respond(200, { id: "op-2", state: "failed", error: { code: "Conflict", message: "cidr overlaps" } }),
+    );
+    expect(await createVpc("10.9.0.0/16")).toEqual({
+      ok: false,
+      error: { code: "Conflict", message: "cidr overlaps", requestId: null },
+    });
   });
 
   it("returns the API error envelope for a rejected request", async () => {
-    serve(respond(400, { error: { code: "InvalidArgument", field: "cidrBlock", message: "must be an ipv4 network" }, requestId: "r-1" }));
-    expect(await createVpc("bad")).toEqual({ ok: false, error: { code: "InvalidArgument", message: "must be an ipv4 network", requestId: "r-1" } });
+    serve(
+      respond(400, {
+        error: { code: "InvalidArgument", field: "cidrBlock", message: "must be an ipv4 network" },
+        requestId: "r-1",
+      }),
+    );
+    expect(await createVpc("bad")).toEqual({
+      ok: false,
+      error: { code: "InvalidArgument", message: "must be an ipv4 network", requestId: "r-1" },
+    });
   });
 
   it("reports missing configuration without calling the API", async () => {
     vi.stubEnv("VWS_CONSOLE_API_URL", "");
     serve();
     const result = await listVpcs();
-    expect(result).toEqual({ ok: false, error: { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_URL on the console server.", requestId: null } });
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "ConsoleNotConfigured",
+        message: "Set VWS_CONSOLE_API_URL on the console server.",
+        requestId: null,
+      },
+    });
     expect(calls).toEqual([]);
   });
 
@@ -117,11 +160,20 @@ describe("console-api client", () => {
 
   it("signs in without a session and returns the cookies console-api set", async () => {
     nav.session = null;
-    const reply = respond(200, { principal: "root", account: "123456789012", root: true, expiresAt: "x", csrfToken: "c" });
+    const reply = respond(200, {
+      principal: "root",
+      account: "123456789012",
+      root: true,
+      expiresAt: "x",
+      csrfToken: "c",
+    });
     reply.headers.append("set-cookie", "vws_session=s2; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict");
     reply.headers.append("set-cookie", "vws_csrf=c2; Path=/; Max-Age=43200; Secure; SameSite=Strict");
     serve(reply);
-    expect(await login({ account: "123456789012", userName: "root", password: "pw" })).toEqual({ ok: true, value: { session: "s2", csrf: "c2", maxAge: 43200 } });
+    expect(await login({ account: "123456789012", userName: "root", password: "pw" })).toEqual({
+      ok: true,
+      value: { session: "s2", csrf: "c2", maxAge: 43200 },
+    });
     expect(calls[0].url).toBe("http://api.test/api/v1/auth/login");
     expect(calls[0].init.body).toBe('{"account":"123456789012","userName":"root","password":"pw"}');
     expect((calls[0].init.headers as Record<string, string>).cookie).toBeUndefined();
@@ -149,7 +201,10 @@ describe("console-api client", () => {
 
   it("returns the new security group ID from the accepted request", async () => {
     serve(
-      respond(202, { operation: { id: "op-4", state: "running" }, items: [{ groupId: "sg-9", groupName: "web", vpcId: "vpc-1" }] }),
+      respond(202, {
+        operation: { id: "op-4", state: "running" },
+        items: [{ groupId: "sg-9", groupName: "web", vpcId: "vpc-1" }],
+      }),
       respond(200, { id: "op-4", state: "succeeded" }),
     );
     expect(await createSecurityGroup("web", "vpc-1")).toEqual({ ok: true, value: "sg-9" });
@@ -157,13 +212,22 @@ describe("console-api client", () => {
   });
 
   it("launches with tags only when there are some", async () => {
-    serve(respond(202, { operation: { id: "op-3", state: "succeeded" } }), respond(202, { operation: { id: "op-4", state: "succeeded" } }));
+    serve(
+      respond(202, { operation: { id: "op-3", state: "succeeded" } }),
+      respond(202, { operation: { id: "op-4", state: "succeeded" } }),
+    );
     const req = { imageId: "ami-1", instanceType: "vws.small", subnetId: "subnet-1", count: 2 };
     await launchInstances({ ...req, tags: { Name: "web" } });
     await launchInstances({ ...req, tags: {} });
     expect(calls.map((c) => [c.url, c.init.body])).toEqual([
-      ["http://api.test/api/v1/instances", '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2,"tags":{"Name":"web"}}'],
-      ["http://api.test/api/v1/instances", '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2}'],
+      [
+        "http://api.test/api/v1/instances",
+        '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2,"tags":{"Name":"web"}}',
+      ],
+      [
+        "http://api.test/api/v1/instances",
+        '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":2}',
+      ],
     ]);
   });
 
@@ -188,8 +252,14 @@ describe("console-api client", () => {
 
   it("stops at the first failed batch", async () => {
     const ids = Array.from({ length: 25 }, (_, index) => `i-${index}`);
-    serve(respond(202, { operation: { id: "op-c", state: "running" } }), respond(200, { id: "op-c", state: "failed", error: { code: "Conflict", message: "busy" } }));
-    expect(await instanceBatch("terminate", ids)).toEqual({ ok: false, error: { code: "Conflict", message: "busy", requestId: null } });
+    serve(
+      respond(202, { operation: { id: "op-c", state: "running" } }),
+      respond(200, { id: "op-c", state: "failed", error: { code: "Conflict", message: "busy" } }),
+    );
+    expect(await instanceBatch("terminate", ids)).toEqual({
+      ok: false,
+      error: { code: "Conflict", message: "busy", requestId: null },
+    });
     expect(calls).toHaveLength(2);
   });
 
@@ -209,11 +279,17 @@ describe("console-api client", () => {
     expect(vpc.ok && vpc.value?.ipv4Cidr).toBe("10.0.0.0/16");
     expect(vpc.ok && vpc.value?.isDefault).toBe(true);
     expect(await getVolume("vol-x")).toEqual({ ok: true, value: null });
-    expect(calls.map((c) => c.url)).toEqual(["http://api.test/api/v1/vpcs/vpc-1", "http://api.test/api/v1/volumes/vol-x"]);
+    expect(calls.map((c) => c.url)).toEqual([
+      "http://api.test/api/v1/vpcs/vpc-1",
+      "http://api.test/api/v1/volumes/vol-x",
+    ]);
   });
 
   it("sends the new size to the modify endpoint", async () => {
-    serve(respond(202, { operation: { id: "op-5", state: "running" }, items: [] }), respond(200, { id: "op-5", state: "succeeded" }));
+    serve(
+      respond(202, { operation: { id: "op-5", state: "running" }, items: [] }),
+      respond(200, { id: "op-5", state: "succeeded" }),
+    );
     expect(await modifyVolume("vol-1", 9)).toEqual({ ok: true, value: undefined });
     expect(calls[0].url).toBe("http://api.test/api/v1/volumes/vol-1/modify");
     expect(calls[0].init.body).toBe('{"size":9}');
@@ -235,8 +311,20 @@ describe("console-api client", () => {
   });
 
   it("reads the signed-in session for the account menu with the session cookie", async () => {
-    serve(respond(200, { principal: "arn:vws:iam::123456789012:root", account: "123456789012", root: true, expiresAt: "t" }));
-    expect(await signedInSession()).toEqual({ principal: "arn:vws:iam::123456789012:root", account: "123456789012", root: true, expiresAt: "t" });
+    serve(
+      respond(200, {
+        principal: "arn:vws:iam::123456789012:root",
+        account: "123456789012",
+        root: true,
+        expiresAt: "t",
+      }),
+    );
+    expect(await signedInSession()).toEqual({
+      principal: "arn:vws:iam::123456789012:root",
+      account: "123456789012",
+      root: true,
+      expiresAt: "t",
+    });
     expect(calls[0].url).toBe("http://api.test/api/v1/auth/session");
     expect((calls[0].init.headers as Record<string, string>).cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
   });
@@ -278,7 +366,11 @@ describe("console-api client", () => {
     });
 
     it("stops retrying a GET after 3 attempts and reports the request ID", async () => {
-      serve(respond(502, {}), respond(502, {}), respond(502, { error: { code: "BadGateway", message: "down" }, requestId: "r-9" }));
+      serve(
+        respond(502, {}),
+        respond(502, {}),
+        respond(502, { error: { code: "BadGateway", message: "down" }, requestId: "r-9" }),
+      );
       const result = await settle(listVpcs());
       expect(calls).toHaveLength(3);
       expect(result).toEqual({ ok: false, error: { code: "BadGateway", message: "down", requestId: "r-9" } });
@@ -292,14 +384,20 @@ describe("console-api client", () => {
 
     it("never retries a write, even on a 503 or a network error", async () => {
       serve(respond(503, { error: { code: "ServiceUnavailable", message: "busy" } }));
-      expect(await settle(createVpc("10.9.0.0/16"))).toMatchObject({ ok: false, error: { code: "ServiceUnavailable" } });
+      expect(await settle(createVpc("10.9.0.0/16"))).toMatchObject({
+        ok: false,
+        error: { code: "ServiceUnavailable" },
+      });
       expect(calls).toHaveLength(1);
       calls = [];
       vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
         calls.push({ url, init });
         throw new TypeError("fetch failed");
       });
-      expect(await settle(createVpc("10.9.0.0/16"))).toMatchObject({ ok: false, error: { code: "ServiceUnavailable" } });
+      expect(await settle(createVpc("10.9.0.0/16"))).toMatchObject({
+        ok: false,
+        error: { code: "ServiceUnavailable" },
+      });
       expect(calls).toHaveLength(1);
     });
 
@@ -321,7 +419,10 @@ describe("console-api client", () => {
         return new Promise((_, reject) => init.signal!.addEventListener("abort", () => reject(init.signal!.reason)));
       });
       const write = await createVpc("10.9.0.0/16");
-      expect(write).toMatchObject({ ok: false, error: { code: "RequestTimeout", requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) } });
+      expect(write).toMatchObject({
+        ok: false,
+        error: { code: "RequestTimeout", requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) },
+      });
       expect(calls).toHaveLength(1);
       calls = [];
       const signIn = await login({ account: "1", userName: "root", password: "pw" });
@@ -344,7 +445,9 @@ describe("console-api client", () => {
         respond(200, { principal: "arn:vws:iam::1:root", account: "1" }),
         new Response(null, { status: 204 }),
       );
-      await settle(login({ account: "123456789012", userName: "root", password: "PASSWORD-SECRET", mfaCode: "987654" }));
+      await settle(
+        login({ account: "123456789012", userName: "root", password: "PASSWORD-SECRET", mfaCode: "987654" }),
+      );
       await settle(login({ account: "123456789012", userName: "root", password: "PASSWORD-SECRET" }));
       await settle(signedInSession());
       await settle(logout());
@@ -359,13 +462,27 @@ describe("console-api client", () => {
         ["auth.logout", "success", 204],
       ]);
       for (const e of events) {
-        expect(Object.keys(e).sort()).toEqual(expect.arrayContaining(["durationMs", "event", "outcome", "requestId", "status"]));
+        expect(Object.keys(e).sort()).toEqual(
+          expect.arrayContaining(["durationMs", "event", "outcome", "requestId", "status"]),
+        );
         expect(e.requestId).toMatch(/^[0-9a-f-]{36}$/);
         expect(typeof e.durationMs).toBe("number");
       }
       expect(events[0].code).toBe("Unauthenticated");
       const all = lines.join("\n");
-      for (const secret of ["PASSWORD-SECRET", "987654", "SESSION-TOKEN-SECRET", "CSRF-VALUE-SECRET", "NEW-SESSION-SECRET", "NEW-CSRF-SECRET", "vws_session", "vws_csrf", "password", "mfa", "cookie"]) {
+      for (const secret of [
+        "PASSWORD-SECRET",
+        "987654",
+        "SESSION-TOKEN-SECRET",
+        "CSRF-VALUE-SECRET",
+        "NEW-SESSION-SECRET",
+        "NEW-CSRF-SECRET",
+        "vws_session",
+        "vws_csrf",
+        "password",
+        "mfa",
+        "cookie",
+      ]) {
         expect(all).not.toContain(secret);
       }
     });
@@ -397,19 +514,36 @@ describe("console-api client", () => {
     it("reports a missing token without calling the API", async () => {
       vi.stubEnv("VWS_CONSOLE_API_TOKEN", "");
       serve();
-      expect(await listVpcs()).toEqual({ ok: false, error: { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_TOKEN on the console server.", requestId: null } });
+      expect(await listVpcs()).toEqual({
+        ok: false,
+        error: {
+          code: "ConsoleNotConfigured",
+          message: "Set VWS_CONSOLE_API_TOKEN on the console server.",
+          requestId: null,
+        },
+      });
       expect(calls).toEqual([]);
     });
 
     it("refuses sign-in and skips sign-out without calling the API", async () => {
       serve();
-      expect(await login({ account: "1", userName: "root", password: "pw" })).toMatchObject({ ok: false, error: { code: "SignInDisabled" } });
+      expect(await login({ account: "1", userName: "root", password: "pw" })).toMatchObject({
+        ok: false,
+        error: { code: "SignInDisabled" },
+      });
       await logout();
       expect(calls).toEqual([]);
     });
 
     it("reads the account for the menu with the bearer token", async () => {
-      serve(respond(200, { principal: "arn:vws:iam::123456789012:root", account: "123456789012", root: true, loginEnabled: false }));
+      serve(
+        respond(200, {
+          principal: "arn:vws:iam::123456789012:root",
+          account: "123456789012",
+          root: true,
+          loginEnabled: false,
+        }),
+      );
       expect(await signedInSession()).toMatchObject({ account: "123456789012" });
       expect(calls[0].init.headers).toMatchObject({ authorization: "Bearer tok" });
       expect((calls[0].init.headers as Record<string, string>).cookie).toBeUndefined();

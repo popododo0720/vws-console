@@ -44,7 +44,12 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
   const one = selected.length === 1 ? selected[0] : null;
 
   const columns: Column<Vpc>[] = [
-    { key: "name", header: "Name", minWidth: 120, sortValue: (row) => row.name, cell: (row) => (
+    {
+      key: "name",
+      header: "Name",
+      minWidth: 120,
+      sortValue: (row) => row.name,
+      cell: (row) => (
         <NameCell
           value={row.name}
           onRename={(name) => {
@@ -53,7 +58,13 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
         />
       ),
     },
-    { key: "id", header: "VPC ID", minWidth: 190, sortValue: (row) => row.id, cell: (row) => <DetailLink href={`/network/vpcs/${row.id}`} id={row.id} /> },
+    {
+      key: "id",
+      header: "VPC ID",
+      minWidth: 190,
+      sortValue: (row) => row.id,
+      cell: (row) => <DetailLink href={`/network/vpcs/${row.id}`} id={row.id} />,
+    },
     {
       key: "state",
       header: "State",
@@ -69,11 +80,35 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
           <span className="text-[#006ce0]">Pending</span>
         ),
     },
-    { key: "encryption", header: "Encryption", minWidth: 120, sortValue: (row) => row.encryption, cell: (row) => dash(row.encryption) },
-    { key: "control", header: "Encryption control", minWidth: 150, sortValue: (row) => row.encryptionControl, cell: (row) => dash(row.encryptionControl) },
-    { key: "block", header: "Block public access", minWidth: 150, sortValue: (row) => row.blockPublicAccess, cell: (row) => blockPublicAccess(row.blockPublicAccess) },
+    {
+      key: "encryption",
+      header: "Encryption",
+      minWidth: 120,
+      sortValue: (row) => row.encryption,
+      cell: (row) => dash(row.encryption),
+    },
+    {
+      key: "control",
+      header: "Encryption control",
+      minWidth: 150,
+      sortValue: (row) => row.encryptionControl,
+      cell: (row) => dash(row.encryptionControl),
+    },
+    {
+      key: "block",
+      header: "Block public access",
+      minWidth: 150,
+      sortValue: (row) => row.blockPublicAccess,
+      cell: (row) => blockPublicAccess(row.blockPublicAccess),
+    },
     { key: "cidr", header: "IPv4 CIDR", minWidth: 130, sortValue: (row) => row.ipv4Cidr, cell: (row) => row.ipv4Cidr },
-    { key: "ipv6", header: "IPv6 CIDR", minWidth: 120, sortValue: (row) => row.ipv6Cidr, cell: (row) => dash(row.ipv6Cidr) },
+    {
+      key: "ipv6",
+      header: "IPv6 CIDR",
+      minWidth: 120,
+      sortValue: (row) => row.ipv6Cidr,
+      cell: (row) => dash(row.ipv6Cidr),
+    },
   ];
 
   return (
@@ -120,7 +155,11 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
                 {
                   label: "Delete",
                   disabled: action.pending || selected.length === 0,
-                  onSelect: () => action.run(() => deleteVpcsAction(selected.map((item) => item.id)), () => setSelectedIds([])),
+                  onSelect: () =>
+                    action.run(
+                      () => deleteVpcsAction(selected.map((item) => item.id)),
+                      () => setSelectedIds([]),
+                    ),
                 },
               ]}
             />
@@ -144,7 +183,16 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
       />
       <DetailDock
         title={one ? one.name || one.id : "Select a VPC above"}
-        tabs={one ? [{ id: "details", label: "Details" }, { id: "cidrs", label: "CIDRs" }, { id: "map", label: "Resource map" }, { id: "tags", label: "Tags" }] : undefined}
+        tabs={
+          one
+            ? [
+                { id: "details", label: "Details" },
+                { id: "cidrs", label: "CIDRs" },
+                { id: "map", label: "Resource map" },
+                { id: "tags", label: "Tags" },
+              ]
+            : undefined
+        }
         tab={vpcTab}
         onTab={setVpcTab}
         height={dock}
@@ -157,17 +205,36 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
             <dl className="grid gap-3 text-[13px] sm:grid-cols-3">
               <div>
                 <dt className="font-semibold text-[#5f6b7a]">Subnets</dt>
-                <dd>{subnets.filter((item) => item.vpcId === one.id).map((item) => item.id).join(", ") || "—"}</dd>
+                <dd>
+                  {subnets
+                    .filter((item) => item.vpcId === one.id)
+                    .map((item) => item.id)
+                    .join(", ") || "—"}
+                </dd>
               </div>
             </dl>
           ) : vpcTab === "cidrs" ? (
-            <p className="text-[13px]">IPv4 {one.ipv4Cidr} · IPv6 {dash(one.ipv6Cidr)}</p>
+            <p className="text-[13px]">
+              IPv4 {one.ipv4Cidr} · IPv6 {dash(one.ipv6Cidr)}
+            </p>
           ) : (
             <dl className="grid gap-3 text-[13px] sm:grid-cols-3">
-              <div><dt className="text-[#5f6b7a]">VPC ID</dt><dd>{one.id}</dd></div>
-              <div><dt className="text-[#5f6b7a]">IPv4 CIDR</dt><dd>{one.ipv4Cidr}</dd></div>
-              <div><dt className="text-[#5f6b7a]">Owner ID</dt><dd>{dash(one.owner)}</dd></div>
-              <div><dt className="text-[#5f6b7a]">Default VPC</dt><dd>{one.isDefault === null ? "—" : one.isDefault ? "Yes" : "No"}</dd></div>
+              <div>
+                <dt className="text-[#5f6b7a]">VPC ID</dt>
+                <dd>{one.id}</dd>
+              </div>
+              <div>
+                <dt className="text-[#5f6b7a]">IPv4 CIDR</dt>
+                <dd>{one.ipv4Cidr}</dd>
+              </div>
+              <div>
+                <dt className="text-[#5f6b7a]">Owner ID</dt>
+                <dd>{dash(one.owner)}</dd>
+              </div>
+              <div>
+                <dt className="text-[#5f6b7a]">Default VPC</dt>
+                <dd>{one.isDefault === null ? "—" : one.isDefault ? "Yes" : "No"}</dd>
+              </div>
             </dl>
           )
         ) : null}
@@ -179,7 +246,15 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
         footer={
           <>
             <OutlineButton onClick={() => setCreateOpen(false)}>Cancel</OutlineButton>
-            <OrangeButton disabled={action.pending} onClick={() => action.run(() => createVpcAction(cidr, newName), () => setCreateOpen(false))}>
+            <OrangeButton
+              disabled={action.pending}
+              onClick={() =>
+                action.run(
+                  () => createVpcAction(cidr, newName),
+                  () => setCreateOpen(false),
+                )
+              }
+            >
               Create VPC
             </OrangeButton>
           </>
@@ -188,11 +263,21 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
         <div className="space-y-3">
           <div>
             <FieldLabel>Name tag (optional)</FieldLabel>
-            <input className="field" aria-label="VPC name" value={newName} onChange={(event) => setNewName(event.target.value)} />
+            <input
+              className="field"
+              aria-label="VPC name"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+            />
           </div>
           <div>
             <FieldLabel>IPv4 CIDR</FieldLabel>
-            <input className="field" aria-label="IPv4 CIDR" value={cidr} onChange={(event) => setCidr(event.target.value)} />
+            <input
+              className="field"
+              aria-label="IPv4 CIDR"
+              value={cidr}
+              onChange={(event) => setCidr(event.target.value)}
+            />
           </div>
           <ApiErrorAlert error={action.error} title="The VPC could not be created" />
         </div>

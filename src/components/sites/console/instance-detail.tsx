@@ -63,20 +63,26 @@ function SimpleTable({ head, rows, empty }: { head: string[]; rows: ReactNode[][
       <thead>
         <tr className="border-b border-[#e6e8eb] text-[12px] text-[#5f6b7a]">
           {head.map((item) => (
-            <th key={item} className="px-2 py-1.5 font-bold">{item}</th>
+            <th key={item} className="px-2 py-1.5 font-bold">
+              {item}
+            </th>
           ))}
         </tr>
       </thead>
       <tbody>
         {rows.length === 0 ? (
           <tr>
-            <td colSpan={head.length} className="px-2 py-4 text-center text-[#5f6b7a]">{empty}</td>
+            <td colSpan={head.length} className="px-2 py-4 text-center text-[#5f6b7a]">
+              {empty}
+            </td>
           </tr>
         ) : (
           rows.map((row, index) => (
             <tr key={index} className="border-b border-[#eaeded]">
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className="px-2 py-1.5">{cell}</td>
+                <td key={cellIndex} className="px-2 py-1.5">
+                  {cell}
+                </td>
               ))}
             </tr>
           ))
@@ -89,11 +95,15 @@ function SimpleTable({ head, rows, empty }: { head: string[]; rows: ReactNode[][
 export function InstanceDetails({ instance }: { instance: Instance }) {
   return (
     <Fields>
-      <Field label="Instance ID"><CopyText value={instance.id} /></Field>
+      <Field label="Instance ID">
+        <CopyText value={instance.id} />
+      </Field>
       <Field label="Public IPv4 address">{dash(instance.publicIpv4)}</Field>
       <Field label="Private IPv4 addresses">{dash(instance.privateIpv4)}</Field>
       <Field label="IPv6 address">{dash(instance.ipv6)}</Field>
-      <Field label="Instance state"><StateDot state={instance.state} /></Field>
+      <Field label="Instance state">
+        <StateDot state={instance.state} />
+      </Field>
       <Field label="Public IPv4 DNS">{dash(instance.publicDns)}</Field>
       <Field label="Private IP DNS name (IPv4 only)">{dash(instance.privateDns)}</Field>
       <Field label="Instance type">{instance.type}</Field>
@@ -108,7 +118,15 @@ export function InstanceDetails({ instance }: { instance: Instance }) {
   );
 }
 
-export function InstanceTab({ tab, instance, hideSummary = false }: { tab: string; instance: Instance; hideSummary?: boolean }) {
+export function InstanceTab({
+  tab,
+  instance,
+  hideSummary = false,
+}: {
+  tab: string;
+  instance: Instance;
+  hideSummary?: boolean;
+}) {
   const api = useConsole();
   if (tab === "alarms") {
     return (
@@ -129,7 +147,9 @@ export function InstanceTab({ tab, instance, hideSummary = false }: { tab: strin
   if (tab === "security") {
     return (
       <Section title="Security groups">
-        <p className="text-[13px] text-[#5f6b7a]">The VWS API does not report the security groups of an instance yet.</p>
+        <p className="text-[13px] text-[#5f6b7a]">
+          The VWS API does not report the security groups of an instance yet.
+        </p>
       </Section>
     );
   }
@@ -187,7 +207,11 @@ export function InstanceTab({ tab, instance, hideSummary = false }: { tab: strin
 
 export function InstanceLink({ id }: { id: string }) {
   return (
-    <Link href={`/compute/instances/${id}`} className="text-[#006ce0] hover:underline" onClick={(event) => event.stopPropagation()}>
+    <Link
+      href={`/compute/instances/${id}`}
+      className="text-[#006ce0] hover:underline"
+      onClick={(event) => event.stopPropagation()}
+    >
       {id}
     </Link>
   );

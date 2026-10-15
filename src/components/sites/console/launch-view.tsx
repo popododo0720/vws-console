@@ -34,7 +34,14 @@ export function LaunchView({
 }) {
   const router = useRouter();
   const action = useApiAction();
-  const [open, setOpen] = useState<Record<Section, boolean>>({ name: true, image: true, type: true, key: true, network: true, storage: true });
+  const [open, setOpen] = useState<Record<Section, boolean>>({
+    name: true,
+    image: true,
+    type: true,
+    key: true,
+    network: true,
+    storage: true,
+  });
   const [name, setName] = useState("");
   const [tags, setTags] = useState<{ key: string; value: string }[]>([]);
   const [tag, setTag] = useState({ key: "", value: "" });
@@ -58,7 +65,10 @@ export function LaunchView({
           instanceType,
           subnetId,
           count,
-          tags: Object.fromEntries([...(name.trim() ? [["Name", name.trim()]] : []), ...tags.map((item) => [item.key, item.value])]),
+          tags: Object.fromEntries([
+            ...(name.trim() ? [["Name", name.trim()]] : []),
+            ...tags.map((item) => [item.key, item.value]),
+          ]),
         }),
       () => router.push("/compute/instances"),
     );
@@ -79,16 +89,37 @@ export function LaunchView({
             <InfoTip text="Launch sends the request to the VWS API and waits until it is accepted." />
           </div>
           <p className="mt-1 max-w-3xl text-[13px] text-[#5f6b7a]">
-            Start a virtual machine from an image. It takes a few simple steps, and the summary on the right follows your choices.
+            Start a virtual machine from an image. It takes a few simple steps, and the summary on the right follows
+            your choices.
           </p>
           <ApiErrorAlert error={loadError} title="Launch options could not be loaded" />
           <div className="mt-4 max-w-4xl space-y-4 pb-8">
-            <Card title="Name and tags" info="The name is stored as the Name tag. It can be blank." open={open.name} onToggle={() => toggle("name")}>
+            <Card
+              title="Name and tags"
+              info="The name is stored as the Name tag. It can be blank."
+              open={open.name}
+              onToggle={() => toggle("name")}
+            >
               <FieldLabel>Name</FieldLabel>
-              <input className="field" placeholder="e.g. My Web Server" value={name} onChange={(event) => setName(event.target.value)} />
+              <input
+                className="field"
+                placeholder="e.g. My Web Server"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
               <div className="mt-2 flex flex-wrap gap-2">
-                <input className="field max-w-40" placeholder="Key" value={tag.key} onChange={(event) => setTag({ ...tag, key: event.target.value })} />
-                <input className="field max-w-40" placeholder="Value" value={tag.value} onChange={(event) => setTag({ ...tag, value: event.target.value })} />
+                <input
+                  className="field max-w-40"
+                  placeholder="Key"
+                  value={tag.key}
+                  onChange={(event) => setTag({ ...tag, key: event.target.value })}
+                />
+                <input
+                  className="field max-w-40"
+                  placeholder="Value"
+                  value={tag.value}
+                  onChange={(event) => setTag({ ...tag, value: event.target.value })}
+                />
                 <OutlineButton
                   onClick={() => {
                     const key = tag.key.trim();
@@ -103,21 +134,35 @@ export function LaunchView({
               {tags.length > 0 ? (
                 <ul className="mt-2 text-[13px] text-[#5f6b7a]">
                   {tags.map((item) => (
-                    <li key={item.key}>{item.key} = {item.value || "—"}</li>
+                    <li key={item.key}>
+                      {item.key} = {item.value || "—"}
+                    </li>
                   ))}
                 </ul>
               ) : null}
             </Card>
 
-            <Card title="Application and OS images" info="Images come from the VWS API." open={open.image} onToggle={() => toggle("image")}>
+            <Card
+              title="Application and OS images"
+              info="Images come from the VWS API."
+              open={open.image}
+              onToggle={() => toggle("image")}
+            >
               {images.length === 0 ? (
                 <p className="text-[13px] text-[#5f6b7a]">No images are available.</p>
               ) : (
                 <>
                   <FieldLabel>Image</FieldLabel>
-                  <select className="field max-w-lg" aria-label="Image" value={imageId} onChange={(event) => setImageId(event.target.value)}>
+                  <select
+                    className="field max-w-lg"
+                    aria-label="Image"
+                    value={imageId}
+                    onChange={(event) => setImageId(event.target.value)}
+                  >
                     {images.map((item) => (
-                      <option key={item.id} value={item.id}>{item.name ? `${item.name} (${item.id})` : item.id}</option>
+                      <option key={item.id} value={item.id}>
+                        {item.name ? `${item.name} (${item.id})` : item.id}
+                      </option>
                     ))}
                   </select>
                   {image ? (
@@ -134,14 +179,28 @@ export function LaunchView({
               )}
             </Card>
 
-            <Card title="Instance type" info="Machine types the VWS compute service runs." open={open.type} onToggle={() => toggle("type")}>
-              <select className="field max-w-xs" aria-label="Instance type" value={instanceType} onChange={(event) => setInstanceType(event.target.value)}>
+            <Card
+              title="Instance type"
+              info="Machine types the VWS compute service runs."
+              open={open.type}
+              onToggle={() => toggle("type")}
+            >
+              <select
+                className="field max-w-xs"
+                aria-label="Instance type"
+                value={instanceType}
+                onChange={(event) => setInstanceType(event.target.value)}
+              >
                 {instanceTypes.map((item) => (
-                  <option key={item.id} value={item.id}>{item.id}</option>
+                  <option key={item.id} value={item.id}>
+                    {item.id}
+                  </option>
                 ))}
               </select>
               <p className="mt-2 text-[13px] text-[#5f6b7a]">
-                {type ? `${type.vcpus} vCPU · ${formatMemory(type.memoryMiB)} memory` : "No instance types are available."}
+                {type
+                  ? `${type.vcpus} vCPU · ${formatMemory(type.memoryMiB)} memory`
+                  : "No instance types are available."}
               </p>
             </Card>
 
@@ -149,27 +208,48 @@ export function LaunchView({
               <p className="text-[13px] text-[#5f6b7a]">Key pair: — ({NOT_SUPPORTED})</p>
             </Card>
 
-            <Card title="Network settings" info="The instance joins a subnet in the chosen VPC." open={open.network} onToggle={() => toggle("network")}>
+            <Card
+              title="Network settings"
+              info="The instance joins a subnet in the chosen VPC."
+              open={open.network}
+              onToggle={() => toggle("network")}
+            >
               <div className="space-y-3 text-[13px]">
                 <div>
                   <FieldLabel>Network</FieldLabel>
-                  <select className="field max-w-lg" aria-label="Network" value={vpcId} onChange={(event) => setVpcId(event.target.value)}>
+                  <select
+                    className="field max-w-lg"
+                    aria-label="Network"
+                    value={vpcId}
+                    onChange={(event) => setVpcId(event.target.value)}
+                  >
                     {vpcs.length === 0 ? <option value="">No networks in this region</option> : null}
                     {vpcs.map((vpc) => (
-                      <option key={vpc.id} value={vpc.id}>{vpc.id} ({vpc.ipv4Cidr})</option>
+                      <option key={vpc.id} value={vpc.id}>
+                        {vpc.id} ({vpc.ipv4Cidr})
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <FieldLabel>Subnet</FieldLabel>
-                  <select className="field max-w-lg" aria-label="Subnet" value={subnetId} onChange={(event) => setSubnetChoice(event.target.value)}>
+                  <select
+                    className="field max-w-lg"
+                    aria-label="Subnet"
+                    value={subnetId}
+                    onChange={(event) => setSubnetChoice(event.target.value)}
+                  >
                     {vpcSubnets.length === 0 ? <option value="">No subnets in this network</option> : null}
                     {vpcSubnets.map((subnet) => (
-                      <option key={subnet.id} value={subnet.id}>{subnet.id} ({subnet.ipv4Cidr})</option>
+                      <option key={subnet.id} value={subnet.id}>
+                        {subnet.id} ({subnet.ipv4Cidr})
+                      </option>
                     ))}
                   </select>
                 </div>
-                <p className="text-[#5f6b7a]">Auto-assign public IP: — · Firewall (security group): — ({NOT_SUPPORTED})</p>
+                <p className="text-[#5f6b7a]">
+                  Auto-assign public IP: — · Firewall (security group): — ({NOT_SUPPORTED})
+                </p>
               </div>
             </Card>
 
@@ -177,7 +257,9 @@ export function LaunchView({
               <p className="text-[13px] text-[#5f6b7a]">Root volume: — ({NOT_SUPPORTED})</p>
               <div className="mt-4 border-t border-[#e6e8eb] pt-3 text-[13px]">
                 <p className="font-semibold">File systems</p>
-                <p className="mt-1 text-[#5f6b7a]">No file systems are attached. Shared file systems are not available in this console yet.</p>
+                <p className="mt-1 text-[#5f6b7a]">
+                  No file systems are attached. Shared file systems are not available in this console yet.
+                </p>
               </div>
             </Card>
           </div>
@@ -187,14 +269,26 @@ export function LaunchView({
             <p className="text-[16px] font-bold">Summary</p>
             <div>
               <div className="mb-1 font-semibold">Number of instances</div>
-              <input className="field" aria-label="Number of instances" type="number" min={1} max={20} value={count} onChange={(event) => setCount(Number(event.target.value))} />
+              <input
+                className="field"
+                aria-label="Number of instances"
+                type="number"
+                min={1}
+                max={20}
+                value={count}
+                onChange={(event) => setCount(Number(event.target.value))}
+              />
             </div>
             <SummaryRow label="Software Image (AMI)" value={image ? image.name || image.id : "—"} detail={image?.id} />
             <SummaryRow label="Virtual server type (instance type)" value={type?.id ?? "—"} />
             <SummaryRow label="Subnet" value={subnetId || "—"} />
             <ApiErrorAlert error={action.error} title="The instance could not be launched" />
             <div className="flex items-center justify-between pt-2">
-              <button type="button" className="text-[13px] text-[#16191f] hover:underline" onClick={() => router.push("/compute/instances")}>
+              <button
+                type="button"
+                className="text-[13px] text-[#16191f] hover:underline"
+                onClick={() => router.push("/compute/instances")}
+              >
                 Cancel
               </button>
               <OrangeButton disabled={!ready} onClick={launch}>
@@ -208,12 +302,26 @@ export function LaunchView({
   );
 }
 
-function Card({ title, info, open, onToggle, children }: { title: string; info: string; open: boolean; onToggle: () => void; children: ReactNode }) {
+function Card({
+  title,
+  info,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  info: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
   return (
     <section className="rounded-lg border border-[#d5dbdb] bg-white">
       <div className="flex items-center gap-2 px-4 py-3">
         <button type="button" className="flex items-center gap-2 text-left" onClick={onToggle} aria-expanded={open}>
-          <span aria-hidden className="w-3 text-[9px]">{open ? "▼" : "▶"}</span>
+          <span aria-hidden className="w-3 text-[9px]">
+            {open ? "▼" : "▶"}
+          </span>
           <span className="text-[16px] font-bold">{title}</span>
         </button>
         <InfoTip text={info} />

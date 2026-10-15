@@ -72,13 +72,33 @@ test("shows the empty instance list from the API", async ({ page }) => {
 test("lists a seeded instance by its Name tag and stops it", async ({ page, request }) => {
   const api = `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
   const headers = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
-  const vpc = await (await request.post(`${api}/vpcs`, { headers: headers("seed-vpc"), data: { cidrBlock: "10.77.0.0/16" } })).json();
+  const vpc = await (
+    await request.post(`${api}/vpcs`, { headers: headers("seed-vpc"), data: { cidrBlock: "10.77.0.0/16" } })
+  ).json();
   const vpcId = vpc.items[0].vpcId;
-  await expect.poll(async () => (await (await request.get(`${api}/vpcs`, { headers: headers("x") })).json()).items.find((v: { vpcId: string }) => v.vpcId === vpcId).state).toBe("available");
-  const subnet = await (await request.post(`${api}/subnets`, { headers: headers("seed-subnet"), data: { vpcId, cidrBlock: "10.77.1.0/24" } })).json();
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${api}/vpcs`, { headers: headers("x") })).json()).items.find(
+          (v: { vpcId: string }) => v.vpcId === vpcId,
+        ).state,
+    )
+    .toBe("available");
+  const subnet = await (
+    await request.post(`${api}/subnets`, {
+      headers: headers("seed-subnet"),
+      data: { vpcId, cidrBlock: "10.77.1.0/24" },
+    })
+  ).json();
   const run = await request.post(`${api}/instances`, {
     headers: headers("seed-run"),
-    data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId: subnet.items[0].subnetId, count: 1, tags: { Name: "e2e-web" } },
+    data: {
+      imageId: "ami-0123456789abcdef0",
+      instanceType: "vws.small",
+      subnetId: subnet.items[0].subnetId,
+      count: 1,
+      tags: { Name: "e2e-web" },
+    },
   });
   expect(run.status()).toBe(202);
   const instanceId = (await run.json()).items[0].instanceId;
@@ -87,9 +107,20 @@ test("lists a seeded instance by its Name tag and stops it", async ({ page, requ
   const row = page.getByRole("row").filter({ hasText: instanceId });
   await expect(row).toContainText("e2e-web");
   await expect(row).toContainText("vws.small");
-  await expect.poll(async () => { await page.reload(); return (await row.textContent()) ?? ""; }, { timeout: 30_000 }).toContain("Running");
+  await expect
+    .poll(
+      async () => {
+        await page.reload();
+        return (await row.textContent()) ?? "";
+      },
+      { timeout: 30_000 },
+    )
+    .toContain("Running");
   await row.getByRole("checkbox").check();
-  await page.getByRole("button", { name: /^Instance state/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Instance state/ })
+    .first()
+    .click();
   await page.getByRole("menuitem", { name: "Stop" }).click();
   await expect(row).toContainText("Stopped", { timeout: 60_000 });
 
@@ -102,7 +133,12 @@ const consoleApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 
 const apiHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
 
 test("creates a security group with an inbound rule, adds a rule and deletes it", async ({ page, request }) => {
-  const vpc = await (await request.post(`${consoleApi()}/vpcs`, { headers: apiHeaders("sg-seed-vpc"), data: { cidrBlock: "10.88.0.0/16" } })).json();
+  const vpc = await (
+    await request.post(`${consoleApi()}/vpcs`, {
+      headers: apiHeaders("sg-seed-vpc"),
+      data: { cidrBlock: "10.88.0.0/16" },
+    })
+  ).json();
   const vpcId = vpc.items[0].vpcId;
 
   await page.goto("/network/security-groups/create");
@@ -136,26 +172,62 @@ test("creates a security group with an inbound rule, adds a rule and deletes it"
 });
 
 test("allocates, associates, disassociates and releases an Elastic IP address", async ({ page, request }) => {
-  const vpc = await (await request.post(`${consoleApi()}/vpcs`, { headers: apiHeaders("eip-seed-vpc"), data: { cidrBlock: "10.89.0.0/16" } })).json();
+  const vpc = await (
+    await request.post(`${consoleApi()}/vpcs`, {
+      headers: apiHeaders("eip-seed-vpc"),
+      data: { cidrBlock: "10.89.0.0/16" },
+    })
+  ).json();
   const vpcId = vpc.items[0].vpcId;
-  await expect.poll(async () => (await (await request.get(`${consoleApi()}/vpcs`, { headers: apiHeaders("x") })).json()).items.find((v: { vpcId: string }) => v.vpcId === vpcId).state).toBe("available");
-  const subnet = await (await request.post(`${consoleApi()}/subnets`, { headers: apiHeaders("eip-seed-subnet"), data: { vpcId, cidrBlock: "10.89.1.0/24" } })).json();
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${consoleApi()}/vpcs`, { headers: apiHeaders("x") })).json()).items.find(
+          (v: { vpcId: string }) => v.vpcId === vpcId,
+        ).state,
+    )
+    .toBe("available");
+  const subnet = await (
+    await request.post(`${consoleApi()}/subnets`, {
+      headers: apiHeaders("eip-seed-subnet"),
+      data: { vpcId, cidrBlock: "10.89.1.0/24" },
+    })
+  ).json();
   const run = await request.post(`${consoleApi()}/instances`, {
     headers: apiHeaders("eip-seed-run"),
-    data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId: subnet.items[0].subnetId, count: 1, tags: { Name: "e2e-eip" } },
+    data: {
+      imageId: "ami-0123456789abcdef0",
+      instanceType: "vws.small",
+      subnetId: subnet.items[0].subnetId,
+      count: 1,
+      tags: { Name: "e2e-eip" },
+    },
   });
   const instanceId = (await run.json()).items[0].instanceId;
-  await expect.poll(async () => (await (await request.get(`${consoleApi()}/instances/${instanceId}`, { headers: apiHeaders("x") })).json()).state, { timeout: 30_000 }).toBe("running");
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${consoleApi()}/instances/${instanceId}`, { headers: apiHeaders("x") })).json())
+          .state,
+      { timeout: 30_000 },
+    )
+    .toBe("running");
 
   await page.goto("/network/elastic-ips");
   await expect(page.getByText("Elastic IP addresses could not be loaded")).toHaveCount(0);
-  const before = await page.getByRole("row").filter({ hasText: /eipalloc-/ }).count();
+  const before = await page
+    .getByRole("row")
+    .filter({ hasText: /eipalloc-/ })
+    .count();
   await page.getByRole("button", { name: "Allocate Elastic IP address" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Allocate" }).click();
   const rows = page.getByRole("row").filter({ hasText: /eipalloc-/ });
   await expect(rows).toHaveCount(before + 1);
   const row = rows.last();
-  const allocationId = (await row.getByText(/^eipalloc-/).first().textContent())!.trim();
+  const allocationId = (await row
+    .getByText(/^eipalloc-/)
+    .first()
+    .textContent())!.trim();
   const byId = page.getByRole("row").filter({ hasText: allocationId });
 
   await byId.getByRole("checkbox").check();
@@ -177,9 +249,18 @@ test("allocates, associates, disassociates and releases an Elastic IP address", 
 });
 
 test("creates a snapshot from a volume and deletes it", async ({ page, request }) => {
-  const volume = await (await request.post(`${consoleApi()}/volumes`, { headers: apiHeaders("snap-seed-vol"), data: { size: 7 } })).json();
+  const volume = await (
+    await request.post(`${consoleApi()}/volumes`, { headers: apiHeaders("snap-seed-vol"), data: { size: 7 } })
+  ).json();
   const volumeId = volume.items[0].volumeId;
-  await expect.poll(async () => (await (await request.get(`${consoleApi()}/volumes`, { headers: apiHeaders("x") })).json()).items.find((v: { volumeId: string }) => v.volumeId === volumeId).state).toBe("available");
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${consoleApi()}/volumes`, { headers: apiHeaders("x") })).json()).items.find(
+          (v: { volumeId: string }) => v.volumeId === volumeId,
+        ).state,
+    )
+    .toBe("available");
 
   await page.goto("/storage/snapshots");
   await expect(page.getByText("Snapshots could not be loaded")).toHaveCount(0);
@@ -191,7 +272,15 @@ test("creates a snapshot from a volume and deletes it", async ({ page, request }
   const row = page.getByRole("row").filter({ hasText: "e2e backup" });
   await expect(row).toContainText(volumeId);
   await expect(row).toContainText("7 GiB");
-  await expect.poll(async () => { await page.reload(); return (await row.textContent()) ?? ""; }, { timeout: 15_000 }).toContain("Completed");
+  await expect
+    .poll(
+      async () => {
+        await page.reload();
+        return (await row.textContent()) ?? "";
+      },
+      { timeout: 15_000 },
+    )
+    .toContain("Completed");
 
   await row.getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
@@ -202,10 +291,24 @@ test("creates a snapshot from a volume and deletes it", async ({ page, request }
 test("launches an instance from the launch screen", async ({ page, request }) => {
   const api = `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
   const headers = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
-  const vpc = await (await request.post(`${api}/vpcs`, { headers: headers("launch-vpc"), data: { cidrBlock: "10.88.0.0/16" } })).json();
+  const vpc = await (
+    await request.post(`${api}/vpcs`, { headers: headers("launch-vpc"), data: { cidrBlock: "10.88.0.0/16" } })
+  ).json();
   const vpcId = vpc.items[0].vpcId;
-  await expect.poll(async () => (await (await request.get(`${api}/vpcs`, { headers: headers("x") })).json()).items.find((v: { vpcId: string }) => v.vpcId === vpcId).state).toBe("available");
-  const subnet = await (await request.post(`${api}/subnets`, { headers: headers("launch-subnet"), data: { vpcId, cidrBlock: "10.88.1.0/24" } })).json();
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${api}/vpcs`, { headers: headers("x") })).json()).items.find(
+          (v: { vpcId: string }) => v.vpcId === vpcId,
+        ).state,
+    )
+    .toBe("available");
+  const subnet = await (
+    await request.post(`${api}/subnets`, {
+      headers: headers("launch-subnet"),
+      data: { vpcId, cidrBlock: "10.88.1.0/24" },
+    })
+  ).json();
   const subnetId = subnet.items[0].subnetId;
 
   await page.goto("/compute/launch");
@@ -226,18 +329,51 @@ test("launches an instance from the launch screen", async ({ page, request }) =>
 const tagsApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
 const tagsHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
 
-async function seedInstances(request: import("@playwright/test").APIRequestContext, prefix: string, cidr: string, count: number) {
-  const vpc = await (await request.post(`${tagsApi()}/vpcs`, { headers: tagsHeaders(`${prefix}-vpc`), data: { cidrBlock: `${cidr}.0.0/16` } })).json();
+async function seedInstances(
+  request: import("@playwright/test").APIRequestContext,
+  prefix: string,
+  cidr: string,
+  count: number,
+) {
+  const vpc = await (
+    await request.post(`${tagsApi()}/vpcs`, {
+      headers: tagsHeaders(`${prefix}-vpc`),
+      data: { cidrBlock: `${cidr}.0.0/16` },
+    })
+  ).json();
   const vpcId: string = vpc.items[0].vpcId;
-  await expect.poll(async () => (await (await request.get(`${tagsApi()}/vpcs/${vpcId}`, { headers: tagsHeaders("x") })).json()).state).toBe("available");
-  const subnet = await (await request.post(`${tagsApi()}/subnets`, { headers: tagsHeaders(`${prefix}-subnet`), data: { vpcId, cidrBlock: `${cidr}.1.0/24` } })).json();
-  const run = await (await request.post(`${tagsApi()}/instances`, {
-    headers: tagsHeaders(`${prefix}-run`),
-    data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId: subnet.items[0].subnetId, count, tags: { Name: `${prefix}-old` } },
-  })).json();
+  await expect
+    .poll(
+      async () => (await (await request.get(`${tagsApi()}/vpcs/${vpcId}`, { headers: tagsHeaders("x") })).json()).state,
+    )
+    .toBe("available");
+  const subnet = await (
+    await request.post(`${tagsApi()}/subnets`, {
+      headers: tagsHeaders(`${prefix}-subnet`),
+      data: { vpcId, cidrBlock: `${cidr}.1.0/24` },
+    })
+  ).json();
+  const run = await (
+    await request.post(`${tagsApi()}/instances`, {
+      headers: tagsHeaders(`${prefix}-run`),
+      data: {
+        imageId: "ami-0123456789abcdef0",
+        instanceType: "vws.small",
+        subnetId: subnet.items[0].subnetId,
+        count,
+        tags: { Name: `${prefix}-old` },
+      },
+    })
+  ).json();
   const ids: string[] = run.items.map((item: { instanceId: string }) => item.instanceId);
   for (const id of ids) {
-    await expect.poll(async () => (await (await request.get(`${tagsApi()}/instances/${id}`, { headers: tagsHeaders("x") })).json()).state, { timeout: 30_000 }).toBe("running");
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get(`${tagsApi()}/instances/${id}`, { headers: tagsHeaders("x") })).json()).state,
+        { timeout: 30_000 },
+      )
+      .toBe("running");
   }
   return { vpcId, subnetId: subnet.items[0].subnetId as string, ids };
 }
@@ -267,19 +403,29 @@ test("stops and terminates several instances in one batch", async ({ page, reque
 
   await page.goto("/compute/instances");
   for (const id of ids) await page.getByRole("row").filter({ hasText: id }).getByRole("checkbox").check();
-  await page.getByRole("button", { name: /^Instance state/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Instance state/ })
+    .first()
+    .click();
   await page.getByRole("menuitem", { name: "Stop" }).click();
-  for (const id of ids) await expect(page.getByRole("row").filter({ hasText: id })).toContainText("Stopped", { timeout: 60_000 });
+  for (const id of ids)
+    await expect(page.getByRole("row").filter({ hasText: id })).toContainText("Stopped", { timeout: 60_000 });
 
   for (const id of ids) await page.getByRole("row").filter({ hasText: id }).getByRole("checkbox").check();
-  await page.getByRole("button", { name: /^Instance state/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Instance state/ })
+    .first()
+    .click();
   await page.getByRole("menuitem", { name: "Terminate" }).click();
-  for (const id of ids) await expect(page.getByRole("row").filter({ hasText: id })).toContainText("Terminated", { timeout: 60_000 });
+  for (const id of ids)
+    await expect(page.getByRole("row").filter({ hasText: id })).toContainText("Terminated", { timeout: 60_000 });
 });
 
 test("opens VPC and volume detail pages from their lists", async ({ page, request }) => {
   const { vpcId, subnetId } = await seedInstances(request, "detail", "10.57", 1);
-  const volume = await (await request.post(`${tagsApi()}/volumes`, { headers: tagsHeaders("detail-vol"), data: { size: 6 } })).json();
+  const volume = await (
+    await request.post(`${tagsApi()}/volumes`, { headers: tagsHeaders("detail-vol"), data: { size: 6 } })
+  ).json();
   const volumeId: string = volume.items[0].volumeId;
 
   await page.goto("/network/vpcs");
@@ -302,9 +448,18 @@ const liveApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 480
 const liveHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
 
 test("grows a volume and will not shrink it", async ({ page, request }) => {
-  const created = await (await request.post(`${liveApi()}/volumes`, { headers: liveHeaders("grow-vol"), data: { size: 5 } })).json();
+  const created = await (
+    await request.post(`${liveApi()}/volumes`, { headers: liveHeaders("grow-vol"), data: { size: 5 } })
+  ).json();
   const volumeId = created.items[0].volumeId;
-  await expect.poll(async () => (await (await request.get(`${liveApi()}/volumes`, { headers: liveHeaders("x") })).json()).items.find((v: { volumeId: string }) => v.volumeId === volumeId).state).toBe("available");
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${liveApi()}/volumes`, { headers: liveHeaders("x") })).json()).items.find(
+          (v: { volumeId: string }) => v.volumeId === volumeId,
+        ).state,
+    )
+    .toBe("available");
 
   await page.goto("/storage/volumes");
   const row = page.getByRole("row").filter({ hasText: volumeId });
@@ -320,16 +475,35 @@ test("grows a volume and will not shrink it", async ({ page, request }) => {
   await expect(row).toContainText("12 GiB");
 });
 
-test("shows instance VPC and launch time, subnet zone and public IP setting, and the default VPC flag", async ({ page, request }) => {
-  const vpc = await (await request.post(`${liveApi()}/vpcs`, { headers: liveHeaders("fields-vpc"), data: { cidrBlock: "10.66.0.0/16" } })).json();
+test("shows instance VPC and launch time, subnet zone and public IP setting, and the default VPC flag", async ({
+  page,
+  request,
+}) => {
+  const vpc = await (
+    await request.post(`${liveApi()}/vpcs`, { headers: liveHeaders("fields-vpc"), data: { cidrBlock: "10.66.0.0/16" } })
+  ).json();
   const vpcId = vpc.items[0].vpcId;
-  await expect.poll(async () => (await (await request.get(`${liveApi()}/vpcs`, { headers: liveHeaders("x") })).json()).items.find((v: { vpcId: string }) => v.vpcId === vpcId).state).toBe("available");
-  const subnet = await (await request.post(`${liveApi()}/subnets`, { headers: liveHeaders("fields-subnet"), data: { vpcId, cidrBlock: "10.66.1.0/24" } })).json();
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${liveApi()}/vpcs`, { headers: liveHeaders("x") })).json()).items.find(
+          (v: { vpcId: string }) => v.vpcId === vpcId,
+        ).state,
+    )
+    .toBe("available");
+  const subnet = await (
+    await request.post(`${liveApi()}/subnets`, {
+      headers: liveHeaders("fields-subnet"),
+      data: { vpcId, cidrBlock: "10.66.1.0/24" },
+    })
+  ).json();
   const subnetId = subnet.items[0].subnetId;
-  const run = await (await request.post(`${liveApi()}/instances`, {
-    headers: liveHeaders("fields-run"),
-    data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId, count: 1 },
-  })).json();
+  const run = await (
+    await request.post(`${liveApi()}/instances`, {
+      headers: liveHeaders("fields-run"),
+      data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId, count: 1 },
+    })
+  ).json();
   const instanceId = run.items[0].instanceId;
   const launchTime: string = run.items[0].launchTime;
 
@@ -393,22 +567,55 @@ test("names a VPC and a subnet on create, renames them and shows their tags", as
 });
 
 test("shows an instance's public IP and Elastic IP allocation", async ({ page, request }) => {
-  const vpc = await (await request.post(`${netApi()}/vpcs`, { headers: netHeaders("pip-vpc"), data: { cidrBlock: "10.45.0.0/16" } })).json();
+  const vpc = await (
+    await request.post(`${netApi()}/vpcs`, { headers: netHeaders("pip-vpc"), data: { cidrBlock: "10.45.0.0/16" } })
+  ).json();
   const vpcId = vpc.items[0].vpcId;
-  await expect.poll(async () => (await (await request.get(`${netApi()}/vpcs/${vpcId}`, { headers: netHeaders("x") })).json()).state).toBe("available");
-  const subnet = await (await request.post(`${netApi()}/subnets`, { headers: netHeaders("pip-subnet"), data: { vpcId, cidrBlock: "10.45.1.0/24" } })).json();
-  const run = await (await request.post(`${netApi()}/instances`, {
-    headers: netHeaders("pip-run"),
-    data: { imageId: "ami-0123456789abcdef0", instanceType: "vws.small", subnetId: subnet.items[0].subnetId, count: 1 },
-  })).json();
+  await expect
+    .poll(
+      async () => (await (await request.get(`${netApi()}/vpcs/${vpcId}`, { headers: netHeaders("x") })).json()).state,
+    )
+    .toBe("available");
+  const subnet = await (
+    await request.post(`${netApi()}/subnets`, {
+      headers: netHeaders("pip-subnet"),
+      data: { vpcId, cidrBlock: "10.45.1.0/24" },
+    })
+  ).json();
+  const run = await (
+    await request.post(`${netApi()}/instances`, {
+      headers: netHeaders("pip-run"),
+      data: {
+        imageId: "ami-0123456789abcdef0",
+        instanceType: "vws.small",
+        subnetId: subnet.items[0].subnetId,
+        count: 1,
+      },
+    })
+  ).json();
   const instanceId: string = run.items[0].instanceId;
-  await expect.poll(async () => (await (await request.get(`${netApi()}/instances/${instanceId}`, { headers: netHeaders("x") })).json()).state, { timeout: 30_000 }).toBe("running");
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${netApi()}/instances/${instanceId}`, { headers: netHeaders("x") })).json()).state,
+      { timeout: 30_000 },
+    )
+    .toBe("running");
   const eip = await (await request.post(`${netApi()}/addresses`, { headers: netHeaders("pip-eip"), data: {} })).json();
   const allocationId: string = eip.items[0].allocationId;
   const publicIp: string = eip.items[0].publicIp;
-  const assoc = await request.post(`${netApi()}/addresses/${allocationId}/associate`, { headers: netHeaders("pip-assoc"), data: { instanceId } });
+  const assoc = await request.post(`${netApi()}/addresses/${allocationId}/associate`, {
+    headers: netHeaders("pip-assoc"),
+    data: { instanceId },
+  });
   expect(assoc.status()).toBe(202);
-  await expect.poll(async () => (await (await request.get(`${netApi()}/instances/${instanceId}`, { headers: netHeaders("x") })).json()).publicIpAddress).toBe(publicIp);
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${netApi()}/instances/${instanceId}`, { headers: netHeaders("x") })).json())
+          .publicIpAddress,
+    )
+    .toBe(publicIp);
 
   await page.goto("/compute/instances");
   const row = page.getByRole("row").filter({ hasText: instanceId });

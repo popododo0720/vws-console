@@ -42,7 +42,9 @@ export function UploadView({ name }: { name: string }) {
         <PageHeader crumbs={crumbs} />
         <div className="px-4 py-6 text-[13px]">
           <p className="font-semibold">Bucket not found</p>
-          <Link href="/storage/buckets" className="mt-3 inline-block text-[#006ce0] hover:underline">Back to buckets</Link>
+          <Link href="/storage/buckets" className="mt-3 inline-block text-[#006ce0] hover:underline">
+            Back to buckets
+          </Link>
         </div>
       </Shell>
     );
@@ -58,7 +60,9 @@ export function UploadView({ name }: { name: string }) {
         />
         <div className="mx-auto max-w-[900px] space-y-4 px-4 pb-8 text-[13px]">
           <section className="rounded-lg border border-[#e6e8eb] bg-white p-4">
-            <p className="mb-3 text-[#5f6b7a]">Add the files you want to upload. Destination: s3://{name}/{prefix}</p>
+            <p className="mb-3 text-[#5f6b7a]">
+              Add the files you want to upload. Destination: s3://{name}/{prefix}
+            </p>
             <div
               className={`grid place-items-center rounded-lg border-2 border-dashed px-4 py-10 text-center ${dragging ? "border-[#006ce0] bg-[#f2f8fd]" : "border-[#c6c9ce]"}`}
               onDragOver={(event) => {
@@ -73,8 +77,20 @@ export function UploadView({ name }: { name: string }) {
               }}
             >
               <p>Drag and drop files here, or choose Add files.</p>
-              <OutlineButton className="mt-3" onClick={() => input.current?.click()}>Add files</OutlineButton>
-              <input ref={input} type="file" multiple className="hidden" aria-label="Add files" onChange={(event) => { add(event.target.files); event.target.value = ""; }} />
+              <OutlineButton className="mt-3" onClick={() => input.current?.click()}>
+                Add files
+              </OutlineButton>
+              <input
+                ref={input}
+                type="file"
+                multiple
+                className="hidden"
+                aria-label="Add files"
+                onChange={(event) => {
+                  add(event.target.files);
+                  event.target.value = "";
+                }}
+              />
             </div>
           </section>
           <section className="rounded-lg border border-[#e6e8eb] bg-white p-4">
@@ -83,7 +99,14 @@ export function UploadView({ name }: { name: string }) {
               <p className="text-[#5f6b7a]">No files or folders</p>
             ) : (
               <table className="w-full text-left">
-                <thead className="text-[#5f6b7a]"><tr><th className="py-1">Name</th><th>Type</th><th>Size</th><th /></tr></thead>
+                <thead className="text-[#5f6b7a]">
+                  <tr>
+                    <th className="py-1">Name</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                    <th />
+                  </tr>
+                </thead>
                 <tbody>
                   {files.map((file) => (
                     <tr key={file.name} className="border-t border-[#e6e8eb]">
@@ -91,7 +114,13 @@ export function UploadView({ name }: { name: string }) {
                       <td>{file.type || "—"}</td>
                       <td>{formatBytes(file.size)}</td>
                       <td className="text-right">
-                        <button type="button" className="text-[#006ce0] hover:underline" onClick={() => setFiles((prev) => prev.filter((item) => item !== file))}>Remove</button>
+                        <button
+                          type="button"
+                          className="text-[#006ce0] hover:underline"
+                          onClick={() => setFiles((prev) => prev.filter((item) => item !== file))}
+                        >
+                          Remove
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -100,11 +129,16 @@ export function UploadView({ name }: { name: string }) {
             )}
           </section>
           <div className="flex justify-end gap-2">
-            <Link href={back}><OutlineButton type="button">Cancel</OutlineButton></Link>
+            <Link href={back}>
+              <OutlineButton type="button">Cancel</OutlineButton>
+            </Link>
             <OrangeButton
               disabled={files.length === 0}
               onClick={() => {
-                api.addObjects(name, files.map((file) => ({ key: `${prefix}${file.name}`, sizeBytes: file.size })));
+                api.addObjects(
+                  name,
+                  files.map((file) => ({ key: `${prefix}${file.name}`, sizeBytes: file.size })),
+                );
                 router.push(back);
               }}
             >

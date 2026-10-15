@@ -71,7 +71,13 @@ export function RuleEditor({
                   </select>
                 </td>
                 <td className="py-1 pr-2">
-                  <input aria-label={`Rule ${index + 1} protocol`} className="field" value={rule.protocol} readOnly disabled />
+                  <input
+                    aria-label={`Rule ${index + 1} protocol`}
+                    className="field"
+                    value={rule.protocol}
+                    readOnly
+                    disabled
+                  />
                 </td>
                 <td className="py-1 pr-2">
                   <input
@@ -102,7 +108,9 @@ export function RuleEditor({
                   />
                 </td>
                 <td className="py-1">
-                  <OutlineButton onClick={() => onChange(rules.filter((item) => item.id !== rule.id))}>Delete</OutlineButton>
+                  <OutlineButton onClick={() => onChange(rules.filter((item) => item.id !== rule.id))}>
+                    Delete
+                  </OutlineButton>
                 </td>
               </tr>
             );
@@ -110,9 +118,7 @@ export function RuleEditor({
         </tbody>
       </table>
       <div className="mt-2">
-        <OutlineButton onClick={() => onChange([...rules, newDraftRule(direction)])}>
-          Add rule
-        </OutlineButton>
+        <OutlineButton onClick={() => onChange([...rules, newDraftRule(direction)])}>Add rule</OutlineButton>
       </div>
     </div>
   );

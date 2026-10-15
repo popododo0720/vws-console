@@ -31,7 +31,11 @@ export function BucketDetailView({ name }: { name: string }) {
   const [confirm, setConfirm] = useState("");
 
   const rows = useMemo(
-    () => listAtPrefix(api.objects.filter((item) => item.bucket === name), prefix),
+    () =>
+      listAtPrefix(
+        api.objects.filter((item) => item.bucket === name),
+        prefix,
+      ),
     [api.objects, name, prefix],
   );
   const base = `/storage/buckets/${encodeURIComponent(name)}`;
@@ -47,7 +51,13 @@ export function BucketDetailView({ name }: { name: string }) {
   if (!bucket) {
     return (
       <Shell tree={storageNav}>
-        <PageHeader crumbs={[{ label: "S3", href: "/storage/buckets" }, { label: "Buckets", href: "/storage/buckets" }, { label: name }]} />
+        <PageHeader
+          crumbs={[
+            { label: "S3", href: "/storage/buckets" },
+            { label: "Buckets", href: "/storage/buckets" },
+            { label: name },
+          ]}
+        />
         <div className="px-4 py-6 text-[13px]">
           <p className="font-semibold">Bucket not found</p>
           <p className="mt-1 text-[#5f6b7a]">{name} is not in this account.</p>
@@ -89,17 +99,45 @@ export function BucketDetailView({ name }: { name: string }) {
           </span>
         ),
     },
-    { key: "type", header: "Type", minWidth: 100, sortValue: (row) => (row.isFolder ? "Folder" : row.name.includes(".") ? row.name.split(".").pop() ?? "" : "—"), cell: (row) => (row.isFolder ? "Folder" : row.name.includes(".") ? row.name.split(".").pop() : "—") },
-    { key: "modified", header: "Last modified", minWidth: 140, sortValue: (row) => row.modified, cell: (row) => dash(row.modified) },
-    { key: "size", header: "Size", minWidth: 100, sortValue: (row) => String(row.sizeBytes).padStart(15, "0"), cell: (row) => (row.isFolder ? "—" : formatBytes(row.sizeBytes)) },
-    { key: "class", header: "Storage class", minWidth: 120, sortValue: (row) => row.storageClass, cell: (row) => dash(row.storageClass) },
+    {
+      key: "type",
+      header: "Type",
+      minWidth: 100,
+      sortValue: (row) => (row.isFolder ? "Folder" : row.name.includes(".") ? (row.name.split(".").pop() ?? "") : "—"),
+      cell: (row) => (row.isFolder ? "Folder" : row.name.includes(".") ? row.name.split(".").pop() : "—"),
+    },
+    {
+      key: "modified",
+      header: "Last modified",
+      minWidth: 140,
+      sortValue: (row) => row.modified,
+      cell: (row) => dash(row.modified),
+    },
+    {
+      key: "size",
+      header: "Size",
+      minWidth: 100,
+      sortValue: (row) => String(row.sizeBytes).padStart(15, "0"),
+      cell: (row) => (row.isFolder ? "—" : formatBytes(row.sizeBytes)),
+    },
+    {
+      key: "class",
+      header: "Storage class",
+      minWidth: 120,
+      sortValue: (row) => row.storageClass,
+      cell: (row) => dash(row.storageClass),
+    },
   ];
 
   return (
     <Shell tree={storageNav}>
       <div className="min-h-0 flex-1 overflow-auto bg-[#f3f3f5]">
         <PageHeader
-          crumbs={[{ label: "S3", href: "/storage/buckets" }, { label: "Buckets", href: "/storage/buckets" }, { label: name }]}
+          crumbs={[
+            { label: "S3", href: "/storage/buckets" },
+            { label: "Buckets", href: "/storage/buckets" },
+            { label: name },
+          ]}
           info="Object keys and sizes are kept in this browser session. File contents are not stored."
           meta={api.mode === "sample" ? <SampleBadge /> : null}
         />
@@ -108,7 +146,10 @@ export function BucketDetailView({ name }: { name: string }) {
             <button
               key={item}
               type="button"
-              className={cn("border-b-2 pb-2 capitalize", tab === item ? "border-[#006ce0] font-semibold text-[#006ce0]" : "border-transparent text-[#16191f]")}
+              className={cn(
+                "border-b-2 pb-2 capitalize",
+                tab === item ? "border-[#006ce0] font-semibold text-[#006ce0]" : "border-transparent text-[#16191f]",
+              )}
               onClick={() => go({ tab: item })}
             >
               {item}
@@ -120,14 +161,20 @@ export function BucketDetailView({ name }: { name: string }) {
             <h2 className="text-[16px] font-semibold">Objects ({rows.length})</h2>
             <p className="mb-3 text-[13px] text-[#5f6b7a]">Objects are the fundamental entities stored in a bucket.</p>
             <nav aria-label="Object path" className="mb-3 flex flex-wrap items-center gap-1 text-[13px]">
-              <button type="button" className="text-[#006ce0] hover:underline" onClick={() => go({})}>{name}</button>
+              <button type="button" className="text-[#006ce0] hover:underline" onClick={() => go({})}>
+                {name}
+              </button>
               {segments.map((segment, index) => (
                 <span key={segments.slice(0, index + 1).join("/")} className="flex items-center gap-1">
                   <span className="text-[#5f6b7a]">/</span>
                   {index === segments.length - 1 ? (
                     <span className="font-semibold">{segment}</span>
                   ) : (
-                    <button type="button" className="text-[#006ce0] hover:underline" onClick={() => go({ prefix: `${segments.slice(0, index + 1).join("/")}/` })}>
+                    <button
+                      type="button"
+                      className="text-[#006ce0] hover:underline"
+                      onClick={() => go({ prefix: `${segments.slice(0, index + 1).join("/")}/` })}
+                    >
                       {segment}
                     </button>
                   )}
@@ -137,7 +184,12 @@ export function BucketDetailView({ name }: { name: string }) {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <OutlineButton
                 disabled={selectedRows.length === 0}
-                onClick={() => void copyToClipboard(selectedRows.map((row) => `s3://${name}/${row.key}`).join("\n"), "bucket-detail-view")}
+                onClick={() =>
+                  void copyToClipboard(
+                    selectedRows.map((row) => `s3://${name}/${row.key}`).join("\n"),
+                    "bucket-detail-view",
+                  )
+                }
               >
                 Copy S3 URI
               </OutlineButton>
@@ -159,7 +211,10 @@ export function BucketDetailView({ name }: { name: string }) {
               >
                 Create folder
               </OutlineButton>
-              <Link href={uploadHref} className="inline-flex h-8 items-center rounded-lg bg-[#ff9900] px-3 text-[13px] font-semibold text-[#16191f] hover:bg-[#ec7211]">
+              <Link
+                href={uploadHref}
+                className="inline-flex h-8 items-center rounded-lg bg-[#ff9900] px-3 text-[13px] font-semibold text-[#16191f] hover:bg-[#ec7211]"
+              >
                 Upload
               </Link>
             </div>
@@ -182,11 +237,26 @@ export function BucketDetailView({ name }: { name: string }) {
           <div className="mx-4 mb-6 rounded-lg border border-[#e6e8eb] bg-white p-4 text-[13px]">
             <h2 className="mb-3 text-[16px] font-semibold">Bucket overview</h2>
             <dl className="grid gap-3 sm:grid-cols-2">
-              <div><dt className="text-[#5f6b7a]">Region</dt><dd>{bucket.region}</dd></div>
-              <div><dt className="text-[#5f6b7a]">Creation date</dt><dd>{bucket.created}</dd></div>
-              <div><dt className="text-[#5f6b7a]">Bucket type</dt><dd>{bucket.kind === "general" ? "General purpose" : "Directory"}</dd></div>
-              <div><dt className="text-[#5f6b7a]">Bucket Versioning</dt><dd>{bucket.versioning ? "Enabled" : "Disabled"}</dd></div>
-              <div><dt className="text-[#5f6b7a]">Block all public access</dt><dd>{bucket.blockPublicAccess ? "On" : "Off"}</dd></div>
+              <div>
+                <dt className="text-[#5f6b7a]">Region</dt>
+                <dd>{bucket.region}</dd>
+              </div>
+              <div>
+                <dt className="text-[#5f6b7a]">Creation date</dt>
+                <dd>{bucket.created}</dd>
+              </div>
+              <div>
+                <dt className="text-[#5f6b7a]">Bucket type</dt>
+                <dd>{bucket.kind === "general" ? "General purpose" : "Directory"}</dd>
+              </div>
+              <div>
+                <dt className="text-[#5f6b7a]">Bucket Versioning</dt>
+                <dd>{bucket.versioning ? "Enabled" : "Disabled"}</dd>
+              </div>
+              <div>
+                <dt className="text-[#5f6b7a]">Block all public access</dt>
+                <dd>{bucket.blockPublicAccess ? "On" : "Off"}</dd>
+              </div>
             </dl>
           </div>
         )}
@@ -227,7 +297,10 @@ export function BucketDetailView({ name }: { name: string }) {
             <OrangeButton
               disabled={confirm !== CONFIRM_WORD}
               onClick={() => {
-                api.deleteObjects(name, selectedRows.map((row) => row.key));
+                api.deleteObjects(
+                  name,
+                  selectedRows.map((row) => row.key),
+                );
                 setSelectedIds([]);
                 setDeleteOpen(false);
               }}
@@ -237,7 +310,10 @@ export function BucketDetailView({ name }: { name: string }) {
           </>
         }
       >
-        <p className="mb-3">Deleting {selectedRows.length} selected item{selectedRows.length === 1 ? "" : "s"} cannot be undone. Folders are deleted with everything inside them.</p>
+        <p className="mb-3">
+          Deleting {selectedRows.length} selected item{selectedRows.length === 1 ? "" : "s"} cannot be undone. Folders
+          are deleted with everything inside them.
+        </p>
         <FieldLabel>To confirm, type “{CONFIRM_WORD}”.</FieldLabel>
         <input className="field" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
       </PanelDialog>

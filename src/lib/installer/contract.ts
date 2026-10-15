@@ -43,7 +43,13 @@ export type ApiError = {
   error: { code: string; message: string; fields?: FieldError[]; retryable: boolean };
 };
 
-export type ProgressEvent = { phase: string; index: number; total: number; percent: number; state: "running" | "done" | "failed" };
+export type ProgressEvent = {
+  phase: string;
+  index: number;
+  total: number;
+  percent: number;
+  state: "running" | "done" | "failed";
+};
 export type LogEvent = { ts: string; phase: string; level: string; line: string };
 export type DoneEvent = { result: "succeeded" | "failed"; error?: ApiError["error"] };
 
@@ -59,11 +65,16 @@ export const STORAGE_CHOICES: { driver: StorageDriver; label: string; enabled: b
   { driver: "local", label: "Local", enabled: false },
 ];
 
-const HOST = /^(?=.{1,253}$)([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+const HOST =
+  /^(?=.{1,253}$)([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 const IPV4 = /^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
 
 function isHost(value: string) {
-  return IPV4.test(value) || (HOST.test(value) && !/^[\d.]+$/.test(value)) || /^[0-9a-fA-F:]+$/.test(value) && value.includes(":");
+  return (
+    IPV4.test(value) ||
+    (HOST.test(value) && !/^[\d.]+$/.test(value)) ||
+    (/^[0-9a-fA-F:]+$/.test(value) && value.includes(":"))
+  );
 }
 
 // Client-side mirror of the server rules, so the form can flag errors before PUT.
@@ -72,14 +83,36 @@ export function validateStorage(spec: StorageSpec, storageClasses: string[]): Fi
   const errors: FieldError[] = [];
   if (spec.driver === "nfs") {
     const { server, share } = spec.nfs;
-    if (!server.trim()) errors.push({ field: "spec.storage.nfs.server", code: "required", message: "Enter the NFS server host name or IP address." });
-    else if (!isHost(server.trim())) errors.push({ field: "spec.storage.nfs.server", code: "invalid", message: "Enter a valid host name or IP address." });
-    if (!share.trim()) errors.push({ field: "spec.storage.nfs.share", code: "required", message: "Enter the export path." });
-    else if (!share.trim().startsWith("/")) errors.push({ field: "spec.storage.nfs.share", code: "invalid", message: "The export path must be absolute, for example /exports/vws." });
+    if (!server.trim())
+      errors.push({
+        field: "spec.storage.nfs.server",
+        code: "required",
+        message: "Enter the NFS server host name or IP address.",
+      });
+    else if (!isHost(server.trim()))
+      errors.push({
+        field: "spec.storage.nfs.server",
+        code: "invalid",
+        message: "Enter a valid host name or IP address.",
+      });
+    if (!share.trim())
+      errors.push({ field: "spec.storage.nfs.share", code: "required", message: "Enter the export path." });
+    else if (!share.trim().startsWith("/"))
+      errors.push({
+        field: "spec.storage.nfs.share",
+        code: "invalid",
+        message: "The export path must be absolute, for example /exports/vws.",
+      });
   }
   if (spec.driver === "existing") {
-    if (!spec.storageClass) errors.push({ field: "spec.storage.storageClass", code: "required", message: "Choose a StorageClass." });
-    else if (!storageClasses.includes(spec.storageClass)) errors.push({ field: "spec.storage.storageClass", code: "not_found", message: "That StorageClass is not in the cluster." });
+    if (!spec.storageClass)
+      errors.push({ field: "spec.storage.storageClass", code: "required", message: "Choose a StorageClass." });
+    else if (!storageClasses.includes(spec.storageClass))
+      errors.push({
+        field: "spec.storage.storageClass",
+        code: "not_found",
+        message: "That StorageClass is not in the cluster.",
+      });
   }
   return errors;
 }

@@ -7,11 +7,22 @@ import { computeNav } from "@/lib/console-data";
 import { ResourceDetail } from "@/components/sites/console/resource-detail";
 import { CopyText, dash } from "@/components/sites/console/ui";
 
-export function VolumeDetailView({ id, volume, loadError }: { id: string; volume: Volume | null; loadError: ApiError | null }) {
+export function VolumeDetailView({
+  id,
+  volume,
+  loadError,
+}: {
+  id: string;
+  volume: Volume | null;
+  loadError: ApiError | null;
+}) {
   return (
     <ResourceDetail
       tree={computeNav}
-      crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: "Volumes", href: "/storage/volumes" }]}
+      crumbs={[
+        { label: "EC2", href: "/compute/instances" },
+        { label: "Volumes", href: "/storage/volumes" },
+      ]}
       kind="volume"
       id={id}
       backHref="/storage/volumes"
@@ -29,7 +40,11 @@ export function VolumeDetailView({ id, volume, loadError }: { id: string; volume
               [
                 "Attached instance",
                 volume.attachedTo ? (
-                  <Link key="att" href={`/compute/instances/${volume.attachedTo}`} className="text-[#006ce0] hover:underline">
+                  <Link
+                    key="att"
+                    href={`/compute/instances/${volume.attachedTo}`}
+                    className="text-[#006ce0] hover:underline"
+                  >
                     {volume.attachedTo}
                   </Link>
                 ) : (

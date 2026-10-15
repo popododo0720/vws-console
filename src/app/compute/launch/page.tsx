@@ -7,7 +7,12 @@ export const metadata: Metadata = { title: "Launch an instance · VWS" };
 
 export default async function Page() {
   await connection();
-  const [images, instanceTypes, vpcs, subnets] = await Promise.all([listImages(), listInstanceTypes(), listVpcs(), listSubnets()]);
+  const [images, instanceTypes, vpcs, subnets] = await Promise.all([
+    listImages(),
+    listInstanceTypes(),
+    listVpcs(),
+    listSubnets(),
+  ]);
   const loadError = [images, instanceTypes, vpcs, subnets].find((result) => !result.ok);
   return (
     <LaunchView

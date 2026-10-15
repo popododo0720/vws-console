@@ -11,13 +11,32 @@ import type { SecurityGroup } from "@/types/console";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
 import { OUTBOUND_UNAVAILABLE, RulesTable } from "@/components/sites/console/sg-rules-table";
-import { CopyText, DetailGrid, MenuButton, MenuChevron, OutlineButton, dash, menuTriggerClass } from "@/components/sites/console/ui";
+import {
+  CopyText,
+  DetailGrid,
+  MenuButton,
+  MenuChevron,
+  OutlineButton,
+  dash,
+  menuTriggerClass,
+} from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 
-const crumbBase = [{ label: "EC2", href: "/compute/instances" }, { label: "Security Groups", href: "/network/security-groups" }];
+const crumbBase = [
+  { label: "EC2", href: "/compute/instances" },
+  { label: "Security Groups", href: "/network/security-groups" },
+];
 
-export function SecurityGroupDetailView({ id, group, loadError }: { id: string; group: SecurityGroup | null; loadError: ApiError | null }) {
+export function SecurityGroupDetailView({
+  id,
+  group,
+  loadError,
+}: {
+  id: string;
+  group: SecurityGroup | null;
+  loadError: ApiError | null;
+}) {
   const action = useApiAction();
   const router = useRouter();
   const [tab, setTab] = useState("in");
@@ -52,14 +71,28 @@ export function SecurityGroupDetailView({ id, group, loadError }: { id: string; 
         actions={
           <MenuButton
             className={menuTriggerClass()}
-            label={<>Actions <MenuChevron /></>}
+            label={
+              <>
+                Actions <MenuChevron />
+              </>
+            }
             items={[
-              { label: "Add inbound rules", onSelect: () => router.push(`/network/security-groups/${group.id}/edit/inbound`) },
-              { label: "Copy security group ID", onSelect: () => void copyToClipboard(group.id, "security-group-detail-view") },
+              {
+                label: "Add inbound rules",
+                onSelect: () => router.push(`/network/security-groups/${group.id}/edit/inbound`),
+              },
+              {
+                label: "Copy security group ID",
+                onSelect: () => void copyToClipboard(group.id, "security-group-detail-view"),
+              },
               {
                 label: "Delete security groups",
                 disabled: isDefault || action.pending,
-                onSelect: () => action.run(() => deleteSecurityGroupsAction([group.id]), () => router.push("/network/security-groups")),
+                onSelect: () =>
+                  action.run(
+                    () => deleteSecurityGroupsAction([group.id]),
+                    () => router.push("/network/security-groups"),
+                  ),
               },
             ]}
           />
@@ -74,7 +107,16 @@ export function SecurityGroupDetailView({ id, group, loadError }: { id: string; 
               ["Security group name", group.groupName],
               ["Security group ID", <CopyText key="id" value={group.id} />],
               ["Description", dash(group.description)],
-              ["VPC ID", group.vpcId ? <Link key="vpc" href={`/network/vpcs?vpc=${group.vpcId}`} className="text-[#006ce0] hover:underline">{group.vpcId}</Link> : "—"],
+              [
+                "VPC ID",
+                group.vpcId ? (
+                  <Link key="vpc" href={`/network/vpcs?vpc=${group.vpcId}`} className="text-[#006ce0] hover:underline">
+                    {group.vpcId}
+                  </Link>
+                ) : (
+                  "—"
+                ),
+              ],
               ["Owner", dash(group.owner)],
               ["Inbound rules count", `${inCount} Permission entr${inCount === 1 ? "y" : "ies"}`],
               ["Outbound rules count", "—"],
@@ -87,7 +129,12 @@ export function SecurityGroupDetailView({ id, group, loadError }: { id: string; 
               <button
                 key={item.id}
                 type="button"
-                className={cn("border-b-2 py-2", tab === item.id ? "border-[#006ce0] font-semibold text-[#006ce0]" : "border-transparent text-[#5f6b7a]")}
+                className={cn(
+                  "border-b-2 py-2",
+                  tab === item.id
+                    ? "border-[#006ce0] font-semibold text-[#006ce0]"
+                    : "border-transparent text-[#5f6b7a]",
+                )}
                 onClick={() => setTab(item.id)}
               >
                 {item.label}
@@ -97,10 +144,16 @@ export function SecurityGroupDetailView({ id, group, loadError }: { id: string; 
           <div className="p-4">
             {tab === "in" ? (
               <div className="mb-3 flex justify-end">
-                <OutlineButton onClick={() => router.push(`/network/security-groups/${group.id}/edit/inbound`)}>Add inbound rules</OutlineButton>
+                <OutlineButton onClick={() => router.push(`/network/security-groups/${group.id}/edit/inbound`)}>
+                  Add inbound rules
+                </OutlineButton>
               </div>
             ) : null}
-            <RulesTable rules={group.rules} direction="in" unavailable={tab === "out" ? OUTBOUND_UNAVAILABLE : undefined} />
+            <RulesTable
+              rules={group.rules}
+              direction="in"
+              unavailable={tab === "out" ? OUTBOUND_UNAVAILABLE : undefined}
+            />
           </div>
         </section>
       </div>

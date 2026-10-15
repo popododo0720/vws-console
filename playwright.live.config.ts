@@ -21,7 +21,11 @@ export default defineConfig({
   use: { baseURL: `http://127.0.0.1:${port}` },
   projects: [
     { name: "setup", testMatch: /login\.setup\.ts/, use: { ...devices["Desktop Chrome"] } },
-    { name: "chromium", dependencies: ["setup"], use: { ...devices["Desktop Chrome"], storageState: "e2e-live/.auth/root.json" } },
+    {
+      name: "chromium",
+      dependencies: ["setup"],
+      use: { ...devices["Desktop Chrome"], storageState: "e2e-live/.auth/root.json" },
+    },
   ],
   webServer: [
     {

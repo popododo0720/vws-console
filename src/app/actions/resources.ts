@@ -33,10 +33,18 @@ export async function terminateInstancesAction(ids: string[]) {
 }
 
 /** Renames an instance through its Name tag. console-api has no DeleteTags, so a name cannot be cleared. */
-const NAME_REQUIRED: ApiError = { code: "NameRequired", message: "The VWS API cannot remove a Name tag yet, so enter a name.", requestId: null };
+const NAME_REQUIRED: ApiError = {
+  code: "NameRequired",
+  message: "The VWS API cannot remove a Name tag yet, so enter a name.",
+  requestId: null,
+};
 
 /** Writes the Name tag through one of the tags endpoints. console-api has no DeleteTags, so a name cannot be cleared. */
-async function rename(write: (id: string, tags: Record<string, string>) => Promise<ApiResult<void>>, id: string, name: string) {
+async function rename(
+  write: (id: string, tags: Record<string, string>) => Promise<ApiResult<void>>,
+  id: string,
+  name: string,
+) {
   const trimmed = name.trim();
   return trimmed ? errorOf(write(id, { Name: trimmed })) : NAME_REQUIRED;
 }

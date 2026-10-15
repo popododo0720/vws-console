@@ -6,7 +6,12 @@ import { RefreshCw } from "lucide-react";
 import type { Volume } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { createSnapshotAction, createVolumeAction, deleteVolumesAction, modifyVolumeAction } from "@/app/actions/resources";
+import {
+  createSnapshotAction,
+  createVolumeAction,
+  deleteVolumesAction,
+  modifyVolumeAction,
+} from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
@@ -51,18 +56,78 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
   };
 
   const columns: Column<Volume>[] = [
-    { key: "name", header: "Name", minWidth: 140, sortValue: (row) => row.name, cell: (row) => <NameCell value={row.name} /> },
-    { key: "id", header: "Volume ID", minWidth: 180, sortValue: (row) => row.id, cell: (row) => <DetailLink href={`/storage/volumes/${row.id}`} id={row.id} /> },
-    { key: "state", header: "Volume state", minWidth: 120, sortValue: (row) => volumeState(row), cell: (row) => volumeState(row) },
+    {
+      key: "name",
+      header: "Name",
+      minWidth: 140,
+      sortValue: (row) => row.name,
+      cell: (row) => <NameCell value={row.name} />,
+    },
+    {
+      key: "id",
+      header: "Volume ID",
+      minWidth: 180,
+      sortValue: (row) => row.id,
+      cell: (row) => <DetailLink href={`/storage/volumes/${row.id}`} id={row.id} />,
+    },
+    {
+      key: "state",
+      header: "Volume state",
+      minWidth: 120,
+      sortValue: (row) => volumeState(row),
+      cell: (row) => volumeState(row),
+    },
     { key: "type", header: "Type", minWidth: 130, sortValue: (row) => row.volumeType, cell: (row) => row.volumeType },
-    { key: "size", header: "Size", minWidth: 80, sortValue: (row) => String(row.sizeGiB), cell: (row) => `${row.sizeGiB} GiB` },
-    { key: "iops", header: "IOPS", minWidth: 80, sortValue: (row) => String(row.iops ?? ""), cell: (row) => (row.iops === null ? "—" : row.iops) },
-    { key: "throughput", header: "Throughput", minWidth: 110, sortValue: (row) => row.throughput, cell: (row) => dash(row.throughput) },
+    {
+      key: "size",
+      header: "Size",
+      minWidth: 80,
+      sortValue: (row) => String(row.sizeGiB),
+      cell: (row) => `${row.sizeGiB} GiB`,
+    },
+    {
+      key: "iops",
+      header: "IOPS",
+      minWidth: 80,
+      sortValue: (row) => String(row.iops ?? ""),
+      cell: (row) => (row.iops === null ? "—" : row.iops),
+    },
+    {
+      key: "throughput",
+      header: "Throughput",
+      minWidth: 110,
+      sortValue: (row) => row.throughput,
+      cell: (row) => dash(row.throughput),
+    },
     { key: "owner", header: "Owner ID", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => dash(row.owner) },
-    { key: "snapshot", header: "Snapshot ID", minWidth: 120, sortValue: (row) => row.snapshotId, cell: (row) => dash(row.snapshotId) },
-    { key: "source", header: "Source volume ID", minWidth: 150, sortValue: (row) => row.sourceVolumeId, cell: (row) => dash(row.sourceVolumeId) },
-    { key: "created", header: "Created", minWidth: 120, sortValue: (row) => row.created, cell: (row) => dash(row.created) },
-    { key: "az", header: "Availability", minWidth: 120, sortValue: (row) => row.availabilityZone, cell: (row) => row.availabilityZone },
+    {
+      key: "snapshot",
+      header: "Snapshot ID",
+      minWidth: 120,
+      sortValue: (row) => row.snapshotId,
+      cell: (row) => dash(row.snapshotId),
+    },
+    {
+      key: "source",
+      header: "Source volume ID",
+      minWidth: 150,
+      sortValue: (row) => row.sourceVolumeId,
+      cell: (row) => dash(row.sourceVolumeId),
+    },
+    {
+      key: "created",
+      header: "Created",
+      minWidth: 120,
+      sortValue: (row) => row.created,
+      cell: (row) => dash(row.created),
+    },
+    {
+      key: "az",
+      header: "Availability",
+      minWidth: 120,
+      sortValue: (row) => row.availabilityZone,
+      cell: (row) => row.availabilityZone,
+    },
   ];
 
   return (
@@ -108,7 +173,11 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
                 {
                   label: "Delete volume",
                   disabled: action.pending || selected.length === 0,
-                  onSelect: () => action.run(() => deleteVolumesAction(selected.map((item) => item.id)), () => setSelectedIds([])),
+                  onSelect: () =>
+                    action.run(
+                      () => deleteVolumesAction(selected.map((item) => item.id)),
+                      () => setSelectedIds([]),
+                    ),
                 },
               ]}
             />
@@ -209,7 +278,11 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
             <OrangeButton
               disabled={action.pending || !one || modifySize <= one.sizeGiB}
               onClick={() => {
-                if (one) action.run(() => modifyVolumeAction(one.id, modifySize), () => setModifyOpen(false));
+                if (one)
+                  action.run(
+                    () => modifyVolumeAction(one.id, modifySize),
+                    () => setModifyOpen(false),
+                  );
               }}
             >
               Modify
@@ -233,7 +306,8 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
               onChange={(event) => setModifySize(Number(event.target.value))}
             />
             <p className="mt-1 text-[12px] text-[#5f6b7a]">
-              A volume can only grow. Current size: {one ? `${one.sizeGiB} GiB` : "—"}. Volume type, IOPS and throughput cannot be changed.
+              A volume can only grow. Current size: {one ? `${one.sizeGiB} GiB` : "—"}. Volume type, IOPS and throughput
+              cannot be changed.
             </p>
           </div>
         </div>
@@ -248,7 +322,11 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
             <OrangeButton
               disabled={action.pending}
               onClick={() => {
-                if (one) action.run(() => createSnapshotAction(one.id, snapDescription), () => setSnapOpen(false));
+                if (one)
+                  action.run(
+                    () => createSnapshotAction(one.id, snapDescription),
+                    () => setSnapOpen(false),
+                  );
               }}
             >
               Create snapshot
@@ -263,7 +341,11 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
           </div>
           <div>
             <FieldLabel>Description</FieldLabel>
-            <input className="field" value={snapDescription} onChange={(event) => setSnapDescription(event.target.value)} />
+            <input
+              className="field"
+              value={snapDescription}
+              onChange={(event) => setSnapDescription(event.target.value)}
+            />
           </div>
         </div>
       </PanelDialog>
@@ -276,7 +358,12 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
             <OutlineButton onClick={() => setCreateOpen(false)}>Cancel</OutlineButton>
             <OrangeButton
               disabled={action.pending}
-              onClick={() => action.run(() => createVolumeAction(Number(form.sizeGiB) || 1, form.volumeType), () => setCreateOpen(false))}
+              onClick={() =>
+                action.run(
+                  () => createVolumeAction(Number(form.sizeGiB) || 1, form.volumeType),
+                  () => setCreateOpen(false),
+                )
+              }
             >
               Create volume
             </OrangeButton>
@@ -286,7 +373,11 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
         <div className="space-y-3">
           <div>
             <FieldLabel>Type</FieldLabel>
-            <select className="field" value={form.volumeType} onChange={(event) => setForm({ ...form, volumeType: event.target.value })}>
+            <select
+              className="field"
+              value={form.volumeType}
+              onChange={(event) => setForm({ ...form, volumeType: event.target.value })}
+            >
               {VOLUME_TYPES.map((item) => (
                 <option key={item}>{item}</option>
               ))}
@@ -294,7 +385,13 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
           </div>
           <div>
             <FieldLabel>Size (GiB)</FieldLabel>
-            <input className="field" type="number" min={1} value={form.sizeGiB} onChange={(event) => setForm({ ...form, sizeGiB: Number(event.target.value) })} />
+            <input
+              className="field"
+              type="number"
+              min={1}
+              value={form.sizeGiB}
+              onChange={(event) => setForm({ ...form, sizeGiB: Number(event.target.value) })}
+            />
           </div>
           <ApiErrorAlert error={action.error} title="The volume could not be created" />
         </div>

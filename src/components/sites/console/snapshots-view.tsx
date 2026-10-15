@@ -26,7 +26,15 @@ function snapshotState(row: Snapshot) {
   return row.state ? row.state.charAt(0).toUpperCase() + row.state.slice(1) : "—";
 }
 
-export function SnapshotsView({ snapshots, volumes, loadError }: { snapshots: Snapshot[]; volumes: Volume[]; loadError: ApiError | null }) {
+export function SnapshotsView({
+  snapshots,
+  volumes,
+  loadError,
+}: {
+  snapshots: Snapshot[];
+  volumes: Volume[];
+  loadError: ApiError | null;
+}) {
   const action = useApiAction();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(240);
@@ -37,13 +45,55 @@ export function SnapshotsView({ snapshots, volumes, loadError }: { snapshots: Sn
   const one = selected.length === 1 ? selected[0] : null;
 
   const columns: Column<Snapshot>[] = [
-    { key: "name", header: "Name", minWidth: 140, sortValue: (row) => row.name, cell: (row) => <NameCell value={row.name} /> },
-    { key: "id", header: "Snapshot ID", minWidth: 150, sortValue: (row) => row.id, cell: (row) => <CopyText value={row.id} /> },
-    { key: "size", header: "Full snapshot size", minWidth: 140, sortValue: (row) => String(row.sizeGiB), cell: (row) => `${row.sizeGiB} GiB` },
-    { key: "volume", header: "Volume ID", minWidth: 180, sortValue: (row) => row.volumeId, cell: (row) => <CopyText value={row.volumeId} /> },
-    { key: "state", header: "Snapshot status", minWidth: 120, sortValue: (row) => row.state, cell: (row) => snapshotState(row) },
-    { key: "started", header: "Started", minWidth: 120, sortValue: (row) => row.started, cell: (row) => dash(row.started) },
-    { key: "desc", header: "Description", minWidth: 160, sortValue: (row) => row.description, cell: (row) => dash(row.description) },
+    {
+      key: "name",
+      header: "Name",
+      minWidth: 140,
+      sortValue: (row) => row.name,
+      cell: (row) => <NameCell value={row.name} />,
+    },
+    {
+      key: "id",
+      header: "Snapshot ID",
+      minWidth: 150,
+      sortValue: (row) => row.id,
+      cell: (row) => <CopyText value={row.id} />,
+    },
+    {
+      key: "size",
+      header: "Full snapshot size",
+      minWidth: 140,
+      sortValue: (row) => String(row.sizeGiB),
+      cell: (row) => `${row.sizeGiB} GiB`,
+    },
+    {
+      key: "volume",
+      header: "Volume ID",
+      minWidth: 180,
+      sortValue: (row) => row.volumeId,
+      cell: (row) => <CopyText value={row.volumeId} />,
+    },
+    {
+      key: "state",
+      header: "Snapshot status",
+      minWidth: 120,
+      sortValue: (row) => row.state,
+      cell: (row) => snapshotState(row),
+    },
+    {
+      key: "started",
+      header: "Started",
+      minWidth: 120,
+      sortValue: (row) => row.started,
+      cell: (row) => dash(row.started),
+    },
+    {
+      key: "desc",
+      header: "Description",
+      minWidth: 160,
+      sortValue: (row) => row.description,
+      cell: (row) => dash(row.description),
+    },
     { key: "owner", header: "Owner", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => dash(row.owner) },
   ];
 
@@ -67,7 +117,11 @@ export function SnapshotsView({ snapshots, volumes, loadError }: { snapshots: Sn
                 {
                   label: "Delete snapshot",
                   disabled: action.pending || selected.length === 0,
-                  onSelect: () => action.run(() => deleteSnapshotsAction(selected.map((item) => item.id)), () => setSelectedIds([])),
+                  onSelect: () =>
+                    action.run(
+                      () => deleteSnapshotsAction(selected.map((item) => item.id)),
+                      () => setSelectedIds([]),
+                    ),
                 },
               ]}
             />
@@ -129,7 +183,12 @@ export function SnapshotsView({ snapshots, volumes, loadError }: { snapshots: Sn
             <OutlineButton onClick={() => setCreateOpen(false)}>Cancel</OutlineButton>
             <OrangeButton
               disabled={action.pending || !form.volumeId}
-              onClick={() => action.run(() => createSnapshotAction(form.volumeId, form.description), () => setCreateOpen(false))}
+              onClick={() =>
+                action.run(
+                  () => createSnapshotAction(form.volumeId, form.description),
+                  () => setCreateOpen(false),
+                )
+              }
             >
               Create snapshot
             </OrangeButton>
@@ -142,7 +201,11 @@ export function SnapshotsView({ snapshots, volumes, loadError }: { snapshots: Sn
             {volumes.length === 0 ? (
               <p className="text-[13px] text-[#5f6b7a]">There are no volumes in this region.</p>
             ) : (
-              <select className="field" value={form.volumeId} onChange={(event) => setForm({ ...form, volumeId: event.target.value })}>
+              <select
+                className="field"
+                value={form.volumeId}
+                onChange={(event) => setForm({ ...form, volumeId: event.target.value })}
+              >
                 {volumes.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.id}
@@ -158,7 +221,11 @@ export function SnapshotsView({ snapshots, volumes, loadError }: { snapshots: Sn
           </div>
           <div>
             <FieldLabel>Description</FieldLabel>
-            <input className="field" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+            <input
+              className="field"
+              value={form.description}
+              onChange={(event) => setForm({ ...form, description: event.target.value })}
+            />
           </div>
         </div>
       </PanelDialog>

@@ -8,17 +8,10 @@ import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 
 export function Mark({ className }: { className?: string }) {
-  return (
-    <span className={cn("text-[15px] font-bold tracking-[0.18em] text-[#ff9900]", className)}>
-      VWS
-    </span>
-  );
+  return <span className={cn("text-[15px] font-bold tracking-[0.18em] text-[#ff9900]", className)}>VWS</span>;
 }
 
-export function OrangeButton({
-  className,
-  ...props
-}: React.ComponentProps<typeof Button>) {
+export function OrangeButton({ className, ...props }: React.ComponentProps<typeof Button>) {
   return (
     <Button
       {...props}
@@ -30,10 +23,7 @@ export function OrangeButton({
   );
 }
 
-export function OutlineButton({
-  className,
-  ...props
-}: React.ComponentProps<typeof Button>) {
+export function OutlineButton({ className, ...props }: React.ComponentProps<typeof Button>) {
   return (
     <Button
       variant="outline"
@@ -199,10 +189,7 @@ export function PanelDialog({
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
-      onMouseDown={onClose}
-    >
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -255,7 +242,10 @@ export function MenuChevron() {
 
 export function SampleBadge() {
   return (
-    <span className="rounded-full bg-[#f2f8fd] px-2 py-0.5 text-[11px] font-semibold text-[#006ce0]" title="Values on this screen come from the console's sample data set">
+    <span
+      className="rounded-full bg-[#f2f8fd] px-2 py-0.5 text-[11px] font-semibold text-[#006ce0]"
+      title="Values on this screen come from the console's sample data set"
+    >
       Sample data
     </span>
   );

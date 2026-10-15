@@ -27,7 +27,11 @@ export function sessionFromSetCookie(headers: string[]): ApiSession | null {
 
 /** Keeps a post-login redirect on this console: a single leading slash only. */
 export function safeNext(value: unknown): string {
-  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\") && !value.startsWith("/login")
+  return typeof value === "string" &&
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.startsWith("/\\") &&
+    !value.startsWith("/login")
     ? value
     : "/";
 }

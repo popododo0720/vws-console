@@ -75,7 +75,13 @@ export function BucketsView() {
       ),
     },
     { key: "region", header: "Region", minWidth: 160, sortValue: (row) => row.region, cell: (row) => row.region },
-    { key: "created", header: "Creation date", minWidth: 140, sortValue: (row) => row.created, cell: (row) => row.created },
+    {
+      key: "created",
+      header: "Creation date",
+      minWidth: 140,
+      sortValue: (row) => row.created,
+      cell: (row) => row.created,
+    },
   ];
 
   return (
@@ -92,15 +98,27 @@ export function BucketsView() {
             <div className="mb-3 flex gap-4 px-4 text-[14px]">
               <button
                 type="button"
-                className={cn("border-b-2 pb-2", tab === "general" ? "border-[#006ce0] font-semibold text-[#006ce0]" : "border-transparent text-[#16191f]")}
+                className={cn(
+                  "border-b-2 pb-2",
+                  tab === "general"
+                    ? "border-[#006ce0] font-semibold text-[#006ce0]"
+                    : "border-transparent text-[#16191f]",
+                )}
                 onClick={() => setTab("general")}
               >
                 General purpose buckets
-                <span className="ml-2 rounded bg-[#414d5c] px-1.5 py-0.5 text-[11px] font-semibold text-white">All Regions</span>
+                <span className="ml-2 rounded bg-[#414d5c] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                  All Regions
+                </span>
               </button>
               <button
                 type="button"
-                className={cn("border-b-2 pb-2", tab === "directory" ? "border-[#006ce0] font-semibold text-[#006ce0]" : "border-transparent text-[#16191f]")}
+                className={cn(
+                  "border-b-2 pb-2",
+                  tab === "directory"
+                    ? "border-[#006ce0] font-semibold text-[#006ce0]"
+                    : "border-transparent text-[#16191f]",
+                )}
                 onClick={() => setTab("directory")}
               >
                 Directory buckets
@@ -112,9 +130,13 @@ export function BucketsView() {
                 <div className="mr-auto">
                   <h2 className="flex items-center gap-2 text-[18px] font-bold">
                     {tab === "general" ? "General purpose buckets" : "Directory buckets"}
-                    <span className="font-normal text-[#5f6b7a]">({tab === "general" ? generalCount : directoryCount})</span>
+                    <span className="font-normal text-[#5f6b7a]">
+                      ({tab === "general" ? generalCount : directoryCount})
+                    </span>
                   </h2>
-                  <p className="text-[12px] text-[#5f6b7a]">Buckets are containers for data stored in object storage.</p>
+                  <p className="text-[12px] text-[#5f6b7a]">
+                    Buckets are containers for data stored in object storage.
+                  </p>
                 </div>
                 <OutlineButton
                   disabled={selected.length !== 1}
@@ -122,16 +144,10 @@ export function BucketsView() {
                 >
                   Copy ARN
                 </OutlineButton>
-                <OutlineButton
-                  disabled={selected.length === 0}
-                  onClick={() => openAction("empty")}
-                >
+                <OutlineButton disabled={selected.length === 0} onClick={() => openAction("empty")}>
                   Empty
                 </OutlineButton>
-                <OutlineButton
-                  disabled={selected.length === 0}
-                  onClick={() => openAction("delete")}
-                >
+                <OutlineButton disabled={selected.length === 0} onClick={() => openAction("delete")}>
                   Delete
                 </OutlineButton>
                 <Link href="/storage/buckets/create" className={orangeLinkClass}>
@@ -147,7 +163,9 @@ export function BucketsView() {
                 selectedIds={selected.map((item) => item.name)}
                 onSelectedIds={setSelectedIds}
                 emptyTitle="No buckets"
-                emptyMessage={tab === "general" ? "You don't have any buckets." : "You don't have any directory buckets."}
+                emptyMessage={
+                  tab === "general" ? "You don't have any buckets." : "You don't have any directory buckets."
+                }
                 emptyAction={{ label: "Create bucket", href: "/storage/buckets/create" }}
                 filterPlaceholder="Find buckets by name"
                 initialSort={{ key: "name", dir: "asc" }}
@@ -165,10 +183,22 @@ export function BucketsView() {
             >
               {dash ? (
                 <dl className="space-y-1 text-[13px]">
-                  <div className="flex justify-between"><dt>Buckets</dt><dd>{api.buckets.length}</dd></div>
-                  <div className="flex justify-between"><dt>Instances in region</dt><dd>{api.instances.length}</dd></div>
-                  <div className="flex justify-between"><dt>Volumes in region</dt><dd>{api.volumes.length}</dd></div>
-                  <div className="flex justify-between"><dt>VPCs in region</dt><dd>{api.vpcs.length}</dd></div>
+                  <div className="flex justify-between">
+                    <dt>Buckets</dt>
+                    <dd>{api.buckets.length}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Instances in region</dt>
+                    <dd>{api.instances.length}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Volumes in region</dt>
+                    <dd>{api.volumes.length}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>VPCs in region</dt>
+                    <dd>{api.vpcs.length}</dd>
+                  </div>
                 </dl>
               ) : (
                 <p className="text-[13px] text-[#5f6b7a]">Open the dashboard to see counts for this session.</p>
@@ -252,7 +282,9 @@ function SideCard({
       <div className="flex items-start gap-2">
         <div className="flex items-center gap-2">
           <button type="button" className="flex items-center gap-2 text-left" aria-expanded={open} onClick={onToggle}>
-            <span aria-hidden className="w-3 text-[9px]">{open ? "▼" : "▶"}</span>
+            <span aria-hidden className="w-3 text-[9px]">
+              {open ? "▼" : "▶"}
+            </span>
             <h2 className="whitespace-nowrap font-bold">{title}</h2>
           </button>
           <InfoTip text={info} />

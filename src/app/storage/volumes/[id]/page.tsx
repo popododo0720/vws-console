@@ -9,5 +9,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const { id } = await params;
   await connection();
   const result = await getVolume(id);
-  return <VolumeDetailView id={id} volume={result.ok ? result.value : null} loadError={result.ok ? null : result.error} />;
+  return (
+    <VolumeDetailView id={id} volume={result.ok ? result.value : null} loadError={result.ok ? null : result.error} />
+  );
 }

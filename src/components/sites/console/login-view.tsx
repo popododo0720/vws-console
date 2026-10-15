@@ -14,7 +14,10 @@ export function LoginView({ next, expired }: { next: string; expired: boolean })
   }, [state.next]);
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f2f3f3] px-4">
-      <form action={action} className="w-full max-w-sm space-y-4 rounded-lg border border-[#d5dbdb] bg-white p-6 text-[13px] shadow-sm">
+      <form
+        action={action}
+        className="w-full max-w-sm space-y-4 rounded-lg border border-[#d5dbdb] bg-white p-6 text-[13px] shadow-sm"
+      >
         <div>
           <p className="text-[20px] font-bold tracking-tight text-[#16191f]">VWS</p>
           <h1 className="mt-1 text-[16px] font-semibold">Sign in to the console</h1>
@@ -32,7 +35,14 @@ export function LoginView({ next, expired }: { next: string; expired: boolean })
         <input type="hidden" name="next" value={next} />
         <div>
           <FieldLabel>Account ID</FieldLabel>
-          <input className="field" name="account" aria-label="Account ID" autoComplete="organization" inputMode="numeric" required />
+          <input
+            className="field"
+            name="account"
+            aria-label="Account ID"
+            autoComplete="organization"
+            inputMode="numeric"
+            required
+          />
         </div>
         <div>
           <FieldLabel>User name</FieldLabel>
@@ -40,11 +50,24 @@ export function LoginView({ next, expired }: { next: string; expired: boolean })
         </div>
         <div>
           <FieldLabel>Password</FieldLabel>
-          <input className="field" name="password" type="password" aria-label="Password" autoComplete="current-password" required />
+          <input
+            className="field"
+            name="password"
+            type="password"
+            aria-label="Password"
+            autoComplete="current-password"
+            required
+          />
         </div>
         <div>
           <FieldLabel>MFA code (optional)</FieldLabel>
-          <input className="field" name="mfaCode" aria-label="MFA code" autoComplete="one-time-code" inputMode="numeric" />
+          <input
+            className="field"
+            name="mfaCode"
+            aria-label="MFA code"
+            autoComplete="one-time-code"
+            inputMode="numeric"
+          />
         </div>
         <button
           type="submit"

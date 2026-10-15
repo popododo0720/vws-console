@@ -3,7 +3,12 @@
 import { useState } from "react";
 import type { ElasticIp, Instance } from "@/types/console";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { allocateAddressAction, associateAddressAction, disassociateAddressesAction, releaseAddressesAction } from "@/app/actions/resources";
+import {
+  allocateAddressAction,
+  associateAddressAction,
+  disassociateAddressesAction,
+  releaseAddressesAction,
+} from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { NetworkList } from "@/components/sites/console/network-list";
 import { Column } from "@/components/sites/console/resource-table";
@@ -38,11 +43,35 @@ export function ElasticIpsView({
 
   const columns: Column<ElasticIp>[] = [
     { key: "name", header: "Name", minWidth: 150, sortValue: (row) => row.name, cell: (row) => dash(row.name) },
-    { key: "address", header: "Allocated IPv4 address", minWidth: 170, sortValue: (row) => row.address, cell: (row) => row.address },
+    {
+      key: "address",
+      header: "Allocated IPv4 address",
+      minWidth: 170,
+      sortValue: (row) => row.address,
+      cell: (row) => row.address,
+    },
     { key: "type", header: "Type", minWidth: 100, sortValue: () => "Public IP", cell: () => "Public IP" },
-    { key: "alloc", header: "Allocation ID", minWidth: 210, sortValue: (row) => row.allocationId, cell: (row) => <CopyText value={row.allocationId} /> },
-    { key: "instance", header: "Associated instance ID", minWidth: 200, sortValue: (row) => row.instanceId, cell: (row) => (row.instanceId ? <CopyText value={row.instanceId} /> : "—") },
-    { key: "private", header: "Private IP address", minWidth: 150, sortValue: (row) => row.privateIp, cell: (row) => dash(row.privateIp) },
+    {
+      key: "alloc",
+      header: "Allocation ID",
+      minWidth: 210,
+      sortValue: (row) => row.allocationId,
+      cell: (row) => <CopyText value={row.allocationId} />,
+    },
+    {
+      key: "instance",
+      header: "Associated instance ID",
+      minWidth: 200,
+      sortValue: (row) => row.instanceId,
+      cell: (row) => (row.instanceId ? <CopyText value={row.instanceId} /> : "—"),
+    },
+    {
+      key: "private",
+      header: "Private IP address",
+      minWidth: 150,
+      sortValue: (row) => row.privateIp,
+      cell: (row) => dash(row.privateIp),
+    },
   ];
 
   const open = (next: Dialog) => {
@@ -155,7 +184,11 @@ export function ElasticIpsView({
                 </option>
               ))}
             </select>
-            {error ? <p role="alert" className="text-[13px] text-[#d91515]">{error}</p> : null}
+            {error ? (
+              <p role="alert" className="text-[13px] text-[#d91515]">
+                {error}
+              </p>
+            ) : null}
           </div>
         )}
       </PanelDialog>

@@ -4,7 +4,10 @@ import { safeNext, secureCookies, sessionFromSetCookie } from "./session-cookies
 describe("sessionFromSetCookie", () => {
   it("reads both cookies and the session max-age", () => {
     expect(
-      sessionFromSetCookie(["vws_session=abc; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict", "vws_csrf=def; Path=/; Secure; SameSite=Strict"]),
+      sessionFromSetCookie([
+        "vws_session=abc; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict",
+        "vws_csrf=def; Path=/; Secure; SameSite=Strict",
+      ]),
     ).toEqual({ session: "abc", csrf: "def", maxAge: 43200 });
   });
   it("needs both cookies", () => {

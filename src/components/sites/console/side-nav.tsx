@@ -26,13 +26,7 @@ function isActive(href: string, pathname: string, tab: string | null) {
   return true;
 }
 
-export function SideNav({
-  tree,
-  header,
-}: {
-  tree: NavTree;
-  header?: React.ReactNode;
-}) {
+export function SideNav({ tree, header }: { tree: NavTree; header?: React.ReactNode }) {
   const pathname = usePathname();
   const tab = useSearchParams().get("tab");
   const [open, setOpen] = useState<Record<string, boolean>>(() => initialOpen(tree.sections));
@@ -51,7 +45,9 @@ export function SideNav({
               aria-expanded={expanded}
               onClick={() => setOpen((prev) => ({ ...prev, [node.id]: !expanded }))}
             >
-              <span aria-hidden className="mt-[4px] w-3 shrink-0 text-[9px] leading-none">{expanded ? "▼" : "▶"}</span>
+              <span aria-hidden className="mt-[4px] w-3 shrink-0 text-[9px] leading-none">
+                {expanded ? "▼" : "▶"}
+              </span>
               <span className="min-w-0 break-words">{node.label}</span>
             </button>
             {expanded ? renderNodes(node.children, depth + 1) : null}
@@ -67,7 +63,9 @@ export function SideNav({
       const inner = (
         <>
           <span className="min-w-0 break-words">{node.label}</span>
-          {node.badge ? <span className="ml-2 shrink-0 text-[11px] font-semibold text-[#006ce0]">{node.badge}</span> : null}
+          {node.badge ? (
+            <span className="ml-2 shrink-0 text-[11px] font-semibold text-[#006ce0]">{node.badge}</span>
+          ) : null}
         </>
       );
       if (node.href) {
@@ -78,7 +76,13 @@ export function SideNav({
         );
       }
       return (
-        <button key={node.id} type="button" className={className} style={style} onClick={() => setUnavailable(node.label)}>
+        <button
+          key={node.id}
+          type="button"
+          className={className}
+          style={style}
+          onClick={() => setUnavailable(node.label)}
+        >
           {inner}
         </button>
       );
@@ -91,7 +95,10 @@ export function SideNav({
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" aria-label={tree.title}>
         {renderNodes(tree.sections, 0)}
       </nav>
-      <PanelDialog open={unavailable !== null} title={unavailable ?? ""} onClose={() => setUnavailable(null)}
+      <PanelDialog
+        open={unavailable !== null}
+        title={unavailable ?? ""}
+        onClose={() => setUnavailable(null)}
         footer={<OutlineButton onClick={() => setUnavailable(null)}>Close</OutlineButton>}
       >
         <p>{unavailable} is not part of this preview.</p>

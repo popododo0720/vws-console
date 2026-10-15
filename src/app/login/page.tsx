@@ -6,7 +6,11 @@ import { safeNext } from "@/lib/vws-api/session-cookies";
 
 export const metadata: Metadata = { title: "Sign in · VWS" };
 
-export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const params = await searchParams;
   // With IAM off there is no sign-in; the console works with the server-side token.
   if ((await iamState()) === "off") redirect(safeNext(params.next));

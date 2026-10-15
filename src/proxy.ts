@@ -29,7 +29,13 @@ async function sessionRejected(base: string, session: string): Promise<boolean> 
     });
     return rejected;
   } catch {
-    logAuth({ event: "auth.expired_cookie_cleared", outcome: "error", status: null, requestId: null, durationMs: performance.now() - started });
+    logAuth({
+      event: "auth.expired_cookie_cleared",
+      outcome: "error",
+      status: null,
+      requestId: null,
+      durationMs: performance.now() - started,
+    });
     return false;
   }
 }
@@ -54,7 +60,10 @@ export async function proxy(request: NextRequest) {
       state === "invalid"
         ? 'The console is misconfigured: VWS_CONSOLE_IAM must be "on", "off" or unset.'
         : "The console cannot reach console-api to learn whether sign-in is on. Try again shortly.";
-    return new NextResponse(message, { status: 503, headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "5", "cache-control": "no-store" } });
+    return new NextResponse(message, {
+      status: 503,
+      headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "5", "cache-control": "no-store" },
+    });
   }
   if (state === "off") return NextResponse.next();
   const session = request.cookies.get(SESSION_COOKIE)?.value;
