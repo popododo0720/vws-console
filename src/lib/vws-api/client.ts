@@ -51,7 +51,11 @@ async function modeOrError(): Promise<IamMode | ApiError> {
     if (error instanceof IamUnavailableError && error.state === "invalid") {
       return { code: "ConsoleNotConfigured", message: error.message, requestId: null };
     }
-    return { code: "ServiceUnavailable", message: "The console could not tell whether sign-in is on; try again shortly.", requestId: null };
+    return {
+      code: "ServiceUnavailable",
+      message: "The console could not tell whether sign-in is on; try again shortly.",
+      requestId: null,
+    };
   }
 }
 
@@ -61,7 +65,11 @@ function apiBase(): string | ApiError {
   return { code: "ConsoleNotConfigured", message: "Set VWS_CONSOLE_API_URL on the console server.", requestId: null };
 }
 
-const unavailable: ApiError = { code: "ServiceUnavailable", message: "The VWS console API did not answer.", requestId: null };
+const unavailable: ApiError = {
+  code: "ServiceUnavailable",
+  message: "The VWS console API did not answer.",
+  requestId: null,
+};
 
 function transportError(error: unknown): ApiError {
   if (error instanceof ApiTransportError) {
@@ -96,7 +104,10 @@ async function browserOrigin(): Promise<Record<string, string>> {
 
 async function toLogin(reason: "signin" | "expired"): Promise<never> {
   const path = (await requestHeaders()).get(PATH_HEADER);
-  const query = new URLSearchParams({ ...(reason === "expired" ? { reason } : {}), ...(path ? { next: path } : {}) }).toString();
+  const query = new URLSearchParams({
+    ...(reason === "expired" ? { reason } : {}),
+    ...(path ? { next: path } : {}),
+  }).toString();
   redirect(query ? `${LOGIN_PATH}?${query}` : LOGIN_PATH);
 }
 
@@ -104,7 +115,11 @@ async function toLogin(reason: "signin" | "expired"): Promise<never> {
  * Calls console-api as the signed-in user. The session cookie is forwarded from this server only,
  * and every write carries X-CSRF-Token. A missing session or a 401 redirects to the login screen.
  */
-async function request(method: "GET" | "POST", path: string, body?: unknown): Promise<ApiResult<{ status: number; json: unknown }>> {
+async function request(
+  method: "GET" | "POST",
+  path: string,
+  body?: unknown,
+): Promise<ApiResult<{ status: number; json: unknown }>> {
   const base = apiBase();
   if (typeof base !== "string") return { ok: false, error: base };
   const mode = await modeOrError();
@@ -132,7 +147,11 @@ async function request(method: "GET" | "POST", path: string, body?: unknown): Pr
   let json: unknown;
   try {
     // apiFetch retries a GET on transient failures and sends a POST exactly once.
-    response = await apiFetch(`${base}/api/v1${path}`, { method, headers, body: method === "POST" ? JSON.stringify(body ?? {}) : undefined });
+    response = await apiFetch(`${base}/api/v1${path}`, {
+      method,
+      headers,
+      body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
+    });
   } catch (error) {
     return { ok: false, error: transportError(error) };
   }
@@ -146,14 +165,22 @@ async function request(method: "GET" | "POST", path: string, body?: unknown): Pr
   if (response.status < 200 || response.status > 299) {
     return {
       ok: false,
-      error: parseApiError(json) ?? { code: "InternalError", message: `The VWS console API answered HTTP ${response.status}.`, requestId: response.requestId },
+      error: parseApiError(json) ?? {
+        code: "InternalError",
+        message: `The VWS console API answered HTTP ${response.status}.`,
+        requestId: response.requestId,
+      },
     };
   }
   return { ok: true, value: { status: response.status, json } };
 }
 
 function malformed(path: string): ApiError {
-  return { code: "MalformedResponse", message: `The VWS console API sent an unreadable response for ${path}.`, requestId: null };
+  return {
+    code: "MalformedResponse",
+    message: `The VWS console API sent an unreadable response for ${path}.`,
+    requestId: null,
+  };
 }
 
 async function listAll<T>(path: string, parse: (page: unknown) => T[]): Promise<ApiResult<T[]>> {
@@ -194,7 +221,10 @@ async function mutateReturning(path: string, body?: unknown): Promise<ApiResult<
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   while (op.state === "running") {
     if (Date.now() > deadline) {
-      return { ok: false, error: { code: "OperationTimeout", message: `Operation ${op.id} is still running.`, requestId: null } };
+      return {
+        ok: false,
+        error: { code: "OperationTimeout", message: `Operation ${op.id} is still running.`, requestId: null },
+      };
     }
     await sleep(POLL_INTERVAL_MS);
     const polled = await request("GET", `/operations/${encodeURIComponent(op.id)}`);
@@ -206,7 +236,10 @@ async function mutateReturning(path: string, body?: unknown): Promise<ApiResult<
     }
   }
   if (op.state === "failed") {
-    return { ok: false, error: op.error ?? { code: "OperationFailed", message: `Operation ${op.id} failed.`, requestId: null } };
+    return {
+      ok: false,
+      error: op.error ?? { code: "OperationFailed", message: `Operation ${op.id} failed.`, requestId: null },
+    };
   }
   return { ok: true, value: sent.value.json };
 }
@@ -230,7 +263,8 @@ async function getOne<T>(path: string, map: (item: Record<string, unknown>) => T
   }
 }
 
-export const getInstance = (id: string): Promise<ApiResult<Instance | null>> => getOne(`/instances/${seg(id)}`, toInstance);
+export const getInstance = (id: string): Promise<ApiResult<Instance | null>> =>
+  getOne(`/instances/${seg(id)}`, toInstance);
 export const getVpc = (id: string): Promise<ApiResult<Vpc | null>> => getOne(`/vpcs/${seg(id)}`, toVpc);
 export const getVolume = (id: string): Promise<ApiResult<Volume | null>> => getOne(`/volumes/${seg(id)}`, toVolume);
 
@@ -242,34 +276,42 @@ export const INSTANCE_BATCH_LIMIT = 20;
 /** Starts, stops or terminates instances with one operation per batch of up to 20 IDs. */
 export async function instanceBatch(action: "start" | "stop" | "terminate", ids: string[]): Promise<ApiResult<void>> {
   for (let index = 0; index < ids.length; index += INSTANCE_BATCH_LIMIT) {
-    const result = await mutate(`/instances/${action}`, { instanceIds: ids.slice(index, index + INSTANCE_BATCH_LIMIT) });
+    const result = await mutate(`/instances/${action}`, {
+      instanceIds: ids.slice(index, index + INSTANCE_BATCH_LIMIT),
+    });
     if (!result.ok) return result;
   }
   return { ok: true, value: undefined };
 }
 
 /** Adds or overwrites tags on one instance; tags not named stay. */
-export const createInstanceTags = (id: string, tags: Record<string, string>) => mutate(`/instances/${seg(id)}/tags`, { tags });
+export const createInstanceTags = (id: string, tags: Record<string, string>) =>
+  mutate(`/instances/${seg(id)}/tags`, { tags });
 export const createVolume = (size: number, volumeType: string) => mutate("/volumes", { size, volumeType });
 export const deleteVolume = (id: string) => mutate(`/volumes/${seg(id)}/delete`);
 export const createSnapshot = (volumeId: string, description: string) =>
   mutate("/snapshots", description ? { volumeId, description } : { volumeId });
-const withTags = <T extends object>(body: T, tags: Record<string, string>) => (Object.keys(tags).length > 0 ? { ...body, tags } : body);
+const withTags = <T extends object>(body: T, tags: Record<string, string>) =>
+  Object.keys(tags).length > 0 ? { ...body, tags } : body;
 
-export const createVpc = (cidrBlock: string, tags: Record<string, string> = {}) => mutate("/vpcs", withTags({ cidrBlock }, tags));
+export const createVpc = (cidrBlock: string, tags: Record<string, string> = {}) =>
+  mutate("/vpcs", withTags({ cidrBlock }, tags));
 export const deleteVpc = (id: string) => mutate(`/vpcs/${seg(id)}/delete`);
 export const createSubnet = (vpcId: string, cidrBlock: string, tags: Record<string, string> = {}) =>
   mutate("/subnets", withTags({ vpcId, cidrBlock }, tags));
 /** Adds or overwrites tags on one VPC or subnet; tags not named stay. */
 export const createVpcTags = (id: string, tags: Record<string, string>) => mutate(`/vpcs/${seg(id)}/tags`, { tags });
-export const createSubnetTags = (id: string, tags: Record<string, string>) => mutate(`/subnets/${seg(id)}/tags`, { tags });
+export const createSubnetTags = (id: string, tags: Record<string, string>) =>
+  mutate(`/subnets/${seg(id)}/tags`, { tags });
 export const deleteSubnet = (id: string) => mutate(`/subnets/${seg(id)}/delete`);
 
-export const listInstanceTypes = (): Promise<ApiResult<InstanceType[]>> => listAll("/instance-types", parseInstanceTypes);
+export const listInstanceTypes = (): Promise<ApiResult<InstanceType[]>> =>
+  listAll("/instance-types", parseInstanceTypes);
 /** console-api only grows a volume; it refuses a smaller size. */
 export const modifyVolume = (id: string, size: number) => mutate(`/volumes/${seg(id)}/modify`, { size });
 
-export const listSecurityGroups = (): Promise<ApiResult<SecurityGroup[]>> => listAll("/security-groups", parseSecurityGroups);
+export const listSecurityGroups = (): Promise<ApiResult<SecurityGroup[]>> =>
+  listAll("/security-groups", parseSecurityGroups);
 
 export async function createSecurityGroup(groupName: string, vpcId: string): Promise<ApiResult<string>> {
   const result = await mutateReturning("/security-groups", { groupName, vpcId });
@@ -298,18 +340,28 @@ export type LoginInput = { account: string; userName: string; password: string; 
 export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
   const mode = await modeOrError();
   if (typeof mode !== "string") return { ok: false, error: mode };
-  if (mode === "off") return { ok: false, error: { code: "SignInDisabled", message: "Sign-in is off on this console.", requestId: null } };
+  if (mode === "off")
+    return {
+      ok: false,
+      error: { code: "SignInDisabled", message: "Sign-in is off on this console.", requestId: null },
+    };
   const base = apiBase();
   if (typeof base !== "string") return { ok: false, error: base };
   const started = performance.now();
-  const done = (outcome: "success" | "failure" | "error", status: number | null, requestId: string | null, code?: string | null) =>
-    logAuth({ event: "auth.login", outcome, status, requestId, code, durationMs: performance.now() - started });
+  const done = (
+    outcome: "success" | "failure" | "error",
+    status: number | null,
+    requestId: string | null,
+    code?: string | null,
+  ) => logAuth({ event: "auth.login", outcome, status, requestId, code, durationMs: performance.now() - started });
   let reply: ApiReply;
   try {
     reply = await apiFetch(`${base}/api/v1/auth/login`, {
       method: "POST",
       headers: { accept: "application/json", "content-type": "application/json", ...(await browserOrigin()) },
-      body: JSON.stringify(input.mfaCode ? input : { account: input.account, userName: input.userName, password: input.password }),
+      body: JSON.stringify(
+        input.mfaCode ? input : { account: input.account, userName: input.userName, password: input.password },
+      ),
     });
   } catch (error) {
     const apiError = transportError(error);
@@ -323,7 +375,11 @@ export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
     json = null;
   }
   if (reply.status < 200 || reply.status > 299) {
-    const apiError = parseApiError(json) ?? { code: "InternalError", message: `Sign-in answered HTTP ${reply.status}.`, requestId: reply.requestId };
+    const apiError = parseApiError(json) ?? {
+      code: "InternalError",
+      message: `Sign-in answered HTTP ${reply.status}.`,
+      requestId: reply.requestId,
+    };
     done(reply.status >= 500 ? "error" : "failure", reply.status, reply.requestId, apiError.code);
     return { ok: false, error: apiError };
   }
@@ -343,7 +399,13 @@ export async function logout(): Promise<void> {
   const session = (await iamState()) === "on" ? await currentSession() : null;
   const started = performance.now();
   if (typeof base !== "string" || !session) {
-    logAuth({ event: "auth.logout", outcome: "skipped", status: null, requestId: null, durationMs: performance.now() - started });
+    logAuth({
+      event: "auth.logout",
+      outcome: "skipped",
+      status: null,
+      requestId: null,
+      durationMs: performance.now() - started,
+    });
     return;
   }
   try {
@@ -358,11 +420,24 @@ export async function logout(): Promise<void> {
       body: "{}",
     });
     const ok = reply.status >= 200 && reply.status <= 299;
-    logAuth({ event: "auth.logout", outcome: ok ? "success" : "failure", status: reply.status, requestId: reply.requestId, durationMs: performance.now() - started });
+    logAuth({
+      event: "auth.logout",
+      outcome: ok ? "success" : "failure",
+      status: reply.status,
+      requestId: reply.requestId,
+      durationMs: performance.now() - started,
+    });
   } catch (error) {
     // The console still drops its cookies; the API session then expires on its own.
     const apiError = transportError(error);
-    logAuth({ event: "auth.logout", outcome: "error", status: null, requestId: apiError.requestId, code: apiError.code, durationMs: performance.now() - started });
+    logAuth({
+      event: "auth.logout",
+      outcome: "error",
+      status: null,
+      requestId: apiError.requestId,
+      code: apiError.code,
+      durationMs: performance.now() - started,
+    });
   }
 }
 
@@ -373,7 +448,15 @@ export async function getSession(): Promise<ApiResult<SessionInfo>> {
   if (!result.ok) return result;
   const body = (result.value.json ?? {}) as Record<string, unknown>;
   const text = (value: unknown) => (typeof value === "string" ? value : "");
-  return { ok: true, value: { principal: text(body.principal), account: text(body.account), root: body.root === true, expiresAt: text(body.expiresAt) } };
+  return {
+    ok: true,
+    value: {
+      principal: text(body.principal),
+      account: text(body.account),
+      root: body.root === true,
+      expiresAt: text(body.expiresAt),
+    },
+  };
 }
 
 /**
@@ -399,7 +482,9 @@ export async function signedInSession(): Promise<SessionInfo | null> {
   }
   const started = performance.now();
   try {
-    const reply = await apiFetch(`${base}/api/v1/auth/session`, { headers: { accept: "application/json", ...credentials } });
+    const reply = await apiFetch(`${base}/api/v1/auth/session`, {
+      headers: { accept: "application/json", ...credentials },
+    });
     const ok = reply.status >= 200 && reply.status <= 299;
     logAuth({
       event: "auth.session",
@@ -413,10 +498,22 @@ export async function signedInSession(): Promise<SessionInfo | null> {
     const body = (parseJson(reply.text) ?? {}) as Record<string, unknown>;
     noteLoginEnabled(body);
     const text = (value: unknown) => (typeof value === "string" ? value : "");
-    return { principal: text(body.principal), account: text(body.account), root: body.root === true, expiresAt: text(body.expiresAt) };
+    return {
+      principal: text(body.principal),
+      account: text(body.account),
+      root: body.root === true,
+      expiresAt: text(body.expiresAt),
+    };
   } catch (error) {
     const apiError = transportError(error);
-    logAuth({ event: "auth.session", outcome: "error", status: null, requestId: apiError.requestId, code: apiError.code, durationMs: performance.now() - started });
+    logAuth({
+      event: "auth.session",
+      outcome: "error",
+      status: null,
+      requestId: apiError.requestId,
+      code: apiError.code,
+      durationMs: performance.now() - started,
+    });
     return null;
   }
 }

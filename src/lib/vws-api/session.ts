@@ -17,7 +17,13 @@ export async function currentSession(): Promise<{ session: string; csrf: string 
 export async function storeSession(api: ApiSession) {
   const head = await headers();
   const secure = secureCookies(head.get("x-forwarded-proto"), head.get("host"));
-  const options = { httpOnly: true, secure, sameSite: "lax" as const, path: "/", ...(api.maxAge ? { maxAge: api.maxAge } : {}) };
+  const options = {
+    httpOnly: true,
+    secure,
+    sameSite: "lax" as const,
+    path: "/",
+    ...(api.maxAge ? { maxAge: api.maxAge } : {}),
+  };
   const jar = await cookies();
   jar.set(SESSION_COOKIE, api.session, options);
   jar.set(CSRF_COOKIE, api.csrf, options);

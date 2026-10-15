@@ -15,12 +15,19 @@ export async function loginAction(_prev: LoginState, form: FormData): Promise<Lo
     const value = form.get(name);
     return typeof value === "string" ? value : "";
   };
-  const input = { account: field("account").trim(), userName: field("userName").trim(), password: field("password"), mfaCode: field("mfaCode").trim() };
-  if (!input.account || !input.userName || !input.password) return { error: "Enter the account, user name and password." };
+  const input = {
+    account: field("account").trim(),
+    userName: field("userName").trim(),
+    password: field("password"),
+    mfaCode: field("mfaCode").trim(),
+  };
+  if (!input.account || !input.userName || !input.password)
+    return { error: "Enter the account, user name and password." };
   const result = await vws.login({ ...input, mfaCode: input.mfaCode || undefined });
   if (!result.ok) {
     // console-api gives one message for every bad sign-in, so the console does not reveal which part was wrong.
-    if (result.error.code === "ServiceUnavailable" || result.error.code === "ConsoleNotConfigured") return { error: result.error.message };
+    if (result.error.code === "ServiceUnavailable" || result.error.code === "ConsoleNotConfigured")
+      return { error: result.error.message };
     return { error: "Sign-in failed. Check the account, user name and password, and try again." };
   }
   await storeSession(result.value);

@@ -41,7 +41,10 @@ export function ResourceDetail({
 }) {
   return (
     <Shell tree={tree}>
-      <PageHeader crumbs={[...crumbs, { label: id }]} info={`A single ${kind} in the current region, read from the VWS API.`} />
+      <PageHeader
+        crumbs={[...crumbs, { label: id }]}
+        info={`A single ${kind} in the current region, read from the VWS API.`}
+      />
       <ApiErrorAlert error={loadError} title={`The ${kind} could not be loaded`} />
       {!loadError && !found ? (
         <div className="px-4 py-6 text-[13px]">

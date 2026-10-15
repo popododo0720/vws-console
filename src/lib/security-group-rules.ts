@@ -21,7 +21,9 @@ export const RULE_TYPES: RuleType[] = [
 ];
 
 export function ruleTypeOf(rule: Pick<SecurityGroupRule, "protocol" | "port">): RuleType {
-  const exact = RULE_TYPES.find((item) => item.protocol === rule.protocol && item.port === rule.port && !item.portEditable);
+  const exact = RULE_TYPES.find(
+    (item) => item.protocol === rule.protocol && item.port === rule.port && !item.portEditable,
+  );
   if (exact) return exact;
   return RULE_TYPES.find((item) => item.protocol === rule.protocol && item.portEditable) ?? RULE_TYPES[0];
 }
@@ -61,7 +63,9 @@ function validPortRange(value: string): boolean {
 
 export function validateRule(rule: SecurityGroupRule): string | null {
   const type = ruleTypeOf(rule);
-  if (type.portEditable && !validPortRange(rule.port)) return "Port range must be a port or a range such as 8000-8080 (0-65535).";
-  if (!validCidr(rule.source) && !/^sg-[0-9a-f]{8,}$/.test(rule.source)) return "Source must be a CIDR block such as 10.0.0.0/16 or a security group ID.";
+  if (type.portEditable && !validPortRange(rule.port))
+    return "Port range must be a port or a range such as 8000-8080 (0-65535).";
+  if (!validCidr(rule.source) && !/^sg-[0-9a-f]{8,}$/.test(rule.source))
+    return "Source must be a CIDR block such as 10.0.0.0/16 or a security group ID.";
   return null;
 }

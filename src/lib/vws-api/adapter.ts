@@ -1,4 +1,14 @@
-import type { ElasticIp, Instance, InstanceState, SecurityGroup, SecurityGroupRule, Snapshot, Subnet, Volume, Vpc } from "@/types/console";
+import type {
+  ElasticIp,
+  Instance,
+  InstanceState,
+  SecurityGroup,
+  SecurityGroupRule,
+  Snapshot,
+  Subnet,
+  Volume,
+  Vpc,
+} from "@/types/console";
 
 export const REGION = "vws-1";
 
@@ -13,7 +23,13 @@ export type Image = { id: string; name: string; state: string; owner: string };
 /** Machine types vws-compute accepts (console-api resource/instance.go). The API has no list endpoint. */
 export type InstanceType = { id: string; vcpus: number; memoryMiB: number };
 
-export type LaunchRequest = { imageId: string; instanceType: string; subnetId: string; count: number; tags: Record<string, string> };
+export type LaunchRequest = {
+  imageId: string;
+  instanceType: string;
+  subnetId: string;
+  count: number;
+  tags: Record<string, string>;
+};
 
 export type Operation = { id: string; state: OperationState; error: ApiError | null };
 
@@ -30,7 +46,9 @@ function bool(value: unknown): boolean | null {
 
 /** Reads a tags object, keeping string values only. */
 function tags(value: unknown): Record<string, string> {
-  return Object.fromEntries(Object.entries(obj(value)).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+  return Object.fromEntries(
+    Object.entries(obj(value)).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
 }
 
 function str(value: unknown): string {
@@ -58,7 +76,8 @@ export function parseApiError(body: unknown): ApiError | null {
 export function parseOperation(body: unknown): Operation {
   const op = obj(body);
   const state = str(op.state);
-  if (state !== "running" && state !== "succeeded" && state !== "failed") throw new Error(`unknown operation state ${state}`);
+  if (state !== "running" && state !== "succeeded" && state !== "failed")
+    throw new Error(`unknown operation state ${state}`);
   const error = op.error ? obj(op.error) : null;
   return {
     id: str(op.id),
@@ -67,7 +86,14 @@ export function parseOperation(body: unknown): Operation {
   };
 }
 
-const instanceStates: readonly InstanceState[] = ["pending", "running", "stopping", "stopped", "shutting-down", "terminated"];
+const instanceStates: readonly InstanceState[] = [
+  "pending",
+  "running",
+  "stopping",
+  "stopped",
+  "shutting-down",
+  "terminated",
+];
 
 function instanceState(name: string): InstanceState {
   const found = instanceStates.find((state) => state === name);
@@ -164,7 +190,11 @@ export const parseVpcs = (page: unknown) => list(page).map(toVpc);
 export const parseSubnets = (page: unknown) => list(page).map(toSubnet);
 
 export function toInstanceType(item: Json): InstanceType {
-  return { id: str(item.instanceType), vcpus: typeof item.vcpus === "number" ? item.vcpus : 0, memoryMiB: typeof item.memoryMiB === "number" ? item.memoryMiB : 0 };
+  return {
+    id: str(item.instanceType),
+    vcpus: typeof item.vcpus === "number" ? item.vcpus : 0,
+    memoryMiB: typeof item.memoryMiB === "number" ? item.memoryMiB : 0,
+  };
 }
 
 export const parseInstanceTypes = (page: unknown) => list(page).map(toInstanceType);
@@ -181,7 +211,12 @@ export function toIngressRule(item: Json): SecurityGroupRule {
   const label = protocolLabels[protocol] ?? protocol.toUpperCase();
   const from = num(item.fromPort);
   const to = num(item.toPort);
-  const port = label === "All" || label === "ICMP" || from === null ? "All" : from === to || to === null ? String(from) : `${from}-${to}`;
+  const port =
+    label === "All" || label === "ICMP" || from === null
+      ? "All"
+      : from === to || to === null
+        ? String(from)
+        : `${from}-${to}`;
   return { id: "", direction: "in", protocol: label, port, source: str(item.cidrIp), description: "" };
 }
 
@@ -202,10 +237,13 @@ export function toSecurityGroup(item: Json): SecurityGroup {
 export type IngressPermission = { ipProtocol: string; fromPort: number; toPort: number; cidrIp: string };
 
 /** Maps a console rule onto one authorize-ingress body, or explains why the API cannot take it. */
-export function toIngressPermission(rule: SecurityGroupRule): { ok: true; value: IngressPermission } | { ok: false; error: string } {
+export function toIngressPermission(
+  rule: SecurityGroupRule,
+): { ok: true; value: IngressPermission } | { ok: false; error: string } {
   const protocol = Object.entries(protocolLabels).find(([, label]) => label === rule.protocol)?.[0];
   if (!protocol) return { ok: false, error: `The VWS API does not take protocol ${rule.protocol}.` };
-  if (rule.source.startsWith("sg-")) return { ok: false, error: "The VWS API only takes CIDR sources, not security group IDs." };
+  if (rule.source.startsWith("sg-"))
+    return { ok: false, error: "The VWS API only takes CIDR sources, not security group IDs." };
   let fromPort = 0;
   let toPort = 0;
   if (protocol === "tcp" || protocol === "udp") {
@@ -257,7 +295,10 @@ export function firstItem(body: unknown, key: string): string {
 export type Identity = { userName: string; accountId: string };
 
 /** Maps GET /auth/session to the menu identity: the user name is the last part of the principal ARN. */
-export function identityFromSession(session: { principal?: string; account?: string } | null, mode: { iam: boolean } = { iam: true }): Identity {
+export function identityFromSession(
+  session: { principal?: string; account?: string } | null,
+  mode: { iam: boolean } = { iam: true },
+): Identity {
   if (!mode.iam) return { userName: "root (IAM off)", accountId: session?.account?.trim() || "—" };
   const principal = session?.principal?.trim() ?? "";
   const resource = principal.slice(principal.lastIndexOf(":") + 1);

@@ -14,9 +14,6 @@ describe("global error boundary", () => {
     render(<GlobalError error={error} reset={() => {}} />, { container: document });
     expect(screen.getByText("req-root")).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("layout secret");
-    expect(consoleError).toHaveBeenCalledWith(
-      "[vws-console]",
-      expect.objectContaining({ context: "root-layout" }),
-    );
+    expect(consoleError).toHaveBeenCalledWith("[vws-console]", expect.objectContaining({ context: "root-layout" }));
   });
 });

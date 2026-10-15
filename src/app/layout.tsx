@@ -21,7 +21,9 @@ export default async function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="console min-h-full">
-        <ConsoleProvider identity={identity} signIn={signIn}>{children}</ConsoleProvider>
+        <ConsoleProvider identity={identity} signIn={signIn}>
+          {children}
+        </ConsoleProvider>
       </body>
     </html>
   );

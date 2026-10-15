@@ -72,7 +72,10 @@ export function SecurityGroupRulesEditView({
   const error = firstRuleError(added) ?? mapped.error;
   return (
     <Shell tree={computeNav}>
-      <PageHeader crumbs={crumbs} info="New rules are added through the VWS API. It cannot remove or change existing rules yet." />
+      <PageHeader
+        crumbs={crumbs}
+        info="New rules are added through the VWS API. It cannot remove or change existing rules yet."
+      />
       <ApiErrorAlert error={action.error} title="The rules could not be added" />
       <div className="min-h-0 flex-1 space-y-4 overflow-auto px-4 pb-6 text-[13px]">
         <section className="rounded-lg border border-[#d5dbdb] p-4">
@@ -83,7 +86,11 @@ export function SecurityGroupRulesEditView({
           <h2 className="mb-2 text-[16px] font-semibold">New inbound rules</h2>
           <RuleEditor direction="in" rules={added} onChange={setAdded} />
         </section>
-        {touched && error ? <p role="alert" className="text-[12px] text-[#d91515]">{error}</p> : null}
+        {touched && error ? (
+          <p role="alert" className="text-[12px] text-[#d91515]">
+            {error}
+          </p>
+        ) : null}
         <div className="flex justify-end gap-2">
           <OutlineButton onClick={() => router.push(back)}>Cancel</OutlineButton>
           <OrangeButton
@@ -91,7 +98,10 @@ export function SecurityGroupRulesEditView({
             onClick={() => {
               setTouched(true);
               if (error) return;
-              action.run(() => authorizeIngressAction(group.id, mapped.permissions), () => router.push(back));
+              action.run(
+                () => authorizeIngressAction(group.id, mapped.permissions),
+                () => router.push(back),
+              );
             }}
           >
             Add rules

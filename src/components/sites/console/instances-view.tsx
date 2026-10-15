@@ -7,7 +7,12 @@ import { CircleCheck, ExternalLink, Info, RefreshCw } from "lucide-react";
 import type { Instance } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { renameInstanceAction, startInstancesAction, stopInstancesAction, terminateInstancesAction } from "@/app/actions/resources";
+import {
+  renameInstanceAction,
+  startInstancesAction,
+  stopInstancesAction,
+  terminateInstancesAction,
+} from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
@@ -27,8 +32,7 @@ import {
 function StatusCell({ row }: { row: Instance }) {
   if (row.status === "none") return <span>—</span>;
   const color = row.status === "ok" ? "#037f0c" : row.status === "impaired" ? "#d13212" : "#5f6b7a";
-  const label =
-    row.status === "initializing" ? "Initializing" : `${row.checksPassed}/${row.checksTotal} checks passed`;
+  const label = row.status === "initializing" ? "Initializing" : `${row.checksPassed}/${row.checksTotal} checks passed`;
   return (
     <span className="inline-flex items-center gap-1" style={{ color }}>
       <CircleCheck className="size-3.5" />
@@ -61,17 +65,71 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
         />
       ),
     },
-    { key: "id", header: "Instance ID", minWidth: 180, sortValue: (row) => row.id, cell: (row) => <InstanceLink id={row.id} /> },
-    { key: "state", header: "Instance state", minWidth: 140, sortValue: (row) => row.state, cell: (row) => <StateDot state={row.state} /> },
+    {
+      key: "id",
+      header: "Instance ID",
+      minWidth: 180,
+      sortValue: (row) => row.id,
+      cell: (row) => <InstanceLink id={row.id} />,
+    },
+    {
+      key: "state",
+      header: "Instance state",
+      minWidth: 140,
+      sortValue: (row) => row.state,
+      cell: (row) => <StateDot state={row.state} />,
+    },
     { key: "type", header: "Instance type", minWidth: 120, sortValue: (row) => row.type, cell: (row) => row.type },
-    { key: "status", header: "Status check", minWidth: 170, sortValue: (row) => row.status, cell: (row) => <StatusCell row={row} /> },
-    { key: "az", header: "Availability Zone", minWidth: 150, sortValue: (row) => row.availabilityZone, cell: (row) => row.availabilityZone },
+    {
+      key: "status",
+      header: "Status check",
+      minWidth: 170,
+      sortValue: (row) => row.status,
+      cell: (row) => <StatusCell row={row} />,
+    },
+    {
+      key: "az",
+      header: "Availability Zone",
+      minWidth: 150,
+      sortValue: (row) => row.availabilityZone,
+      cell: (row) => row.availabilityZone,
+    },
     { key: "vpc", header: "VPC ID", minWidth: 190, sortValue: (row) => row.vpcId, cell: (row) => dash(row.vpcId) },
-    { key: "launch", header: "Launch time", minWidth: 200, sortValue: (row) => row.launchedAt, cell: (row) => dash(row.launchedAt) },
-    { key: "dns", header: "Public IPv4 DNS", minWidth: 200, sortValue: (row) => row.publicDns, cell: (row) => dash(row.publicDns) },
-    { key: "ip", header: "Public IPv4 address", minWidth: 150, sortValue: (row) => row.publicIpv4, cell: (row) => dash(row.publicIpv4) },
-    { key: "eip", header: "Elastic IP", minWidth: 120, sortValue: (row) => row.elasticIp, cell: (row) => dash(row.elasticIp) },
-    { key: "eipalloc", header: "Elastic IP allocation ID", minWidth: 210, sortValue: (row) => row.publicIpAllocationId, cell: (row) => dash(row.publicIpAllocationId) },
+    {
+      key: "launch",
+      header: "Launch time",
+      minWidth: 200,
+      sortValue: (row) => row.launchedAt,
+      cell: (row) => dash(row.launchedAt),
+    },
+    {
+      key: "dns",
+      header: "Public IPv4 DNS",
+      minWidth: 200,
+      sortValue: (row) => row.publicDns,
+      cell: (row) => dash(row.publicDns),
+    },
+    {
+      key: "ip",
+      header: "Public IPv4 address",
+      minWidth: 150,
+      sortValue: (row) => row.publicIpv4,
+      cell: (row) => dash(row.publicIpv4),
+    },
+    {
+      key: "eip",
+      header: "Elastic IP",
+      minWidth: 120,
+      sortValue: (row) => row.elasticIp,
+      cell: (row) => dash(row.elasticIp),
+    },
+    {
+      key: "eipalloc",
+      header: "Elastic IP allocation ID",
+      minWidth: 210,
+      sortValue: (row) => row.publicIpAllocationId,
+      cell: (row) => dash(row.publicIpAllocationId),
+    },
     { key: "ipv6", header: "IPv6 IPs", minWidth: 120, sortValue: (row) => row.ipv6, cell: (row) => dash(row.ipv6) },
   ];
 
@@ -79,10 +137,7 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
     <Shell tree={computeNav}>
       <PageHeader
         mark="C"
-        crumbs={[
-          { label: "EC2", href: "/compute/instances" },
-          { label: "Instances" },
-        ]}
+        crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: "Instances" }]}
         info="Instances are virtual machines in the current region, read from the VWS API."
         actions={
           <>
@@ -104,7 +159,10 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
               className={blueMenuTriggerClass()}
               label={
                 <>
-                  Instance state <span aria-hidden className="text-[9px]">▼</span>
+                  Instance state{" "}
+                  <span aria-hidden className="text-[9px]">
+                    ▼
+                  </span>
                 </>
               }
               items={[
@@ -121,7 +179,11 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
                 {
                   label: "Terminate",
                   disabled: action.pending || selected.length === 0,
-                  onSelect: () => action.run(() => terminateInstancesAction(selected.map((item) => item.id)), () => setSelectedIds([])),
+                  onSelect: () =>
+                    action.run(
+                      () => terminateInstancesAction(selected.map((item) => item.id)),
+                      () => setSelectedIds([]),
+                    ),
                 },
               ]}
             />
@@ -129,7 +191,10 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
               className={blueMenuTriggerClass()}
               label={
                 <>
-                  Actions <span aria-hidden className="text-[9px]">▼</span>
+                  Actions{" "}
+                  <span aria-hidden className="text-[9px]">
+                    ▼
+                  </span>
                 </>
               }
               items={[
@@ -154,7 +219,11 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
               <MenuButton
                 align="right"
                 className="inline-flex h-8 items-center rounded-r-lg border-l border-[#16191f]/30 bg-[#ff9900] px-2 text-[#16191f] hover:bg-[#ec7211]"
-                label={<span aria-label="More launch options" className="text-[9px]">▼</span>}
+                label={
+                  <span aria-label="More launch options" className="text-[9px]">
+                    ▼
+                  </span>
+                }
                 items={[
                   { label: "Launch instances", href: "/compute/launch" },
                   { label: "Launch instance from template", disabled: true },
@@ -183,7 +252,15 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
         ]}
       />
       <DetailDock
-        title={one ? (one.name ? `${one.id} (${one.name})` : one.id) : selected.length > 1 ? `${selected.length} instances` : "All instances"}
+        title={
+          one
+            ? one.name
+              ? `${one.id} (${one.name})`
+              : one.id
+            : selected.length > 1
+              ? `${selected.length} instances`
+              : "All instances"
+        }
         info="Alarm, health, and event summaries for the current region."
         tabs={one ? instanceTabs : undefined}
         tab={panel}
@@ -198,12 +275,19 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
         ) : (
           <div className="grid gap-3 lg:grid-cols-3">
             <StatusCard title="Instance alarm states" body="No alarms for this region." link="View metrics" />
-            <StatusCard title="Service health" body="All listed services are operating normally." link="View service status" />
+            <StatusCard
+              title="Service health"
+              body="All listed services are operating normally."
+              link="View service status"
+            />
             <StatusCard title="Health events affecting instances" body="No health events." link="View health events" />
           </div>
         )}
       </DetailDock>
-      <PanelDialog open={connectOpen} title="Connect" onClose={() => setConnectOpen(false)}
+      <PanelDialog
+        open={connectOpen}
+        title="Connect"
+        onClose={() => setConnectOpen(false)}
         footer={<OrangeButton onClick={() => setConnectOpen(false)}>Close</OrangeButton>}
       >
         <p>

@@ -98,7 +98,11 @@ describe("iamMode", () => {
     warn.mockRestore();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(lines).toHaveLength(1);
-    expect(JSON.parse(lines[0])).toMatchObject({ event: "config.invalid", outcome: "error", code: "InvalidVwsConsoleIam" });
+    expect(JSON.parse(lines[0])).toMatchObject({
+      event: "config.invalid",
+      outcome: "error",
+      code: "InvalidVwsConsoleIam",
+    });
     expect(lines[0]).not.toContain("enabled");
   });
 

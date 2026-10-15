@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-test("IAM off: pages open without sign-in and writes go through with the server-side token", async ({ page, context }) => {
+test("IAM off: pages open without sign-in and writes go through with the server-side token", async ({
+  page,
+  context,
+}) => {
   await page.goto("/network/vpcs");
   await expect(page).toHaveURL(/\/network\/vpcs$/);
   await expect(page.getByText("VPCs could not be loaded")).toHaveCount(0);
@@ -11,7 +14,9 @@ test("IAM off: pages open without sign-in and writes go through with the server-
   await expect(page.getByRole("row").filter({ hasText: "10.91.0.0/16" })).toHaveCount(1);
 
   // The VPC really exists in console-api, created with the token (checked here with the same token).
-  const listed = await fetch(`${process.env.E2E_API_URL}/api/v1/vpcs`, { headers: { authorization: "Bearer dev-token" } });
+  const listed = await fetch(`${process.env.E2E_API_URL}/api/v1/vpcs`, {
+    headers: { authorization: "Bearer dev-token" },
+  });
   expect(JSON.stringify(await listed.json())).toContain("10.91.0.0/16");
 
   expect((await context.cookies()).filter((c) => c.name.startsWith("vws_"))).toEqual([]);

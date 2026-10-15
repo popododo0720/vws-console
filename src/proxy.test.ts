@@ -4,12 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { proxy } from "./proxy";
 
 function req(path: string, cookies: Record<string, string> = {}) {
-  const cookie = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join("; ");
+  const cookie = Object.entries(cookies)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("; ");
   return new NextRequest(`http://console.test${path}`, { headers: cookie ? { cookie } : {} });
 }
 
 function deleted(response: Response) {
-  return response.headers.getSetCookie().filter((c) => /Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(c)).map((c) => c.split("=")[0]);
+  return response.headers
+    .getSetCookie()
+    .filter((c) => /Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(c))
+    .map((c) => c.split("=")[0]);
 }
 
 describe("proxy", () => {

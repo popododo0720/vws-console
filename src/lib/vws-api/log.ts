@@ -3,12 +3,7 @@
  * written, so passwords, MFA codes, session tokens, cookies and CSRF values cannot reach the log.
  */
 export type AuthEvent =
-  | "auth.login"
-  | "auth.logout"
-  | "auth.session"
-  | "auth.expired_cookie_cleared"
-  | "iam.mode_detect"
-  | "config.invalid";
+  "auth.login" | "auth.logout" | "auth.session" | "auth.expired_cookie_cleared" | "iam.mode_detect" | "config.invalid";
 
 export type AuthLogFields = {
   event: AuthEvent;

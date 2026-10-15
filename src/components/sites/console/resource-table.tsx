@@ -21,7 +21,7 @@ type Preset<T> = {
   match: (row: T) => boolean;
 };
 
-export function ResourceTable<T,>({
+export function ResourceTable<T>({
   rows,
   getId,
   columns,
@@ -67,7 +67,10 @@ export function ResourceTable<T,>({
     const next = rows.filter((row) => {
       if (presetMatch && !presetMatch(row)) return false;
       if (!query) return true;
-      return columns.map((column) => column.sortValue(row)).join("\n").includes(query);
+      return columns
+        .map((column) => column.sortValue(row))
+        .join("\n")
+        .includes(query);
     });
     if (!sort) return next;
     const column = columns.find((item) => item.key === sort.key);
@@ -102,7 +105,9 @@ export function ResourceTable<T,>({
       <div className="mb-2 flex flex-wrap items-center gap-2">
         {presets.length > 0 ? (
           <label className="relative">
-            <span className="absolute -top-2 left-2 z-[1] bg-white px-1 text-[10.5px] font-semibold leading-none text-[#5f6b7a]">Saved filter sets</span>
+            <span className="absolute -top-2 left-2 z-[1] bg-white px-1 text-[10.5px] font-semibold leading-none text-[#5f6b7a]">
+              Saved filter sets
+            </span>
             <select
               className="field fit appearance-none pr-8"
               value={preset}
@@ -122,32 +127,35 @@ export function ResourceTable<T,>({
           </label>
         ) : null}
         <div className="relative min-w-48 flex-1">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6b7a]" />
-        <input
-          className="field w-full" style={{ paddingLeft: 32 }}
-          value={query}
-          placeholder={filterPlaceholder}
-          aria-label={filterPlaceholder}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setPage(0);
-          }}
-        />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6b7a]" />
+          <input
+            className="field w-full"
+            style={{ paddingLeft: 32 }}
+            value={query}
+            placeholder={filterPlaceholder}
+            aria-label={filterPlaceholder}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(0);
+            }}
+          />
         </div>
-        {hideRefresh ? null : <button
-          type="button"
-          aria-label="Refresh"
-          className="grid size-8 place-items-center rounded-lg border border-[#c6c9ce] bg-white hover:bg-[#f7f8f8]"
-          onClick={() => {
-            setQuery("");
-            setPreset("");
-            setSort(initialSort);
-            setPage(0);
-            onRefresh?.();
-          }}
-        >
-          <RefreshCw className="size-3.5" />
-        </button>}
+        {hideRefresh ? null : (
+          <button
+            type="button"
+            aria-label="Refresh"
+            className="grid size-8 place-items-center rounded-lg border border-[#c6c9ce] bg-white hover:bg-[#f7f8f8]"
+            onClick={() => {
+              setQuery("");
+              setPreset("");
+              setSort(initialSort);
+              setPage(0);
+              onRefresh?.();
+            }}
+          >
+            <RefreshCw className="size-3.5" />
+          </button>
+        )}
         <div className="flex items-center gap-1 text-[13px]">
           <button
             type="button"
@@ -184,7 +192,12 @@ export function ResourceTable<T,>({
         />
       </div>
       <div className={cn("relative flex min-h-0 flex-1 flex-col", bodyClassName)}>
-        <div className={cn("overflow-auto rounded-md border border-[#e6e8eb]", filtered.length === 0 ? "shrink-0" : "min-h-0 flex-1")}>
+        <div
+          className={cn(
+            "overflow-auto rounded-md border border-[#e6e8eb]",
+            filtered.length === 0 ? "shrink-0" : "min-h-0 flex-1",
+          )}
+        >
           <table className="w-max min-w-full border-collapse text-left text-[13px]">
             <thead className="sticky top-0 z-[1] bg-white">
               <tr className="border-b border-[#e6e8eb] text-[12px] text-[#5f6b7a]">
@@ -201,11 +214,23 @@ export function ResourceTable<T,>({
                   />
                 </th>
                 {columns.map((column) => (
-                  <th key={column.key} className="border-l border-[#e6e8eb] px-2 py-2 font-semibold first:border-l-0" style={{ minWidth: column.minWidth }}>
-                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort(column.key)}>
+                  <th
+                    key={column.key}
+                    className="border-l border-[#e6e8eb] px-2 py-2 font-semibold first:border-l-0"
+                    style={{ minWidth: column.minWidth }}
+                  >
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1"
+                      onClick={() => toggleSort(column.key)}
+                    >
                       {column.header}
                       {sort?.key === column.key ? (
-                        sort.dir === "asc" ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />
+                        sort.dir === "asc" ? (
+                          <ChevronUp className="size-3" />
+                        ) : (
+                          <ChevronDown className="size-3" />
+                        )
                       ) : (
                         <MenuChevron />
                       )}
@@ -235,9 +260,7 @@ export function ResourceTable<T,>({
                         checked={selected}
                         onClick={(event) => event.stopPropagation()}
                         onChange={() => {
-                          onSelectedIds(
-                            selected ? selectedIds.filter((item) => item !== id) : [...selectedIds, id],
-                          );
+                          onSelectedIds(selected ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]);
                         }}
                       />
                     </td>
@@ -283,13 +306,7 @@ export function ResourceTable<T,>({
   );
 }
 
-export function NameCell({
-  value,
-  onRename,
-}: {
-  value: string;
-  onRename?: (name: string) => void;
-}) {
+export function NameCell({ value, onRename }: { value: string; onRename?: (name: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value);
   if (!onRename) return <span>{value.trim() ? value : "—"}</span>;

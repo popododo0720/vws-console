@@ -8,5 +8,7 @@ export const metadata: Metadata = { title: "Security groups · VWS" };
 export default async function Page() {
   await connection();
   const result = await listSecurityGroups();
-  return <SecurityGroupsView securityGroups={result.ok ? result.value : []} loadError={result.ok ? null : result.error} />;
+  return (
+    <SecurityGroupsView securityGroups={result.ok ? result.value : []} loadError={result.ok ? null : result.error} />
+  );
 }

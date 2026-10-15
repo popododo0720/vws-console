@@ -20,9 +20,6 @@ describe("route error boundary", () => {
     expect(screen.getByText("UnauthorizedOperation")).toBeInTheDocument();
     expect(screen.getByText("req-route")).toBeInTheDocument();
     expect(container.textContent).not.toContain("leaky message");
-    expect(consoleError).toHaveBeenCalledWith(
-      "[vws-console]",
-      expect.objectContaining({ context: "route" }),
-    );
+    expect(consoleError).toHaveBeenCalledWith("[vws-console]", expect.objectContaining({ context: "route" }));
   });
 });

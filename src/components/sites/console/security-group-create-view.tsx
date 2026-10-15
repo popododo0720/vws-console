@@ -46,7 +46,12 @@ export function SecurityGroupCreateView({ vpcs, loadError }: { vpcs: Vpc[]; load
           <div className="grid max-w-xl gap-3">
             <div>
               <FieldLabel>Security group name</FieldLabel>
-              <input className="field" value={name} onChange={(event) => setName(event.target.value)} aria-invalid={touched && nameError ? true : undefined} />
+              <input
+                className="field"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                aria-invalid={touched && nameError ? true : undefined}
+              />
               <p className="mt-1 text-[12px] text-[#5f6b7a]">Name cannot be edited after creation.</p>
               {touched && nameError ? <p className="mt-1 text-[12px] text-[#d91515]">{nameError}</p> : null}
             </div>
@@ -70,14 +75,22 @@ export function SecurityGroupCreateView({ vpcs, loadError }: { vpcs: Vpc[]; load
         </section>
         <section className="rounded-lg border border-[#d5dbdb] p-4">
           <h2 className="mb-1 text-[16px] font-semibold">Inbound rules</h2>
-          {inbound.length === 0 ? <p className="mb-2 text-[#5f6b7a]">This security group has no inbound rules, so it does not allow incoming traffic.</p> : null}
+          {inbound.length === 0 ? (
+            <p className="mb-2 text-[#5f6b7a]">
+              This security group has no inbound rules, so it does not allow incoming traffic.
+            </p>
+          ) : null}
           <RuleEditor direction="in" rules={inbound} onChange={setInbound} />
         </section>
         <section className="rounded-lg border border-[#d5dbdb] p-4">
           <h2 className="mb-1 text-[16px] font-semibold">Outbound rules</h2>
           <p className="text-[#5f6b7a]">{OUTBOUND_UNAVAILABLE}</p>
         </section>
-        {touched && ruleError ? <p role="alert" className="text-[12px] text-[#d91515]">{ruleError}</p> : null}
+        {touched && ruleError ? (
+          <p role="alert" className="text-[12px] text-[#d91515]">
+            {ruleError}
+          </p>
+        ) : null}
         <div className="flex justify-end gap-2">
           <OutlineButton onClick={() => router.push("/network/security-groups")}>Cancel</OutlineButton>
           <OrangeButton

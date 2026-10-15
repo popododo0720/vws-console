@@ -17,7 +17,11 @@ export function RulesTable({
   const sourceLabel = direction === "in" ? "Source" : "Destination";
   const rows = rules.filter((rule) => rule.direction === direction);
   if (rows.length === 0) {
-    return <p className="py-6 text-center text-[13px] text-[#5f6b7a]">No {direction === "in" ? "inbound" : "outbound"} rules</p>;
+    return (
+      <p className="py-6 text-center text-[13px] text-[#5f6b7a]">
+        No {direction === "in" ? "inbound" : "outbound"} rules
+      </p>
+    );
   }
   return (
     <div className="overflow-x-auto">

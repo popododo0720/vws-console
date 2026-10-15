@@ -92,7 +92,12 @@ export function Shell({
       </footer>
       {tree && mobileOpen ? (
         <div className="fixed inset-0 z-40 lg:hidden">
-          <button type="button" aria-label="Close navigation" className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
+          <button
+            type="button"
+            aria-label="Close navigation"
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setMobileOpen(false)}
+          />
           <div className="absolute inset-y-0 left-0 w-[260px] bg-white shadow-xl">
             <Suspense fallback={null}>
               <SideNav tree={tree} header={navHeader} />

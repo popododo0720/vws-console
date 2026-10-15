@@ -39,7 +39,14 @@ export function forcedMode(): IamMode | null | IamConfigError {
 export function reportInvalidConfig(): void {
   if (invalidLogged || !(forcedMode() instanceof IamConfigError)) return;
   invalidLogged = true;
-  logAuth({ event: "config.invalid", outcome: "error", status: null, requestId: null, durationMs: 0, code: "InvalidVwsConsoleIam" });
+  logAuth({
+    event: "config.invalid",
+    outcome: "error",
+    status: null,
+    requestId: null,
+    durationMs: 0,
+    code: "InvalidVwsConsoleIam",
+  });
 }
 
 /** Maps a GET /auth/session answer to the mode, or null when it says nothing about it. */
@@ -82,7 +89,11 @@ export async function iamState(): Promise<IamState> {
   let status: number | null = null;
   let requestId: string | null = null;
   try {
-    const reply = await apiFetch(`${base}/api/v1/auth/session`, { headers: { accept: "application/json" } }, { timeoutMs: DETECT_TIMEOUT_MS });
+    const reply = await apiFetch(
+      `${base}/api/v1/auth/session`,
+      { headers: { accept: "application/json" } },
+      { timeoutMs: DETECT_TIMEOUT_MS },
+    );
     status = reply.status;
     requestId = reply.requestId;
     let body: unknown = null;
@@ -118,7 +129,11 @@ export async function iamState(): Promise<IamState> {
  */
 export class IamUnavailableError extends Error {
   constructor(readonly state: "unknown" | "invalid") {
-    super(state === "invalid" ? 'VWS_CONSOLE_IAM must be "on", "off" or unset.' : "The console could not learn from console-api whether sign-in is on.");
+    super(
+      state === "invalid"
+        ? 'VWS_CONSOLE_IAM must be "on", "off" or unset.'
+        : "The console could not learn from console-api whether sign-in is on.",
+    );
   }
 }
 

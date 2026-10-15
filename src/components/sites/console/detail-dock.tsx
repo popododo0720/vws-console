@@ -96,7 +96,9 @@ export function DetailDock({
                     type="button"
                     className={cn(
                       "shrink-0 border-b-2 pb-1.5",
-                      tab === item.id ? "border-[#006ce0] font-semibold text-[#006ce0]" : "border-transparent text-[#5f6b7a]",
+                      tab === item.id
+                        ? "border-[#006ce0] font-semibold text-[#006ce0]"
+                        : "border-transparent text-[#5f6b7a]",
                     )}
                     onClick={() => onTab?.(item.id)}
                   >

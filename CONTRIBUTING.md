@@ -2,7 +2,7 @@
 
 Thanks for your interest in improving the **AI Website Cloner Template**! This guide covers how to contribute to the template itself.
 
-> **Note:** This repository is a *template*. If you just want to clone a website, don't open a PR here — click **Use this template** to make your own copy and work there (see the [README](README.md#quick-start)). Pull requests should improve the template: the `/clone-website` skill, support for the four documented agents, the scaffold, or the docs.
+> **Note:** This repository is a _template_. If you just want to clone a website, don't open a PR here — click **Use this template** to make your own copy and work there (see the [README](README.md#quick-start)). Pull requests should improve the template: the `/clone-website` skill, support for the four documented agents, the scaffold, or the docs.
 
 ## Ways to contribute
 

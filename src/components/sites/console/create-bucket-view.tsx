@@ -64,7 +64,13 @@ export function CreateBucketView() {
                 ] as const
               ).map(([value, label, hint]) => (
                 <label key={value} className="flex items-start gap-2 rounded-md border border-[#e6e8eb] p-3">
-                  <input type="radio" name="kind" checked={kind === value} onChange={() => setKind(value)} className="mt-0.5" />
+                  <input
+                    type="radio"
+                    name="kind"
+                    checked={kind === value}
+                    onChange={() => setKind(value)}
+                    className="mt-0.5"
+                  />
                   <span>
                     <span className="block font-semibold">{label}</span>
                     <span className="text-[#5f6b7a]">{hint}</span>
@@ -84,17 +90,25 @@ export function CreateBucketView() {
                 }}
               />
               <p className="mt-1 text-[12px] text-[#5f6b7a]">
-                Bucket names must be 3–63 characters, unique in this account, and use only lowercase letters, numbers, and hyphens.
+                Bucket names must be 3–63 characters, unique in this account, and use only lowercase letters, numbers,
+                and hyphens.
               </p>
               {error ? <p className="mt-1 text-[#d13212]">{error}</p> : null}
             </div>
           </Section>
           <Section title="Block Public Access settings for this bucket">
             <label className="flex items-start gap-2">
-              <input type="checkbox" checked={blockPublic} onChange={(event) => setBlockPublic(event.target.checked)} className="mt-0.5" />
+              <input
+                type="checkbox"
+                checked={blockPublic}
+                onChange={(event) => setBlockPublic(event.target.checked)}
+                className="mt-0.5"
+              />
               <span>
                 <span className="block font-semibold">Block all public access</span>
-                <span className="text-[#5f6b7a]">Turning this setting on is the same as turning on all four settings below.</span>
+                <span className="text-[#5f6b7a]">
+                  Turning this setting on is the same as turning on all four settings below.
+                </span>
               </span>
             </label>
           </Section>
@@ -107,7 +121,12 @@ export function CreateBucketView() {
                 ] as const
               ).map(([value, label]) => (
                 <label key={label} className="flex items-center gap-2">
-                  <input type="radio" name="versioning" checked={versioning === value} onChange={() => setVersioning(value)} />
+                  <input
+                    type="radio"
+                    name="versioning"
+                    checked={versioning === value}
+                    onChange={() => setVersioning(value)}
+                  />
                   {label}
                 </label>
               ))}

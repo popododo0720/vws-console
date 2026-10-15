@@ -8,29 +8,29 @@ export const TOGGLE_NAV_EVENT = "console:toggle-nav";
 export function BreadcrumbBar({ crumbs }: { crumbs: { label: string; href?: string }[] }) {
   return (
     <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[#e6e8eb] px-4 text-[12px]">
-        <button
-          type="button"
-          aria-label="Toggle navigation"
-          className="grid size-6 place-items-center rounded text-[#16191f] hover:bg-[#f4f5f6]"
-          onClick={() => window.dispatchEvent(new Event(TOGGLE_NAV_EVENT))}
-        >
-          <Menu className="size-4" />
-        </button>
-        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5">
-          {crumbs.map((crumb, index) => (
-            <span key={`${crumb.label}-${index}`} className="flex items-center gap-1.5">
-              {index > 0 ? <ChevronRight className="size-3 text-[#5f6b7a]" /> : null}
-              {crumb.href ? (
-                <Link href={crumb.href} className="text-[#006ce0] hover:underline">
-                  {crumb.label}
-                </Link>
-              ) : (
-                <span className="font-semibold">{crumb.label}</span>
-              )}
-            </span>
-          ))}
-        </nav>
-      </div>
+      <button
+        type="button"
+        aria-label="Toggle navigation"
+        className="grid size-6 place-items-center rounded text-[#16191f] hover:bg-[#f4f5f6]"
+        onClick={() => window.dispatchEvent(new Event(TOGGLE_NAV_EVENT))}
+      >
+        <Menu className="size-4" />
+      </button>
+      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5">
+        {crumbs.map((crumb, index) => (
+          <span key={`${crumb.label}-${index}`} className="flex items-center gap-1.5">
+            {index > 0 ? <ChevronRight className="size-3 text-[#5f6b7a]" /> : null}
+            {crumb.href ? (
+              <Link href={crumb.href} className="text-[#006ce0] hover:underline">
+                {crumb.label}
+              </Link>
+            ) : (
+              <span className="font-semibold">{crumb.label}</span>
+            )}
+          </span>
+        ))}
+      </nav>
+    </div>
   );
 }
 

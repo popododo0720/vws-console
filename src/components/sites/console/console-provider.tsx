@@ -1,18 +1,7 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import {
-  createEmptyAccount,
-  createSampleAccount,
-  HOME_REGION,
-  REGIONS,
-} from "@/lib/console-data";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createEmptyAccount, createSampleAccount, HOME_REGION, REGIONS } from "@/lib/console-data";
 import type {
   Bucket,
   BucketObject,
@@ -58,7 +47,12 @@ type ConsoleApi = {
   attachInternetGateway: (id: string, vpcId: string) => string | null;
   detachInternetGateway: (id: string) => void;
   deleteInternetGateways: (ids: string[]) => void;
-  createBucket: (input: { name: string; kind: Bucket["kind"]; versioning: boolean; blockPublicAccess: boolean }) => string | null;
+  createBucket: (input: {
+    name: string;
+    kind: Bucket["kind"];
+    versioning: boolean;
+    blockPublicAccess: boolean;
+  }) => string | null;
   deleteBuckets: (names: string[]) => void;
   emptyBucket: (name: string) => void;
   addObjects: (bucket: string, items: { key: string; sizeBytes: number }[]) => void;
@@ -80,7 +74,6 @@ function isCidr(value: string) {
   if (!match) return false;
   return match.slice(1, 5).every((part) => Number(part) <= 255) && Number(match[5]) <= 32;
 }
-
 
 const UNKNOWN: Identity = { userName: "—", accountId: "—" };
 
@@ -157,7 +150,9 @@ export function ConsoleProvider({
           ...prev,
           routeTables: prev.routeTables.filter((item) => item.main || !ids.includes(item.id)),
           subnets: prev.subnets.map((item) => {
-            const gone = prev.routeTables.some((table) => !table.main && ids.includes(table.id) && table.id === item.routeTableId);
+            const gone = prev.routeTables.some(
+              (table) => !table.main && ids.includes(table.id) && table.id === item.routeTableId,
+            );
             if (!gone) return item;
             const main = prev.routeTables.find((table) => table.vpcId === item.vpcId && table.main);
             return { ...item, routeTableId: main?.id ?? "" };
@@ -168,12 +163,15 @@ export function ConsoleProvider({
         if (!isCidr(destination)) return "Destination must be an IPv4 CIDR block such as 0.0.0.0/0.";
         const table = data.routeTables.find((item) => item.id === tableId);
         if (!table) return "Route table not found.";
-        if (table.routes.some((item) => item.destination === destination)) return "A route for that destination already exists.";
+        if (table.routes.some((item) => item.destination === destination))
+          return "A route for that destination already exists.";
         if (!target) return "Choose a target.";
         setData((prev) => ({
           ...prev,
           routeTables: prev.routeTables.map((item) =>
-            item.id === tableId ? { ...item, routes: [...item.routes, { destination, target, status: "active" }] } : item,
+            item.id === tableId
+              ? { ...item, routes: [...item.routes, { destination, target, status: "active" }] }
+              : item,
           ),
         }));
         return null;
@@ -240,7 +238,14 @@ export function ConsoleProvider({
           ...prev,
           buckets: [
             ...prev.buckets,
-            { name, region, created: "Just now", kind: input.kind, versioning: input.versioning, blockPublicAccess: input.blockPublicAccess },
+            {
+              name,
+              region,
+              created: "Just now",
+              kind: input.kind,
+              versioning: input.versioning,
+              blockPublicAccess: input.blockPublicAccess,
+            },
           ],
         }));
         return null;
@@ -283,7 +288,9 @@ export function ConsoleProvider({
         setData((prev) => ({
           ...prev,
           objects: prev.objects.filter(
-            (item) => item.bucket !== bucket || !keys.some((key) => (key.endsWith("/") ? item.key.startsWith(key) : item.key === key)),
+            (item) =>
+              item.bucket !== bucket ||
+              !keys.some((key) => (key.endsWith("/") ? item.key.startsWith(key) : item.key === key)),
           ),
         }));
       },
