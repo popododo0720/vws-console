@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -28,6 +30,20 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # Prettier on the files this change touches (vws-deploy#300). The whole tree is checked
+      # once the follow-up reformats the files that predate the check.
+      - name: Prettier (changed files)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${BASE_SHA}" || "${BASE_SHA}" =~ ^0+$ ]] || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            BASE_SHA=$(git rev-parse HEAD~1)
+          fi
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" HEAD)
+          if [[ ${#files[@]} -eq 0 ]]; then echo "no changed files"; exit 0; fi
+          npx prettier --check --ignore-unknown --no-error-on-unmatched-pattern "${files[@]}"
 
       - name: Type check
         run: npm run typecheck

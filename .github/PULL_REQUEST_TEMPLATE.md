@@ -4,7 +4,7 @@
 
 ## Related Issue
 
-<!-- Link to the issue this addresses, e.g. Closes #123 -->
+<!-- Link to the issue this addresses, e.g. Part of #123 -->
 
 ## Type of Change
 

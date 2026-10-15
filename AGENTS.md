@@ -12,25 +12,27 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 This repo started from the website cloner template and now implements a mock cloud console. Screen notes are in `docs/research/console/`.
 
-## pstack 사용
+## Using pstack
 
 This project and every other VWS project use pstack for agent work.
 
-| Rule | What enforces it |
-| --- | --- |
-| Nontrivial design that crosses a function boundary goes through the architect skill before implementation. | Judgment. The skill lives in the pstack plugin. |
-| A contested design goes through the interrogate skill before it ships. | Judgment. Reviewers do not auto-apply changes. |
-| A repeated agent mistake goes through the correct skill. Fix it in architecture, then types, then lint, then a test. Write the rule here only after those levels cannot hold it. | This table. Add a row when the operator corrects a repeat. |
-| Visual parity is checked on the running app against reference images. Reference images are local-only and never committed. No AWS screenshots, logos, or trademarks go in the repo. | Review of the diff. |
-| All coding and dev work follows pstack's poteto-mode style. Read the poteto-mode skill first. Subagents run with effort high. Cursor cloud agents are never used. Only Grok Bots do the work. | Judgment and review of the PR. |
-| The header shows the VWS wordmark and substitute icons. Do not add an AWS logo, an AWS wordmark, or original icon files. Service menu names stay EC2, EBS, S3, VPC, and the other reference labels. | Review of the diff and the screenshots. |
+| Rule                                                                                                                                                                                                | What enforces it                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Nontrivial design that crosses a function boundary goes through the architect skill before implementation.                                                                                          | Judgment. The skill lives in the pstack plugin.            |
+| A contested design goes through the interrogate skill before it ships.                                                                                                                              | Judgment. Reviewers do not auto-apply changes.             |
+| A repeated agent mistake goes through the correct skill. Fix it in architecture, then types, then lint, then a test. Write the rule here only after those levels cannot hold it.                    | This table. Add a row when the operator corrects a repeat. |
+| Visual parity is checked on the running app against reference images. Reference images are local-only and never committed. No AWS screenshots, logos, or trademarks go in the repo.                 | Review of the diff.                                        |
+| All coding and dev work follows pstack's poteto-mode style. Read the poteto-mode skill first. Subagents run with effort high. Cursor cloud agents are never used. Only Grok Bots do the work.       | Judgment and review of the PR.                             |
+| The header shows the VWS wordmark and substitute icons. Do not add an AWS logo, an AWS wordmark, or original icon files. Service menu names stay EC2, EBS, S3, VPC, and the other reference labels. | Review of the diff and the screenshots.                    |
 
 # Website Reverse-Engineer Template
 
 ## What This Is
+
 A reusable template for reverse-engineering any website into a clean, modern Next.js codebase using AI coding agents. The Next.js + shadcn/ui + Tailwind v4 base is pre-scaffolded — just run `/clone-website <url1> [<url2> ...]`.
 
 ## Tech Stack
+
 - **Framework:** Next.js 16 (App Router, React 19, TypeScript strict)
 - **UI:** shadcn/ui (Base UI primitives, Tailwind CSS v4, `cn()` utility)
 - **Icons:** Lucide React (default — will be replaced/supplemented by extracted SVGs)
@@ -38,6 +40,7 @@ A reusable template for reverse-engineering any website into a clean, modern Nex
 - **Deployment:** Vercel
 
 ## Commands
+
 - `npm run dev` — Start dev server
 - `npm run build` — Production build
 - `npm run lint` — ESLint check
@@ -45,6 +48,7 @@ A reusable template for reverse-engineering any website into a clean, modern Nex
 - `npm run check` — Run lint + typecheck + build
 
 ## Code Style
+
 - TypeScript strict mode, no `any`
 - Named exports, PascalCase components, camelCase utils
 - Tailwind utilities or scoped CSS; avoid inline styles unless behavior needs dynamic values
@@ -52,12 +56,14 @@ A reusable template for reverse-engineering any website into a clean, modern Nex
 - Responsive: mobile-first
 
 ## Design Principles
+
 - **Pixel-perfect emulation** — match the target's spacing, colors, typography exactly
 - **No personal aesthetic changes during emulation phase** — match 1:1 first, customize later
 - **Real content** — use actual text and assets from the target site, not placeholders
 - **Beauty-first** — every pixel matters
 
 ## Project Structure
+
 ```
 src/
   app/              # Next.js routes
@@ -83,17 +89,18 @@ scripts/            # Asset download scripts
 ```
 
 ## Agent Workflow
+
 - Edit `.agents/skills/clone-website/` for cloning-workflow changes. It is the canonical skill used by Codex, Cursor, and OpenCode.
 - Keep `.claude/commands/clone-website.md` as a thin Claude Code bridge to the canonical skill; do not duplicate the workflow there.
 
 ## Insider-risk guardrails
 
-봇도 내부자 위험이다. 아래는 예외 없는 규칙이다.
+Bots are insider risks too. The rules below have no exceptions.
 
-1. **검증 독립**: 중요 결과(머지, 보안, 데이터)는 작성한 봇/모델이 스스로 검증하지 않는다. 검증은 작성 봇이 아닌 다른 봇(또는 사람)이 한다. (프로세스 규칙, CI로 강제 불가)
-2. **기록**: 모든 변경은 이슈 → PR(`Part of #N` 또는 `Closes #N`) → 커밋으로 남긴다. 작업 로그는 PR 본문/이슈 코멘트에 사람이 읽을 수 있게 쓴다. force-push·히스토리 재작성 금지(사용자 승인 시 예외).
-3. **실패 테스트**: 새 기능은 정상 경로만 테스트하지 않는다. 전원 차단/재시작, 멱등 재실행, 악성·경계 입력 케이스를 최소 1개씩 포함하거나 불가 사유를 PR에 적는다.
-4. **최소 권한**: main 직접 푸시 금지. 모든 변경은 main에서 딴 독립 브랜치의 단일 PR. 스택 PR 금지. 로컬 머지 금지. 토큰은 해당 레포 범위만. RBAC은 서비스 코드가 실제 호출하는 리소스만, 가능하면 Role(네임스페이스 범위).
-5. **감사 분리**: 작성 봇 ≠ 검증 봇 ≠ 머지 판단. 작성 봇은 자기 PR을 머지하지 않는다. 머지는 base==main 이고 head 커밋 CI가 전부 success일 때만.
-6. **격리·비상정지**: 봇/에이전트 즉시 중단은 사용자 요청 또는 오케스트레이터가 해당 봇 세션 중단 + 토큰 폐기(`gh auth`/PAT revoke). 위험 작업은 샌드박스(박스/임시 클러스터)에서만. 운영 클러스터 접근 금지.
-7. **사고 공개**: 규칙 위반·사고는 숨기지 않고 이슈에 `원인 / 영향 / 조치 / 재발방지`로 기록한다 (라벨 `incident`).
+1. **Independent verification**: no bot or model verifies its own important results (merges, security, data). Verification is done by a bot other than the author (or a person). (Process rule; CI cannot enforce it.)
+2. **Records**: every change leaves a trail of issue → PR (`Part of #N`) → commits. Work logs go in the PR body or issue comments in a form people can read. No force-push or history rewriting (except with the user's approval).
+3. **Failure tests**: new features are not tested on the happy path only. Include at least one case each for power loss/restart, idempotent re-runs, and malicious or boundary input, or state in the PR why that is impossible.
+4. **Least privilege**: no direct pushes to main. Every change is a single PR from its own branch cut from main. No stacked PRs. No local merges. Tokens are scoped to the repo in question. RBAC covers only the resources the service code actually calls, as a Role (namespace scope) where possible.
+5. **Separation of duties**: author bot ≠ verifier bot ≠ merge decision. An author bot never merges its own PR. Merge only when base == main and every CI check on the head commit is success.
+6. **Isolation and emergency stop**: a bot or agent is stopped immediately at the user's request, or by the orchestrator stopping that bot's session and revoking its token (`gh auth`/PAT revoke). Risky work runs only in a sandbox (the box or a temporary cluster). No access to production clusters.
+7. **Incident disclosure**: rule violations and incidents are never hidden; record them in an issue as `Cause / Impact / Action / Prevention` (label `incident`).
