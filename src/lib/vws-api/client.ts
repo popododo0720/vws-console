@@ -41,6 +41,7 @@ import {
   type Image,
   type LaunchRequest,
 } from "./adapter";
+import type { CreateAttempt, KeyPairCreateResult, KeyPairId, StoredKeyPair } from "@/lib/key-pair";
 
 const POLL_INTERVAL_MS = 500;
 const POLL_TIMEOUT_MS = 60_000;
@@ -279,6 +280,20 @@ export const getVolume = (id: string): Promise<ApiResult<Volume | null>> => getO
 
 export const launchInstances = ({ tags, ...rest }: LaunchRequest) =>
   mutate("/instances", Object.keys(tags).length > 0 ? { ...rest, tags } : rest);
+
+export function listKeyPairs(): Promise<ApiResult<StoredKeyPair[]>> {
+  throw new Error("not implemented");
+}
+
+export function createKeyPair(attempt: CreateAttempt): Promise<KeyPairCreateResult> {
+  void attempt;
+  throw new Error("not implemented");
+}
+
+export function deleteKeyPair(id: KeyPairId): Promise<ApiResult<void>> {
+  void id;
+  throw new Error("not implemented");
+}
 /** console-api takes at most this many instance IDs in one batch call. */
 export const INSTANCE_BATCH_LIMIT = 20;
 

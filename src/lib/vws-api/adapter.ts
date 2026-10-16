@@ -1,3 +1,4 @@
+import type { KeyPairChoice, StoredKeyPair } from "@/lib/key-pair";
 import type {
   ElasticIp,
   Instance,
@@ -29,6 +30,7 @@ export type LaunchRequest = {
   subnetId: string;
   count: number;
   tags: Record<string, string>;
+  keyPair?: KeyPairChoice;
 };
 
 export type Operation = { id: string; state: OperationState; error: ApiError | null };
@@ -285,6 +287,16 @@ export function toSnapshot(item: Json): Snapshot {
 export const parseSecurityGroups = (page: unknown) => list(page).map(toSecurityGroup);
 export const parseAddresses = (page: unknown) => list(page).map(toAddress);
 export const parseSnapshots = (page: unknown) => list(page).map(toSnapshot);
+
+export function toStoredKeyPair(item: Record<string, unknown>): StoredKeyPair {
+  void item;
+  throw new Error("not implemented");
+}
+
+export function parseKeyPairs(page: unknown): StoredKeyPair[] {
+  void page;
+  throw new Error("not implemented");
+}
 
 /** Reads the first item of a 202 mutation response, which carries the new resource. */
 export function firstItem(body: unknown, key: string): string {

@@ -15,20 +15,24 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("./session", () => ({ currentSession: async () => nav.session }));
 
+import type { CreateAttempt, IdempotencyKey, KeyPairId, KeyPairName } from "@/lib/key-pair";
 import {
   login,
   logout,
   signedInSession,
+  createKeyPair,
   createSubnet,
   createSubnetTags,
   createVpcTags,
   createInstanceTags,
   createSecurityGroup,
   createVpc,
+  deleteKeyPair,
   getVolume,
   getVpc,
   instanceBatch,
   launchInstances,
+  listKeyPairs,
   listVpcs,
   modifyVolume,
   attachVolume,
@@ -618,6 +622,299 @@ describe("console-api client", () => {
       expect(await listVpcs()).toMatchObject({ ok: false, error: { code: "ConsoleNotConfigured" } });
       expect(calls).toEqual([]);
       warn.mockRestore();
+    });
+  });
+
+  describe("key pairs", () => {
+    const rsaBody = '{"keyName":"web","keyType":"rsa","keyFormat":"pem"}';
+    const edBody = '{"keyName":"web","keyType":"ed25519","keyFormat":"ppk"}';
+    const importBody = '{"keyName":"laptop","publicKeyMaterial":"ssh-ed25519 AAAA"}';
+    const material = "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----";
+    const launchBase = { imageId: "ami-1", instanceType: "vws.small", subnetId: "subnet-1", count: 1 };
+
+    function attempt(body: string, key = "attempt-web-1"): CreateAttempt {
+      return { idempotencyKey: key as IdempotencyKey, body };
+    }
+
+    function pairItem(extra: Record<string, unknown> = {}) {
+      return {
+        keyPairId: "key-0123456789abcdef0",
+        keyName: "web",
+        keyFingerprint: "SHA256:abc",
+        keyType: "ed25519",
+        ownerId: "123456789012",
+        keyMaterial: material,
+        ...extra,
+      };
+    }
+
+    function accepted(id: string, item: Record<string, unknown> = pairItem()) {
+      return { operation: { id, state: "running" }, items: [item] };
+    }
+
+    async function settle<T>(promise: Promise<T>): Promise<T> {
+      await vi.runAllTimersAsync();
+      return promise;
+    }
+
+    it("follows the key pair page token", async () => {
+      serve(
+        respond(200, {
+          items: [{ ...pairItem(), keyMaterial: "SECRET", keyName: "web", keyPairId: "key-01234567" }],
+          nextPageToken: "p2",
+        }),
+        respond(200, {
+          items: [{ ...pairItem(), keyName: "db", keyPairId: "key-89abcdef", keyMaterial: "SECRET" }],
+        }),
+      );
+      const result = await listKeyPairs();
+      expect(result.ok && result.value.map((item) => item.name)).toEqual(["web", "db"]);
+      expect(result.ok && result.value.every((item) => !("keyMaterial" in item))).toBe(true);
+      expect(calls.map((c) => c.url)).toEqual([
+        "http://api.test/api/v1/key-pairs",
+        "http://api.test/api/v1/key-pairs?pageToken=p2",
+      ]);
+    });
+
+    it("posts the selected generate body with the attempt idempotency key", async () => {
+      serve(
+        respond(202, accepted("op-rsa", pairItem({ keyType: "rsa", keyMaterial: material }))),
+        respond(200, { id: "op-rsa", state: "succeeded" }),
+        respond(202, accepted("op-ed", pairItem())),
+        respond(200, { id: "op-ed", state: "succeeded" }),
+      );
+      await createKeyPair(attempt(rsaBody));
+      await createKeyPair(attempt(edBody, "attempt-web-2"));
+      const posts = calls.filter((call) => call.url.endsWith("/key-pairs"));
+      expect(posts.map((call) => call.init.body)).toEqual([rsaBody, edBody]);
+      expect(posts.map((call) => (call.init.headers as Record<string, string>)["idempotency-key"])).toEqual([
+        "attempt-web-1",
+        "attempt-web-2",
+      ]);
+      expect(posts[0].init.headers).toEqual({
+        accept: "application/json",
+        "content-type": "application/json",
+        cookie: "vws_session=sess-1; vws_csrf=csrf-1",
+        "idempotency-key": "attempt-web-1",
+        origin: "http://console.test",
+        "x-csrf-token": "csrf-1",
+        "x-request-id": expect.stringMatching(/^[0-9a-f-]{36}$/),
+      });
+    });
+
+    it("posts an import body with the public key only", async () => {
+      serve(
+        respond(202, accepted("op-imp", pairItem({ keyName: "laptop", keyType: "ed25519", keyMaterial: "" }))),
+        respond(200, { id: "op-imp", state: "succeeded" }),
+      );
+      const result = await createKeyPair(attempt(importBody, "attempt-laptop"));
+      expect(calls[0].url).toBe("http://api.test/api/v1/key-pairs");
+      expect(calls[0].init.body).toBe(importBody);
+      expect((calls[0].init.headers as Record<string, string>)["idempotency-key"]).toBe("attempt-laptop");
+      expect(result).toMatchObject({
+        status: "ready",
+        issued: { privateKey: null, settlement: "succeeded", keyPair: { name: "laptop" } },
+      });
+    });
+
+    it("replays one attempt with the same key and body", async () => {
+      serve(
+        respond(202, accepted("op-1")),
+        respond(200, { id: "op-1", state: "succeeded" }),
+        respond(202, accepted("op-1")),
+        respond(200, { id: "op-1", state: "succeeded" }),
+      );
+      const same = attempt(edBody, "attempt-replay");
+      await createKeyPair(same);
+      await createKeyPair(same);
+      const posts = calls.filter((call) => call.url.endsWith("/key-pairs"));
+      expect(posts).toHaveLength(2);
+      expect(posts.map((call) => call.init.body)).toEqual([edBody, edBody]);
+      expect(posts.map((call) => (call.init.headers as Record<string, string>)["idempotency-key"])).toEqual([
+        "attempt-replay",
+        "attempt-replay",
+      ]);
+    });
+
+    it("reads keyMaterial from the 202 item, not from the operation poll", async () => {
+      serve(
+        respond(202, accepted("op-k")),
+        respond(200, { id: "op-k", state: "running" }),
+        respond(200, { id: "op-k", state: "succeeded" }),
+      );
+      const result = await createKeyPair(attempt(edBody));
+      expect(result).toEqual({
+        status: "ready",
+        issued: {
+          keyPair: {
+            id: "key-0123456789abcdef0",
+            name: "web",
+            fingerprint: "SHA256:abc",
+            type: "ed25519",
+            ownerId: "123456789012",
+          },
+          privateKey: { fileName: "web.ppk", material, format: "ppk" },
+          settlement: "succeeded",
+        },
+      });
+      expect(calls[1].url).toBe("http://api.test/api/v1/operations/op-k");
+      expect(calls[1].init.body).toBeUndefined();
+    });
+
+    it("returns the 202 material when the operation stays running through the budget", async () => {
+      vi.useFakeTimers();
+      vi.stubEnv("VWS_CONSOLE_API_TIMEOUT_MS", "600000");
+      vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        if (calls.length === 1) return respond(202, accepted("op-slow"));
+        return respond(200, { id: "op-slow", state: "running" });
+      });
+      try {
+        const pending = createKeyPair(attempt(edBody));
+        const result = await settle(pending);
+        expect(result).toMatchObject({
+          status: "ready",
+          issued: { settlement: "still-running", privateKey: { material } },
+        });
+        expect(calls.length).toBeGreaterThan(2);
+        expect(calls[1].url).toBe("http://api.test/api/v1/operations/op-slow");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("keeps the 202 material when the operation fails", async () => {
+      serve(
+        respond(202, accepted("op-fail")),
+        respond(200, { id: "op-fail", state: "failed", error: { code: "InternalError", message: "disk" } }),
+      );
+      const result = await createKeyPair(attempt(rsaBody));
+      expect(result).toMatchObject({
+        status: "failed",
+        error: { code: "InternalError", message: "disk", requestId: null },
+        issued: { privateKey: { material, format: "pem", fileName: "web.pem" } },
+      });
+    });
+
+    it("fails a generate response that has no private key material", async () => {
+      serve(
+        respond(202, accepted("op-empty", pairItem({ keyMaterial: "" }))),
+        respond(200, { id: "op-empty", state: "succeeded" }),
+      );
+      const result = await createKeyPair(attempt(rsaBody));
+      expect(result).toMatchObject({ status: "failed", issued: null, error: { code: "MalformedResponse" } });
+    });
+
+    it("fails an unreadable 202 even when the operation would succeed", async () => {
+      serve(
+        respond(202, { operation: { id: "op-bad", state: "running" } }),
+        respond(200, { id: "op-bad", state: "succeeded" }),
+      );
+      const result = await createKeyPair(attempt(rsaBody));
+      expect(result).toMatchObject({ status: "failed", issued: null, error: { code: "MalformedResponse" } });
+    });
+
+    it("keeps unexpected import material as a pem file", async () => {
+      serve(
+        respond(202, accepted("op-odd", pairItem({ keyName: "laptop", keyMaterial: "UNEXPECTED" }))),
+        respond(200, { id: "op-odd", state: "succeeded" }),
+      );
+      const result = await createKeyPair(attempt(importBody));
+      expect(result).toMatchObject({
+        status: "ready",
+        issued: { privateKey: { material: "UNEXPECTED", format: "pem", fileName: "laptop.pem" } },
+      });
+    });
+
+    it("does not post a rejected name, an empty public key, or a bad idempotency key", async () => {
+      serve(respond(202, accepted("op-no")));
+      const emptyName = await createKeyPair(
+        attempt('{"keyName":"","keyType":"rsa","keyFormat":"pem"}', "attempt-empty"),
+      );
+      const longName = await createKeyPair(
+        attempt(JSON.stringify({ keyName: "a".repeat(256), keyType: "rsa", keyFormat: "pem" }), "attempt-long"),
+      );
+      const emptyKey = await createKeyPair(attempt('{"keyName":"laptop","publicKeyMaterial":""}', "attempt-pub"));
+      const badKey = await createKeyPair({ idempotencyKey: "" as IdempotencyKey, body: rsaBody });
+      expect(emptyName).toMatchObject({ status: "failed", issued: null });
+      expect(longName).toMatchObject({ status: "failed", issued: null });
+      expect(emptyKey).toMatchObject({ status: "failed", issued: null });
+      expect(badKey).toMatchObject({ status: "failed", issued: null });
+      expect(calls).toEqual([]);
+    });
+
+    it("returns AlreadyExists with the API code, message, and request id", async () => {
+      serve(respond(409, { error: { code: "AlreadyExists", message: "key exists" }, requestId: "r-9" }));
+      expect(await createKeyPair(attempt(rsaBody))).toEqual({
+        status: "failed",
+        error: { code: "AlreadyExists", message: "key exists", requestId: "r-9" },
+        issued: null,
+      });
+      expect(calls[0].init.body).toBe(rsaBody);
+    });
+
+    it("deletes a key pair with an empty JSON body", async () => {
+      serve(
+        respond(202, { operation: { id: "op-d", state: "succeeded" } }),
+        respond(202, { operation: { id: "op-e", state: "succeeded" } }),
+      );
+      expect(await deleteKeyPair("key-0123456789abcdef0" as KeyPairId)).toEqual({ ok: true, value: undefined });
+      expect(await deleteKeyPair("key-01234567" as KeyPairId)).toEqual({ ok: true, value: undefined });
+      expect(calls.map((call) => [call.url, call.init.body])).toEqual([
+        ["http://api.test/api/v1/key-pairs/key-0123456789abcdef0/delete", "{}"],
+        ["http://api.test/api/v1/key-pairs/key-01234567/delete", "{}"],
+      ]);
+    });
+
+    it("does not fetch a delete id that is not key- plus 8 to 17 hex digits", async () => {
+      serve(respond(202, { operation: { id: "op-x", state: "succeeded" } }));
+      for (const id of ["admin", "key-zzzzzzzz", "key-0123456", "key-0123456789abcdef01"]) {
+        const result = await deleteKeyPair(id as KeyPairId);
+        expect(result).toEqual({
+          ok: false,
+          error: {
+            code: "InvalidArgument",
+            message: "Key pair id must be key- followed by 8 to 17 hex digits.",
+            requestId: null,
+          },
+        });
+      }
+      expect(calls).toEqual([]);
+    });
+
+    it("launches with a key name and omits empty tags", async () => {
+      serve(
+        respond(202, { operation: { id: "op-l1", state: "succeeded" } }),
+        respond(202, { operation: { id: "op-l2", state: "succeeded" } }),
+        respond(404, { error: { code: "NotFound", message: "no such key" }, requestId: "r-2" }),
+      );
+      await launchInstances({ ...launchBase, tags: {}, keyPair: { kind: "pair", name: "web" as KeyPairName } });
+      await launchInstances({
+        ...launchBase,
+        tags: { Name: "web" },
+        keyPair: { kind: "pair", name: "web" as KeyPairName },
+      });
+      const missing = await launchInstances({
+        ...launchBase,
+        tags: {},
+        keyPair: { kind: "pair", name: "missing" as KeyPairName },
+      });
+      expect(calls.map((call) => call.init.body)).toEqual([
+        '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":1,"keyName":"web"}',
+        '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":1,"keyName":"web","tags":{"Name":"web"}}',
+        '{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":1,"keyName":"missing"}',
+      ]);
+      expect(missing).toEqual({
+        ok: false,
+        error: { code: "NotFound", message: "no such key", requestId: "r-2" },
+      });
+    });
+
+    it("omits keyName when launch proceeds without a key pair", async () => {
+      serve(respond(202, { operation: { id: "op-n", state: "succeeded" } }));
+      await launchInstances({ ...launchBase, tags: {}, keyPair: { kind: "none" } });
+      expect(calls[0].url).toBe("http://api.test/api/v1/instances");
+      expect(calls[0].init.body).toBe('{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":1}');
     });
   });
 });
