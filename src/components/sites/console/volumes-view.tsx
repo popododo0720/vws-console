@@ -32,6 +32,13 @@ import {
 } from "@/components/sites/console/ui";
 
 const VOLUME_TYPES = ["gp3", "gp2", "standard"];
+const CUSTOM_DEVICE = "custom";
+const DEFAULT_DATA_DEVICE = "/dev/sdf";
+const ROOT_DEVICE_NAMES = ["/dev/sda1", "/dev/xvda"] as const;
+const DATA_DEVICE_NAMES = Array.from(
+  { length: 25 },
+  (_, index) => `/dev/sd${String.fromCharCode("b".charCodeAt(0) + index)}`,
+);
 
 function volumeState(row: Volume) {
   return row.state ? row.state.charAt(0).toUpperCase() + row.state.slice(1) : "—";
@@ -61,13 +68,15 @@ export function VolumesView({
   const [attachOpen, setAttachOpen] = useState(false);
   const [detachOpen, setDetachOpen] = useState(false);
   const [attachInstanceId, setAttachInstanceId] = useState("");
-  const [attachDevice, setAttachDevice] = useState("/dev/sdf");
+  const [attachDevice, setAttachDevice] = useState(DEFAULT_DATA_DEVICE);
+  const [customDevice, setCustomDevice] = useState("");
   const [form, setForm] = useState({ volumeType: VOLUME_TYPES[0], sizeGiB: 8 });
   const selected = volumes.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
   const eligibleInstances = instances.filter(
     (item) => (item.state === "running" || item.state === "stopped") && item.availabilityZone === one?.availabilityZone,
   );
+  const deviceName = (attachDevice === CUSTOM_DEVICE ? customDevice : attachDevice).trim();
   const backedUp = volumes.filter((item) => item.snapshotId).length;
   const refresh = () => {
     setUpdated("less than a minute ago");
@@ -176,15 +185,20 @@ export function VolumesView({
                   label: "Attach volume",
                   disabled: action.pending || !one || one.state !== "available",
                   onSelect: () => {
+                    action.clear();
                     setAttachInstanceId(eligibleInstances[0]?.id ?? "");
-                    setAttachDevice("/dev/sdf");
+                    setAttachDevice(DEFAULT_DATA_DEVICE);
+                    setCustomDevice("");
                     setAttachOpen(true);
                   },
                 },
                 {
                   label: "Detach volume",
                   disabled: action.pending || !one || one.state !== "in-use",
-                  onSelect: () => setDetachOpen(true),
+                  onSelect: () => {
+                    action.clear();
+                    setDetachOpen(true);
+                  },
                 },
                 {
                   label: "Create snapshot",
@@ -214,7 +228,14 @@ export function VolumesView({
                 },
               ]}
             />
-            <OrangeButton onClick={() => setCreateOpen(true)}>Create volume</OrangeButton>
+            <OrangeButton
+              onClick={() => {
+                action.clear();
+                setCreateOpen(true);
+              }}
+            >
+              Create volume
+            </OrangeButton>
           </>
         }
       />
@@ -358,7 +379,7 @@ export function VolumesView({
               disabled={
                 action.pending ||
                 !attachInstanceId.trim() ||
-                !attachDevice.trim() ||
+                !deviceName ||
                 instanceLoadError !== null ||
                 eligibleInstances.length === 0
               }
@@ -368,7 +389,7 @@ export function VolumesView({
                   () =>
                     attachVolumeAction(one.id, {
                       instanceId: attachInstanceId.trim(),
-                      device: attachDevice.trim(),
+                      device: deviceName,
                     }),
                   () => setAttachOpen(false),
                 );
@@ -394,6 +415,7 @@ export function VolumesView({
             ) : (
               <select
                 className="field"
+                aria-label="Instance"
                 value={attachInstanceId}
                 onChange={(event) => setAttachInstanceId(event.target.value)}
               >
@@ -407,12 +429,36 @@ export function VolumesView({
           </div>
           <div>
             <FieldLabel>Device name</FieldLabel>
-            <input
+            <select
               className="field"
               aria-label="Device name"
               value={attachDevice}
               onChange={(event) => setAttachDevice(event.target.value)}
-            />
+            >
+              <optgroup label="Reserved for root volume">
+                {ROOT_DEVICE_NAMES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Recommended for data volumes">
+                {DATA_DEVICE_NAMES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </optgroup>
+              <option value={CUSTOM_DEVICE}>Specify a custom device name</option>
+            </select>
+            {attachDevice === CUSTOM_DEVICE ? (
+              <input
+                className="field mt-2"
+                aria-label="Custom device name"
+                value={customDevice}
+                onChange={(event) => setCustomDevice(event.target.value)}
+              />
+            ) : null}
             <p className="mt-1 text-[12px] text-[#5f6b7a]">
               The device name you specify is used by EC2. The block device driver can mount the device with a device
               name that is different from the one you specify.

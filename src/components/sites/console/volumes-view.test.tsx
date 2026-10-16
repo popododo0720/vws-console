@@ -117,7 +117,7 @@ describe("VolumesView attach and detach", () => {
     openActions();
     fireEvent.click(screen.getByRole("menuitem", { name: "Attach volume" }));
     const dialog = screen.getByRole("dialog", { name: "Attach volume" });
-    expect(within(dialog).getByRole("combobox")).toBeTruthy();
+    expect(within(dialog).getByRole("combobox", { name: "Instance" })).toBeTruthy();
     expect(within(dialog).getByRole("option", { name: "web (i-1)" })).toBeTruthy();
     expect(within(dialog).getByRole("option", { name: "i-stop" })).toBeTruthy();
     expect(within(dialog).queryByRole("option", { name: "boot (i-pending)" })).toBeNull();

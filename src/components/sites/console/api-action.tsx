@@ -17,7 +17,8 @@ export function useApiAction() {
         router.refresh();
       }
     });
-  return { error, pending, run, refresh: () => router.refresh() };
+  const clear = () => setError(null);
+  return { error, pending, run, clear, refresh: () => router.refresh() };
 }
 
 export function ApiErrorAlert({ error, title }: { error: ApiError | null; title: string }) {
