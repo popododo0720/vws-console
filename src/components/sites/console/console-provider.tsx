@@ -38,7 +38,6 @@ type ConsoleApi = {
   internetGateways: InternetGateway[];
   buckets: Bucket[];
   objects: BucketObject[];
-  keyPairs: Dataset["keyPairs"];
   createRouteTable: (input: { name: string; vpcId: string }) => void;
   deleteRouteTables: (ids: string[]) => void;
   addRoute: (tableId: string, destination: string, target: string) => string | null;
@@ -58,7 +57,6 @@ type ConsoleApi = {
   addObjects: (bucket: string, items: { key: string; sizeBytes: number }[]) => void;
   createFolder: (bucket: string, key: string) => void;
   deleteObjects: (bucket: string, keys: string[]) => void;
-  addKeyPair: (name: string) => void;
 };
 
 const ConsoleContext = createContext<ConsoleApi | null>(null);
@@ -117,7 +115,6 @@ export function ConsoleProvider({
       internetGateways,
       buckets: data.buckets,
       objects: data.objects,
-      keyPairs: data.keyPairs,
       showEmpty: () => {
         setMode("empty");
         setData(createEmptyAccount());
@@ -292,16 +289,6 @@ export function ConsoleProvider({
               item.bucket !== bucket ||
               !keys.some((key) => (key.endsWith("/") ? item.key.startsWith(key) : item.key === key)),
           ),
-        }));
-      },
-      addKeyPair: (name) => {
-        const trimmed = name.trim();
-        if (!trimmed) return;
-        setData((prev) => ({
-          ...prev,
-          keyPairs: prev.keyPairs.some((item) => item.name === trimmed)
-            ? prev.keyPairs
-            : [...prev.keyPairs, { name: trimmed, fingerprint: `SHA256:${newId("fp").slice(3, 15)}` }],
         }));
       },
     };
