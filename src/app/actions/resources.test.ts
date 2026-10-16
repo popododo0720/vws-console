@@ -29,6 +29,15 @@ const INVALID_NAME = {
   requestId: null,
 };
 
+const RESERVED_NAME = {
+  code: "InvalidArgument",
+  message:
+    "Bucket names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3, or --x-s3.",
+  requestId: null,
+};
+
+const cleared = (deleted: string[]) => ({ deleted, error: null, failedName: null });
+
 describe("bucket actions", () => {
   let calls: Call[];
 
@@ -67,9 +76,23 @@ describe("bucket actions", () => {
     expect(calls).toEqual([]);
   });
 
+  it("rejects a reserved name without calling the API", async () => {
+    serve();
+    for (const name of ["xn--logs", "sthree-logs", "amzn-s3-demo-ab", "logs-s3alias", "ab--ol-s3", "ab--x-s3"]) {
+      expect(await createBucketAction(name)).toEqual(RESERVED_NAME);
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects a dotted name without calling the API", async () => {
+    serve();
+    expect(await createBucketAction("example.com")).toEqual(INVALID_NAME);
+    expect(calls).toEqual([]);
+  });
+
   it("deletes each name and treats NotFound as success", async () => {
     serve(new Response(null, { status: 204 }), respond(404, { error: { code: "NotFound", message: "missing" } }));
-    expect(await deleteBucketsAction(["logs-1", "logs-2"])).toBeNull();
+    expect(await deleteBucketsAction(["logs-1", "logs-2"])).toEqual(cleared(["logs-1", "logs-2"]));
     expect(calls.map((call) => [call.init.method, call.url])).toEqual([
       ["DELETE", "http://api.test/api/v1/buckets/logs-1"],
       ["DELETE", "http://api.test/api/v1/buckets/logs-2"],
@@ -83,9 +106,9 @@ describe("bucket actions", () => {
       new Response(null, { status: 204 }),
     );
     expect(await deleteBucketsAction(["logs-1", "logs-2", "logs-3"])).toEqual({
-      code: "Conflict",
-      message: "bucket is not empty",
-      requestId: "r-9",
+      deleted: ["logs-1"],
+      error: { code: "Conflict", message: "bucket is not empty", requestId: "r-9" },
+      failedName: "logs-2",
     });
     expect(calls).toHaveLength(2);
     expect(calls.map((call) => call.url)).toEqual([
@@ -96,7 +119,7 @@ describe("bucket actions", () => {
 
   it("returns null when the only bucket is already gone", async () => {
     serve(respond(404, { error: { code: "NotFound", message: "missing" } }));
-    expect(await deleteBucketsAction(["logs-1"])).toBeNull();
+    expect(await deleteBucketsAction(["logs-1"])).toEqual(cleared(["logs-1"]));
     expect(calls).toHaveLength(1);
     expect(calls[0].init.method).toBe("DELETE");
     expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1");
@@ -104,7 +127,11 @@ describe("bucket actions", () => {
 
   it("stops on a bad name and does not send that name or later names", async () => {
     serve(new Response(null, { status: 204 }), new Response(null, { status: 204 }));
-    expect(await deleteBucketsAction(["logs-1", "ab", "logs-2"])).toEqual(INVALID_NAME);
+    expect(await deleteBucketsAction(["logs-1", "ab", "logs-2"])).toEqual({
+      deleted: ["logs-1"],
+      error: INVALID_NAME,
+      failedName: "ab",
+    });
     expect(calls.map((call) => call.url)).toEqual(["http://api.test/api/v1/buckets/logs-1"]);
   });
 });

@@ -413,5 +413,23 @@ describe("account buckets", () => {
     expect(parseBucketName("A")).toBeNull();
     expect(parseBucketName("-ab")).toBeNull();
     expect(parseBucketName("ab-")).toBeNull();
+    expect(parseBucketName("example.com")).toBeNull();
+  });
+
+  it("rejects reserved prefixes and suffixes", () => {
+    expect(parseBucketName("xn--ab")).toBeNull();
+    expect(parseBucketName("sthree-logs")).toBeNull();
+    expect(parseBucketName("amzn-s3-demo-ab")).toBeNull();
+    expect(parseBucketName("logs-s3alias")).toBeNull();
+    expect(parseBucketName("ab--ol-s3")).toBeNull();
+    expect(parseBucketName("ab--x-s3")).toBeNull();
+  });
+
+  it("still reads a reserved name the API already stored", () => {
+    expect(toAccountBucket({ name: "xn--ab", ownerId: "1", creationDate: "2026-08-02T00:00:00Z" })).toEqual({
+      name: "xn--ab",
+      ownerId: "1",
+      created: "2026-08-02T00:00:00Z",
+    });
   });
 });
