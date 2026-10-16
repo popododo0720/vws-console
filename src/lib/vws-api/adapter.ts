@@ -74,15 +74,30 @@ export function nextPageToken(page: unknown): string {
 }
 
 const BUCKET_NAME = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+const RESERVED_PREFIX = ["xn--", "sthree-", "amzn-s3-demo-"] as const;
+const RESERVED_SUFFIX = ["-s3alias", "--ol-s3", "--x-s3"] as const;
 
-export function parseBucketName(input: string): BucketName | null {
+/** Charset only. The API can already store a reserved name, and the list must still show it. */
+export function parseStoredBucketName(input: string): BucketName | null {
   const name = input.trim();
   return BUCKET_NAME.test(name) ? (name as BucketName) : null;
 }
 
+export function reservedBucketName(name: BucketName): boolean {
+  return (
+    RESERVED_PREFIX.some((prefix) => name.startsWith(prefix)) || RESERVED_SUFFIX.some((suffix) => name.endsWith(suffix))
+  );
+}
+
+export function parseBucketName(input: string): BucketName | null {
+  const name = parseStoredBucketName(input);
+  if (!name || reservedBucketName(name)) return null;
+  return name;
+}
+
 export function toAccountBucket(item: unknown, expected?: BucketName): AccountBucket {
   const record = obj(item);
-  const name = parseBucketName(typeof record.name === "string" ? record.name : "");
+  const name = parseStoredBucketName(typeof record.name === "string" ? record.name : "");
   if (!name) throw new Error("invalid bucket name");
   if (expected !== undefined && name !== expected) throw new Error("unexpected bucket name");
   const created = record.creationDate;

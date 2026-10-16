@@ -1,8 +1,11 @@
 "use server";
 
 import * as vws from "@/lib/vws-api/client";
+import { MAX_OBJECT_BYTES, objectKeyProblem } from "@/lib/object-upload";
 import {
   parseBucketName,
+  parseStoredBucketName,
+  reservedBucketName,
   type ApiError,
   type ApiResult,
   type IngressPermission,
@@ -85,19 +88,54 @@ const INVALID_BUCKET_NAME: ApiError = {
   requestId: null,
 };
 
+const RESERVED_BUCKET_NAME: ApiError = {
+  code: "InvalidArgument",
+  message: "Bucket names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3, or --x-s3.",
+  requestId: null,
+};
+
 export async function createBucketAction(rawName: string): Promise<ApiError | null> {
   const name = parseBucketName(rawName);
-  if (!name) return INVALID_BUCKET_NAME;
-  const result = await vws.putBucket(name);
-  return result.ok ? null : result.error;
+  if (name) {
+    const result = await vws.putBucket(name);
+    return result.ok ? null : result.error;
+  }
+  const stored = parseStoredBucketName(rawName);
+  return stored && reservedBucketName(stored) ? RESERVED_BUCKET_NAME : INVALID_BUCKET_NAME;
 }
 
-export async function deleteBucketsAction(names: string[]): Promise<ApiError | null> {
-  return each(names, async (rawName) => {
-    const name = parseBucketName(rawName);
-    if (!name) return { ok: false, error: INVALID_BUCKET_NAME };
-    return vws.deleteBucket(name);
-  });
+export type BucketDeletion = { deleted: string[]; error: ApiError | null; failedName: string | null };
+
+export async function deleteBucketsAction(names: string[]): Promise<BucketDeletion> {
+  const deleted: string[] = [];
+  for (const rawName of names) {
+    const name = parseStoredBucketName(rawName);
+    if (!name) return { deleted, error: INVALID_BUCKET_NAME, failedName: rawName };
+    const result = await vws.deleteBucket(name);
+    if (!result.ok) return { deleted, error: result.error, failedName: name };
+    deleted.push(name);
+  }
+  return { deleted, error: null, failedName: null };
+}
+
+const OBJECT_TOO_LARGE: ApiError = {
+  code: "InvalidArgument",
+  message: "Objects larger than 4 MiB cannot be uploaded.",
+  requestId: null,
+};
+
+export async function uploadObjectAction(rawBucket: string, formData: FormData): Promise<ApiError | null> {
+  const bucket = parseStoredBucketName(rawBucket);
+  if (!bucket) return INVALID_BUCKET_NAME;
+  const key = String(formData.get("key") ?? "");
+  const keyProblem = objectKeyProblem(key);
+  if (keyProblem) return { code: "InvalidArgument", message: keyProblem, requestId: null };
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { code: "InvalidArgument", message: "Choose a file to upload.", requestId: null };
+  if (file.size > MAX_OBJECT_BYTES) return OBJECT_TOO_LARGE;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const result = await vws.putObject(bucket, key, bytes, file.type || "application/octet-stream");
+  return result.ok ? null : result.error;
 }
 
 export async function createSnapshotAction(volumeId: string, description: string) {

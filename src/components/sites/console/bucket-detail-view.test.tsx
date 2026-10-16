@@ -13,7 +13,7 @@ const nav = vi.hoisted(() => ({
 }));
 
 const actions = vi.hoisted(() => ({
-  uploadObjectAction: vi.fn(async () => null as ApiError | null),
+  uploadObjectAction: vi.fn<(bucket: string, form: FormData) => Promise<ApiError | null>>(async () => null),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -94,8 +94,8 @@ describe("UploadView", () => {
     fireEvent.change(input, { target: { files: [file] } });
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
     await waitFor(() => expect(actions.uploadObjectAction).toHaveBeenCalled());
-    const form = actions.uploadObjectAction.mock.calls[0]?.[1] as FormData;
-    expect(actions.uploadObjectAction.mock.calls[0]?.[0]).toBe("logs-1");
+    const [bucket, form] = actions.uploadObjectAction.mock.calls[0];
+    expect(bucket).toBe("logs-1");
     expect(form.get("key")).toBe("notes.txt");
     expect(form.get("file")).toBe(file);
     expect(screen.getByText("Stored notes.txt. This console cannot list objects.")).toBeTruthy();
