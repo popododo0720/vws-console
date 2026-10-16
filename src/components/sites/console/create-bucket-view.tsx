@@ -79,8 +79,8 @@ export function CreateBucketView() {
               />
               <p className="mt-1 text-[12px] text-[#5f6b7a]">
                 Bucket names must be 3–63 characters, unique in this account, and use only lowercase letters, numbers,
-                and hyphens. Names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3, or
-                --x-s3.
+                and hyphens. Names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3,
+                --x-s3, or --table-s3.
               </p>
               {error ? <p className="mt-1 text-[#d13212]">{error}</p> : null}
             </div>

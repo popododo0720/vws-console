@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { currentSession } from "./session";
 import { logAuth } from "./log";
 import { iamMode, iamState, IamUnavailableError, noteLoginEnabled, type IamMode } from "./mode";
+import { objectKeyProblem } from "@/lib/object-upload";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
 import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type {
@@ -336,6 +337,8 @@ export async function putObject(
   bytes: Uint8Array,
   contentType: string,
 ): Promise<ApiResult<void>> {
+  const keyProblem = objectKeyProblem(key);
+  if (keyProblem) return { ok: false, error: { code: "InvalidArgument", message: keyProblem, requestId: null } };
   const path = objectPath(bucket, key);
   const result = await request("PUT", path, { bytes, contentType });
   if (!result.ok) return { ok: false, error: result.error };

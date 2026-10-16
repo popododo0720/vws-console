@@ -73,7 +73,7 @@ export function nextPageToken(page: unknown): string {
 
 const BUCKET_NAME = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 const RESERVED_PREFIX = ["xn--", "sthree-", "amzn-s3-demo-"] as const;
-const RESERVED_SUFFIX = ["-s3alias", "--ol-s3", "--x-s3"] as const;
+const RESERVED_SUFFIX = ["-s3alias", "--ol-s3", "--x-s3", "--table-s3"] as const;
 
 export function parseStoredBucketName(input: string): BucketName | null {
   const name = input.trim();
