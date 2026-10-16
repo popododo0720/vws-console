@@ -275,6 +275,7 @@ export function browserReceiptStore(): ReceiptStore {
       scrubKeyEquivalentStorage();
       const draft = readAttempt(attempt);
       if ("code" in draft) throw new Error("The key pair request could not be stored.");
+      if (draft.mode === "import") return;
       writeNames([...readNames(), draft.name]);
     },
     delete() {

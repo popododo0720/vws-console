@@ -254,7 +254,7 @@ export function LaunchView({
                   aria-label="Key pair"
                   value={
                     keyChoice.kind === "pair"
-                      ? keyChoice.name
+                      ? (keyOptions.find((item) => item.name === keyChoice.name)?.id ?? "")
                       : keyChoice.kind === "opt-out" || keyChoice.kind === "none"
                         ? "proceed-without"
                         : ""
@@ -269,19 +269,21 @@ export function LaunchView({
                       setKeyChoice({ kind: "opt-out" });
                       return;
                     }
-                    const found = keyOptions.find((item) => item.name === value);
+                    const found = keyOptions.find((item) => item.id === value);
                     if (found) setKeyChoice({ kind: "pair", name: found.name });
                   }}
                 >
                   <option value="">Select a key pair</option>
                   <option value="proceed-without">{PROCEED_WITHOUT_KEY_PAIR}</option>
                   {keyOptions.map((item) => (
-                    <option key={item.id} value={item.name}>
+                    <option key={item.id} value={item.id}>
                       {item.name}
                     </option>
                   ))}
                 </select>
-                <OrangeButton onClick={creator.openGenerate}>Create new key pair</OrangeButton>
+                <button type="button" className="text-[13px] text-[#006ce0] underline" onClick={creator.openGenerate}>
+                  Create new key pair
+                </button>
               </div>
               {keyChoice.kind === "opt-out" || keyChoice.kind === "none" ? (
                 <div className="mt-3 space-y-2 text-[13px]">
