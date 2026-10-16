@@ -46,14 +46,6 @@ type ConsoleApi = {
   attachInternetGateway: (id: string, vpcId: string) => string | null;
   detachInternetGateway: (id: string) => void;
   deleteInternetGateways: (ids: string[]) => void;
-  createBucket: (input: {
-    name: string;
-    kind: Bucket["kind"];
-    versioning: boolean;
-    blockPublicAccess: boolean;
-  }) => string | null;
-  deleteBuckets: (names: string[]) => void;
-  emptyBucket: (name: string) => void;
   addObjects: (bucket: string, items: { key: string; sizeBytes: number }[]) => void;
   createFolder: (bucket: string, key: string) => void;
   deleteObjects: (bucket: string, keys: string[]) => void;
@@ -224,38 +216,6 @@ export function ConsoleProvider({
           ...prev,
           internetGateways: prev.internetGateways.filter((item) => item.state === "attached" || !ids.includes(item.id)),
         }));
-      },
-      createBucket: (input) => {
-        const name = input.name.trim();
-        if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(name)) {
-          return "Use 3–63 characters: lowercase letters, numbers, and hyphens.";
-        }
-        if (data.buckets.some((item) => item.name === name)) return "A bucket with that name already exists.";
-        setData((prev) => ({
-          ...prev,
-          buckets: [
-            ...prev.buckets,
-            {
-              name,
-              region,
-              created: "Just now",
-              kind: input.kind,
-              versioning: input.versioning,
-              blockPublicAccess: input.blockPublicAccess,
-            },
-          ],
-        }));
-        return null;
-      },
-      deleteBuckets: (names) => {
-        setData((prev) => ({
-          ...prev,
-          buckets: prev.buckets.filter((item) => !names.includes(item.name)),
-          objects: prev.objects.filter((item) => !names.includes(item.bucket)),
-        }));
-      },
-      emptyBucket: (name) => {
-        setData((prev) => ({ ...prev, objects: prev.objects.filter((item) => item.bucket !== name) }));
       },
       addObjects: (bucket, items) => {
         setData((prev) => {

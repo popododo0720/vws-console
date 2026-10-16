@@ -3,12 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createBucketAction } from "@/app/actions/resources";
 import { storageNav } from "@/lib/console-data";
 import type { BucketKind } from "@/types/console";
+import { useApiAction } from "@/components/sites/console/api-action";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
-import { FieldLabel, OrangeButton, OutlineButton, SampleBadge } from "@/components/sites/console/ui";
+import { FieldLabel, OrangeButton, OutlineButton } from "@/components/sites/console/ui";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -22,20 +24,26 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function CreateBucketView() {
   const api = useConsole();
   const router = useRouter();
+  const action = useApiAction();
   const [kind, setKind] = useState<BucketKind>("general");
   const [name, setName] = useState("");
   const [versioning, setVersioning] = useState(false);
   const [blockPublic, setBlockPublic] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [directoryError, setDirectoryError] = useState<string | null>(null);
 
   const submit = () => {
-    const message = api.createBucket({ name, kind, versioning, blockPublicAccess: blockPublic });
-    if (message) {
-      setError(message);
+    if (kind === "directory") {
+      setDirectoryError("Directory buckets are not available.");
       return;
     }
-    router.push(`/storage/buckets/${encodeURIComponent(name.trim())}`);
+    setDirectoryError(null);
+    action.run(
+      () => createBucketAction(name),
+      () => router.push("/storage/buckets"),
+    );
   };
+
+  const error = directoryError ?? action.error?.message ?? null;
 
   return (
     <Shell tree={storageNav}>
@@ -46,8 +54,7 @@ export function CreateBucketView() {
             { label: "Buckets", href: "/storage/buckets" },
             { label: "Create bucket" },
           ]}
-          info="Buckets are containers for objects. Settings are kept in this browser session only."
-          meta={api.mode === "sample" ? <SampleBadge /> : null}
+          info="Buckets are containers for objects."
         />
         <div className="mx-auto max-w-[900px] space-y-4 px-4 pb-8">
           <Section title="General configuration">
@@ -86,7 +93,7 @@ export function CreateBucketView() {
                 value={name}
                 onChange={(event) => {
                   setName(event.target.value);
-                  setError(null);
+                  setDirectoryError(null);
                 }}
               />
               <p className="mt-1 text-[12px] text-[#5f6b7a]">
