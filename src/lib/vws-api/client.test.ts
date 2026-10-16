@@ -222,7 +222,13 @@ describe("console-api client", () => {
       respond(202, { operation: { id: "op-3", state: "succeeded" } }),
       respond(202, { operation: { id: "op-4", state: "succeeded" } }),
     );
-    const req = { imageId: "ami-1", instanceType: "vws.small", subnetId: "subnet-1", count: 2 };
+    const req = {
+      imageId: "ami-1",
+      instanceType: "vws.small",
+      subnetId: "subnet-1",
+      count: 2,
+      keyPair: { kind: "none" as const },
+    };
     await launchInstances({ ...req, tags: { Name: "web" } });
     await launchInstances({ ...req, tags: {} });
     expect(calls.map((c) => [c.url, c.init.body])).toEqual([
