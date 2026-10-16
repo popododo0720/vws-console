@@ -45,7 +45,7 @@ export function VolumesView({
 }: {
   volumes: Volume[];
   loadError: ApiError | null;
-  instances: Pick<Instance, "id" | "name" | "state">[];
+  instances: Pick<Instance, "id" | "name" | "state" | "availabilityZone">[];
   instanceLoadError: ApiError | null;
 }) {
   const action = useApiAction();
@@ -65,7 +65,9 @@ export function VolumesView({
   const [form, setForm] = useState({ volumeType: VOLUME_TYPES[0], sizeGiB: 8 });
   const selected = volumes.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
-  const eligibleInstances = instances.filter((item) => item.state === "running" || item.state === "stopped");
+  const eligibleInstances = instances.filter(
+    (item) => (item.state === "running" || item.state === "stopped") && item.availabilityZone === one?.availabilityZone,
+  );
   const backedUp = volumes.filter((item) => item.snapshotId).length;
   const refresh = () => {
     setUpdated("less than a minute ago");
@@ -378,6 +380,7 @@ export function VolumesView({
         }
       >
         <div className="space-y-3">
+          <ApiErrorAlert error={action.error} title="The volume action failed" />
           <div>
             <FieldLabel>Volume ID</FieldLabel>
             <p className="text-[13px]">{one?.id ?? "—"}</p>
@@ -387,7 +390,7 @@ export function VolumesView({
             {instanceLoadError ? (
               <ApiErrorAlert error={instanceLoadError} title="Instances could not be loaded" />
             ) : eligibleInstances.length === 0 ? (
-              <p>There are no running or stopped instances in this region.</p>
+              <p>There are no running or stopped instances in this Availability Zone.</p>
             ) : (
               <select
                 className="field"
@@ -411,8 +414,8 @@ export function VolumesView({
               onChange={(event) => setAttachDevice(event.target.value)}
             />
             <p className="mt-1 text-[12px] text-[#5f6b7a]">
-              A root volume typically uses /dev/sda1 or /dev/xvda. /dev/sdf is a common data volume name. The VWS API
-              accepts any non-empty device name.
+              The device name you specify is used by EC2. The block device driver can mount the device with a device
+              name that is different from the one you specify.
             </p>
           </div>
         </div>
@@ -439,6 +442,7 @@ export function VolumesView({
           </>
         }
       >
+        <ApiErrorAlert error={action.error} title="The volume action failed" />
         {one?.attachment ? (
           <div className="space-y-2">
             <p>
