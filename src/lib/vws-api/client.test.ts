@@ -739,6 +739,27 @@ describe("console-api client", () => {
       expect(sent["idempotency-key"]).toBeUndefined();
     });
 
+    it("does not send an object key that walks out of the bucket", async () => {
+      serve(respond(200, { key: "victim.txt" }));
+      const bytes = new Uint8Array([1]);
+      for (const key of ["a/../victim.txt", "../../new-bucket", ".", "..", "a/./b.txt"]) {
+        expect(await putObject(mustName("logs-1"), key, bytes, "text/plain")).toMatchObject({
+          ok: false,
+          error: { code: "InvalidArgument" },
+        });
+      }
+      expect(calls).toEqual([]);
+    });
+
+    it("sends a key whose name contains dots but is not a dot segment", async () => {
+      serve(respond(200, { key: "a/foo..bar.txt" }));
+      expect(await putObject(mustName("logs-1"), "a/foo..bar.txt", new Uint8Array([1]), "text/plain")).toEqual({
+        ok: true,
+        value: undefined,
+      });
+      expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1/objects/a/foo..bar.txt");
+    });
+
     it("rejects an object response whose key does not match", async () => {
       serve(respond(200, { key: "other.txt" }));
       expect(await putObject(mustName("logs-1"), "notes.txt", new Uint8Array([1]), "text/plain")).toMatchObject({

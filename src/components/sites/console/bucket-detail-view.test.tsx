@@ -101,4 +101,20 @@ describe("UploadView", () => {
     expect(screen.getByText("Stored notes.txt. This console cannot list objects.")).toBeTruthy();
     expect(nav.push).not.toHaveBeenCalled();
   });
+
+  it("shows a transport failure and keeps the file selected", async () => {
+    actions.uploadObjectAction.mockRejectedValue(new Error("Body exceeded 1 MB limit"));
+    render(
+      <ConsoleProvider>
+        <UploadView name="logs-1" bucket={logsBucket()} loadError={null} />
+      </ConsoleProvider>,
+    );
+    const file = new File(["hello"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(screen.getByLabelText("Add files"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(screen.getByText("The upload could not be sent.")).toBeTruthy();
+    expect(screen.getByText("notes.txt")).toBeTruthy();
+    expect(screen.queryByText(/Stored notes.txt/)).toBeNull();
+  });
 });
