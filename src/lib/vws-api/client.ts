@@ -310,6 +310,16 @@ export const listInstanceTypes = (): Promise<ApiResult<InstanceType[]>> =>
 /** console-api only grows a volume; it refuses a smaller size. */
 export const modifyVolume = (id: string, size: number) => mutate(`/volumes/${seg(id)}/modify`, { size });
 
+type VolumeAttachment = { instanceId: string; device: string };
+
+export async function attachVolume(_volumeId: string, _input: VolumeAttachment): Promise<ApiResult<void>> {
+  return { ok: false, error: { code: "NotImplemented", message: "Not implemented.", requestId: null } };
+}
+
+export function detachVolume(_volumeId: string): Promise<ApiResult<void>> {
+  return Promise.resolve({ ok: false, error: { code: "NotImplemented", message: "Not implemented.", requestId: null } });
+}
+
 export const listSecurityGroups = (): Promise<ApiResult<SecurityGroup[]>> =>
   listAll("/security-groups", parseSecurityGroups);
 

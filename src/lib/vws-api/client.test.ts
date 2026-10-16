@@ -31,6 +31,8 @@ import {
   launchInstances,
   listVpcs,
   modifyVolume,
+  attachVolume,
+  detachVolume,
 } from "./client";
 
 type Call = { url: string; init: RequestInit };
@@ -293,6 +295,47 @@ describe("console-api client", () => {
     expect(await modifyVolume("vol-1", 9)).toEqual({ ok: true, value: undefined });
     expect(calls[0].url).toBe("http://api.test/api/v1/volumes/vol-1/modify");
     expect(calls[0].init.body).toBe('{"size":9}');
+  });
+
+  it("posts instance and device to the attach endpoint", async () => {
+    serve(respond(202, { operation: { id: "op-attach", state: "succeeded" }, items: [] }));
+    expect(await attachVolume("vol-1", { instanceId: "i-1", device: "/dev/sdf" })).toEqual({
+      ok: true,
+      value: undefined,
+    });
+    expect(calls[0].url).toBe("http://api.test/api/v1/volumes/vol-1/attach");
+    expect(calls[0].init.body).toBe('{"instanceId":"i-1","device":"/dev/sdf"}');
+  });
+
+  it("trims the instance id and device name before attaching", async () => {
+    serve(respond(202, { operation: { id: "op-trim", state: "succeeded" }, items: [] }));
+    expect(await attachVolume("vol-1", { instanceId: " i-1 ", device: " /dev/sdf " })).toEqual({
+      ok: true,
+      value: undefined,
+    });
+    expect(calls[0].url).toBe("http://api.test/api/v1/volumes/vol-1/attach");
+    expect(calls[0].init.body).toBe('{"instanceId":"i-1","device":"/dev/sdf"}');
+  });
+
+  it("rejects a blank instance id or device name without calling the API", async () => {
+    const invalid = {
+      ok: false,
+      error: {
+        code: "InvalidAttachment",
+        message: "Choose an instance and a device name.",
+        requestId: null,
+      },
+    };
+    expect(await attachVolume("vol-1", { instanceId: "  ", device: "/dev/sdf" })).toEqual(invalid);
+    expect(await attachVolume("vol-1", { instanceId: "i-1", device: "" })).toEqual(invalid);
+    expect(calls).toEqual([]);
+  });
+
+  it("posts an empty body to the detach endpoint", async () => {
+    serve(respond(202, { operation: { id: "op-detach", state: "succeeded" }, items: [] }));
+    expect(await detachVolume("vol-1")).toEqual({ ok: true, value: undefined });
+    expect(calls[0].url).toBe("http://api.test/api/v1/volumes/vol-1/detach");
+    expect(calls[0].init.body).toBe("{}");
   });
 
   it("sends a Name tag on create and renames VPCs and subnets through their tags endpoints", async () => {
