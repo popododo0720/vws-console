@@ -922,5 +922,20 @@ describe("console-api client", () => {
       expect(calls[0].url).toBe("http://api.test/api/v1/instances");
       expect(calls[0].init.body).toBe('{"imageId":"ami-1","instanceType":"vws.small","subnetId":"subnet-1","count":1}');
     });
+
+    it("does not launch while the key pair choice is unset or unacknowledged", async () => {
+      serve(respond(202, { operation: { id: "op-no", state: "succeeded" } }));
+      const undecided = [{ kind: "unset" }, { kind: "opt-out" }] as const;
+      for (const keyPair of undecided) {
+        await expect(
+          launchInstances({
+            ...launchBase,
+            tags: {},
+            keyPair: keyPair as unknown as { kind: "none" },
+          }),
+        ).rejects.toThrow("Select a key pair or proceed without one.");
+      }
+      expect(calls).toEqual([]);
+    });
   });
 });
