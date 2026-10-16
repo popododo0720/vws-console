@@ -287,6 +287,9 @@ export const getVpc = (id: string): Promise<ApiResult<Vpc | null>> => getOne(`/v
 export const getVolume = (id: string): Promise<ApiResult<Volume | null>> => getOne(`/volumes/${seg(id)}`, toVolume);
 
 export const launchInstances = ({ tags, keyPair, ...rest }: LaunchRequest) => {
+  if (keyPair.kind !== "pair" && keyPair.kind !== "none") {
+    return Promise.reject(new Error("Select a key pair or proceed without one."));
+  }
   const named = keyPair.kind === "pair" ? { keyName: keyPair.name } : {};
   const body = { ...rest, ...named };
   return mutate("/instances", Object.keys(tags).length > 0 ? { ...body, tags } : body);
