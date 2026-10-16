@@ -19,9 +19,13 @@ import type {
 } from "@/types/console";
 import {
   firstItem,
+  parseAccountBuckets,
   parseAddresses,
   parseSecurityGroups,
   parseSnapshots,
+  toAccountBucket,
+  type AccountBucket,
+  type BucketName,
   type IngressPermission,
   nextPageToken,
   parseApiError,
@@ -120,60 +124,64 @@ async function toLogin(reason: "signin" | "expired"): Promise<never> {
   redirect(query ? `${LOGIN_PATH}?${query}` : LOGIN_PATH);
 }
 
+type RequestResult =
+  { ok: true; value: { status: number; json: unknown } } | { ok: false; status: number | null; error: ApiError };
+
 /**
  * Calls console-api as the signed-in user. The session cookie is forwarded from this server only,
  * and every write carries X-CSRF-Token. A missing session or a 401 redirects to the login screen.
  */
+async function request(method: "GET" | "PUT" | "DELETE", path: string): Promise<RequestResult>;
+async function request(method: "POST", path: string, body?: unknown): Promise<RequestResult>;
 async function request(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
-): Promise<ApiResult<{ status: number; json: unknown }>> {
+): Promise<RequestResult> {
   const base = apiBase();
-  if (typeof base !== "string") return { ok: false, error: base };
+  if (typeof base !== "string") return { ok: false, status: null, error: base };
   const mode = await modeOrError();
-  if (typeof mode !== "string") return { ok: false, error: mode };
+  if (typeof mode !== "string") return { ok: false, status: null, error: mode };
   const iam = mode === "on";
   const headers: Record<string, string> = { accept: "application/json" };
+  if (method !== "GET") headers["content-type"] = "application/json";
+  if (method === "POST") headers["idempotency-key"] = randomUUID();
   if (iam) {
     const session = await currentSession();
     if (!session) return toLogin("signin");
     headers.cookie = `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`;
-    if (method === "POST") {
+    if (method !== "GET") {
       headers["x-csrf-token"] = session.csrf;
       Object.assign(headers, await browserOrigin());
     }
   } else {
     const token = bearer();
-    if (typeof token !== "string") return { ok: false, error: token };
+    if (typeof token !== "string") return { ok: false, status: null, error: token };
     headers.authorization = `Bearer ${token}`;
-  }
-  if (method === "POST") {
-    headers["idempotency-key"] = randomUUID();
-    headers["content-type"] = "application/json";
   }
   let response: ApiReply;
   let json: unknown;
   try {
-    // apiFetch retries a GET on transient failures and sends a POST exactly once.
+    // apiFetch retries a GET on transient failures and sends any other method exactly once.
     response = await apiFetch(`${base}/api/v1${path}`, {
       method,
       headers,
       body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
     });
   } catch (error) {
-    return { ok: false, error: transportError(error) };
+    return { ok: false, status: null, error: transportError(error) };
   }
   try {
     json = parseJson(response.text);
   } catch {
-    return { ok: false, error: { ...malformed(path), requestId: response.requestId } };
+    return { ok: false, status: response.status, error: { ...malformed(path), requestId: response.requestId } };
   }
   // With IAM off a 401 means a wrong token, which signing in cannot fix, so it is shown as an error.
   if (response.status === 401 && iam) return toLogin("expired");
   if (response.status < 200 || response.status > 299) {
     return {
       ok: false,
+      status: response.status,
       error: parseApiError(json) ?? {
         code: "InternalError",
         message: `The VWS console API answered HTTP ${response.status}.`,
@@ -192,12 +200,19 @@ function malformed(path: string): ApiError {
   };
 }
 
-async function listAll<T>(path: string, parse: (page: unknown) => T[]): Promise<ApiResult<T[]>> {
+function listQuery(path: string, pageSize: number | undefined, token: string): string {
+  const params: string[] = [];
+  if (pageSize !== undefined) params.push(`pageSize=${pageSize}`);
+  if (token) params.push(`pageToken=${encodeURIComponent(token)}`);
+  return params.length === 0 ? path : `${path}?${params.join("&")}`;
+}
+
+async function listAll<T>(path: string, parse: (page: unknown) => T[], pageSize?: number): Promise<ApiResult<T[]>> {
   const out: T[] = [];
   let token = "";
   do {
-    const result = await request("GET", token ? `${path}?pageToken=${encodeURIComponent(token)}` : path);
-    if (!result.ok) return result;
+    const result = await request("GET", listQuery(path, pageSize, token));
+    if (!result.ok) return { ok: false, error: result.error };
     try {
       out.push(...parse(result.value.json));
     } catch {
@@ -219,7 +234,7 @@ async function mutate(path: string, body?: unknown): Promise<ApiResult<void>> {
 /** Like mutate, but returns the body of the accepted request, which names the new resource. */
 async function mutateReturning(path: string, body?: unknown): Promise<ApiResult<unknown>> {
   const sent = await request("POST", path, body);
-  if (!sent.ok) return sent;
+  if (!sent.ok) return { ok: false, error: sent.error };
   if (sent.value.status !== 202) return { ok: true, value: sent.value.json };
   let op;
   try {
@@ -237,7 +252,7 @@ async function mutateReturning(path: string, body?: unknown): Promise<ApiResult<
     }
     await sleep(POLL_INTERVAL_MS);
     const polled = await request("GET", `/operations/${encodeURIComponent(op.id)}`);
-    if (!polled.ok) return polled;
+    if (!polled.ok) return { ok: false, error: polled.error };
     try {
       op = parseOperation(polled.value.json);
     } catch {
@@ -260,11 +275,37 @@ export const listInstances = (): Promise<ApiResult<Instance[]>> => listAll("/ins
 export const listVolumes = (): Promise<ApiResult<Volume[]>> => listAll("/volumes", parseVolumes);
 export const listVpcs = (): Promise<ApiResult<Vpc[]>> => listAll("/vpcs", parseVpcs);
 export const listSubnets = (): Promise<ApiResult<Subnet[]>> => listAll("/subnets", parseSubnets);
+export const listBuckets = (): Promise<ApiResult<AccountBucket[]>> => listAll("/buckets", parseAccountBuckets, 100);
+
+export async function putBucket(name: BucketName): Promise<ApiResult<AccountBucket>> {
+  const path = `/buckets/${seg(name)}`;
+  const result = await request("PUT", path);
+  if (!result.ok) return { ok: false, error: result.error };
+  if (result.value.status !== 200) return { ok: false, error: malformed(path) };
+  try {
+    return { ok: true, value: toAccountBucket(result.value.json, name) };
+  } catch {
+    return { ok: false, error: malformed(path) };
+  }
+}
+
+export async function deleteBucket(name: BucketName): Promise<ApiResult<void>> {
+  const path = `/buckets/${seg(name)}`;
+  const result = await request("DELETE", path);
+  if (!result.ok) {
+    if (result.status === 404 && result.error.code === "NotFound") return { ok: true, value: undefined };
+    return { ok: false, error: result.error };
+  }
+  if (result.value.status !== 204) return { ok: false, error: malformed(path) };
+  return { ok: true, value: undefined };
+}
 
 /** Reads one resource; a 404 is a missing resource, not an error. */
 async function getOne<T>(path: string, map: (item: Record<string, unknown>) => T): Promise<ApiResult<T | null>> {
   const result = await request("GET", path);
-  if (!result.ok) return result.error.code === "NotFound" ? { ok: true, value: null } : result;
+  if (!result.ok) {
+    return result.error.code === "NotFound" ? { ok: true, value: null } : { ok: false, error: result.error };
+  }
   try {
     return { ok: true, value: map(result.value.json as Record<string, unknown>) };
   } catch {
@@ -474,7 +515,7 @@ export type SessionInfo = { principal: string; account: string; root: boolean; e
 
 export async function getSession(): Promise<ApiResult<SessionInfo>> {
   const result = await request("GET", "/auth/session");
-  if (!result.ok) return result;
+  if (!result.ok) return { ok: false, error: result.error };
   const body = (result.value.json ?? {}) as Record<string, unknown>;
   const text = (value: unknown) => (typeof value === "string" ? value : "");
   return {
