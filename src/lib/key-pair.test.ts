@@ -54,6 +54,13 @@ describe("key pair rules", () => {
     expect(
       parseDraft({ mode: "generate", name: "é".repeat(128), keyType: "rsa", keyFormat: "pem", publicKey: "" }).ok,
     ).toBe(false);
+    const empty = parseDraft({ mode: "generate", name: "", keyType: "rsa", keyFormat: "pem", publicKey: "" });
+    expect(empty.ok).toBe(false);
+    if (!empty.ok) {
+      expect(empty.error.message).toBe(
+        "Enter a key pair name of 1 to 255 ASCII characters. It cannot start or end with a space.",
+      );
+    }
     const fit = parseDraft({
       mode: "generate",
       name: "a".repeat(255),
@@ -62,14 +69,17 @@ describe("key pair rules", () => {
       publicKey: "",
     });
     expect(fit.ok).toBe(true);
-    const multibyte = parseDraft({
+    const internalSpace = parseDraft({
       mode: "generate",
-      name: "é".repeat(127),
-      keyType: "ed25519",
-      keyFormat: "ppk",
+      name: "web server",
+      keyType: "rsa",
+      keyFormat: "pem",
       publicKey: "",
     });
-    expect(multibyte.ok).toBe(true);
+    expect(internalSpace.ok).toBe(true);
+    for (const name of [" web", "web ", " web ", "é", "é".repeat(127), "a".repeat(254) + "é"]) {
+      expect(parseDraft({ mode: "generate", name, keyType: "rsa", keyFormat: "pem", publicKey: "" }).ok).toBe(false);
+    }
     expect(parseDraft({ mode: "import", name: "laptop", keyType: "rsa", keyFormat: "pem", publicKey: "" }).ok).toBe(
       false,
     );
@@ -118,11 +128,19 @@ describe("key pair rules", () => {
     expect(again.body).toBe(created.body);
   });
 
-  it("round-trips generate and import bodies and does not trim the name", () => {
+  it("round-trips generate and import bodies and rejects a padded name", () => {
     const store = memoryReceiptStore();
-    const generated = parseDraft({
+    const padded = parseDraft({
       mode: "generate",
       name: " web",
+      keyType: "ed25519",
+      keyFormat: "ppk",
+      publicKey: "",
+    });
+    expect(padded.ok).toBe(false);
+    const generated = parseDraft({
+      mode: "generate",
+      name: "web",
       keyType: "ed25519",
       keyFormat: "ppk",
       publicKey: "",
@@ -130,7 +148,7 @@ describe("key pair rules", () => {
     expect(generated.ok).toBe(true);
     if (!generated.ok) return;
     const generateAttempt = commitAttempt(store, generated.value);
-    expect(generateAttempt.body).toBe('{"keyName":" web","keyType":"ed25519","keyFormat":"ppk"}');
+    expect(generateAttempt.body).toBe('{"keyName":"web","keyType":"ed25519","keyFormat":"ppk"}');
     expect(readAttempt(generateAttempt)).toEqual(generated.value);
 
     const imported = parseDraft({
@@ -149,19 +167,87 @@ describe("key pair rules", () => {
     expect(readAttempt(importAttempt)).toEqual({ mode: "import", name: "laptop", publicKey: "ssh-ed25519 AAAA" });
   });
 
-  it("stores one localStorage entry per attempt and no private key bytes", () => {
+  it("persists a pending name and not the idempotency token or request body", () => {
     const store = browserReceiptStore();
     const parsed = parseDraft({ mode: "generate", name: "web", keyType: "rsa", keyFormat: "pem", publicKey: "" });
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     const created = commitAttempt(store, parsed.value);
-    const raw = localStorage.getItem(`vws.key-pair-receipt.${created.idempotencyKey}`);
-    expect(raw).toContain(created.body);
-    expect(raw).not.toContain("keyMaterial");
-    expect(store.read(created.idempotencyKey)).toEqual(created);
-    const second = commitAttempt(store, parsed.value);
-    expect(localStorage.getItem(`vws.key-pair-receipt.${second.idempotencyKey}`)).toContain(second.body);
-    expect(store.list()).toHaveLength(2);
+    const dump = JSON.stringify(localStorage);
+    expect(dump).toContain("web");
+    expect(dump).not.toContain(created.idempotencyKey);
+    expect(dump).not.toContain("keyType");
+    expect(dump).not.toContain("keyFormat");
+    expect(store.read(created.idempotencyKey)).toBeNull();
+    expect(store.list()).toEqual([]);
+  });
+
+  it("rejects a private key before it can be stored", () => {
+    const secrets = [
+      "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----",
+      "-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----",
+      "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----",
+      "-----BEGIN EC PRIVATE KEY-----\nAAAA\n-----END EC PRIVATE KEY-----",
+      "PuTTY-User-Key-File-2: ssh-ed25519\nEncryption: none\nPublic-Lines: 1\nAAAA",
+      "PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: none\nPublic-Lines: 1\nAAAA",
+    ];
+    for (const secret of secrets) {
+      const parsed = parseDraft({
+        mode: "import",
+        name: "laptop",
+        keyType: "rsa",
+        keyFormat: "pem",
+        publicKey: `  ${secret}  `,
+      });
+      expect(parsed.ok).toBe(false);
+      if (!parsed.ok) {
+        expect(parsed.error.message).toBe("Enter a public key. A private key is not accepted.");
+        expect(parsed.error.message).not.toContain("PRIVATE");
+        expect(parsed.error.message).not.toContain("AAAA");
+        expect(parsed.error.message).not.toContain("PuTTY");
+      }
+      const memory = memoryReceiptStore();
+      try {
+        commitAttempt(memory, { mode: "import", name: "laptop" as KeyPairName, publicKey: secret });
+      } catch {
+        expect(memory.list()).toEqual([]);
+      }
+      expect(memory.list()).toEqual([]);
+      try {
+        commitAttempt(browserReceiptStore(), { mode: "import", name: "laptop" as KeyPairName, publicKey: secret });
+      } catch {
+        expect(JSON.stringify(localStorage)).not.toContain("PRIVATE KEY");
+      }
+      expect(JSON.stringify(localStorage)).not.toContain("PRIVATE KEY");
+      expect(JSON.stringify(localStorage)).not.toContain("PuTTY-User-Key-File");
+      expect(JSON.stringify(localStorage)).not.toContain("AAAA");
+    }
+    const openssh = parseDraft({
+      mode: "import",
+      name: "laptop",
+      keyType: "rsa",
+      keyFormat: "pem",
+      publicKey: "ssh-ed25519 AAAA laptop",
+    });
+    expect(openssh.ok).toBe(true);
+    const rfc4716 = parseDraft({
+      mode: "import",
+      name: "laptop",
+      keyType: "rsa",
+      keyFormat: "pem",
+      publicKey: "---- BEGIN SSH2 PUBLIC KEY ----\nAAAA\n---- END SSH2 PUBLIC KEY ----",
+    });
+    expect(rfc4716.ok).toBe(true);
+  });
+
+  it("does not read a stored private key back as an import", () => {
+    const secret = "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----";
+    const read = readAttempt({
+      idempotencyKey: "attempt-1" as IdempotencyKey,
+      body: JSON.stringify({ keyName: "laptop", publicKeyMaterial: secret }),
+    });
+    expect(read).toMatchObject({ code: "InvalidArgument" });
+    if ("code" in read) expect(read.message).not.toContain("AAAA");
   });
 
   it("follows the create result table", () => {
