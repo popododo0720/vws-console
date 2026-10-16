@@ -15,6 +15,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("./session", () => ({ currentSession: async () => nav.session }));
 
+import { parseBucketName, type BucketName } from "./adapter";
 import {
   login,
   logout,
@@ -25,13 +26,22 @@ import {
   createInstanceTags,
   createSecurityGroup,
   createVpc,
+  deleteBucket,
   getVolume,
   getVpc,
   instanceBatch,
   launchInstances,
+  listBuckets,
   listVpcs,
   modifyVolume,
+  putBucket,
 } from "./client";
+
+function mustName(input: string): BucketName {
+  const name = parseBucketName(input);
+  if (!name) throw new Error(input);
+  return name;
+}
 
 type Call = { url: string; init: RequestInit };
 
@@ -488,6 +498,170 @@ describe("console-api client", () => {
     });
   });
 
+  describe("buckets", () => {
+    const logs = { name: "logs-1", ownerId: "123", creationDate: "2026-08-02T00:00:00Z" };
+    const accountLogs = { name: "logs-1", ownerId: "123", created: "2026-08-02T00:00:00Z" };
+    const headers = (call: Call) => call.init.headers as Record<string, string>;
+
+    it("follows bucket page tokens with pageSize and the session cookie", async () => {
+      serve(
+        respond(200, { items: [logs], nextPageToken: "p2" }),
+        respond(200, { items: [{ ...logs, name: "logs-2" }] }),
+      );
+      const result = await listBuckets();
+      expect(result.ok && result.value.map((bucket) => bucket.name)).toEqual(["logs-1", "logs-2"]);
+      expect(calls.map((call) => [call.init.method, call.url])).toEqual([
+        ["GET", "http://api.test/api/v1/buckets?pageSize=100"],
+        ["GET", "http://api.test/api/v1/buckets?pageSize=100&pageToken=p2"],
+      ]);
+      const sent = headers(calls[0]);
+      expect(sent.accept).toBe("application/json");
+      expect(sent.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+      expect(sent["x-csrf-token"]).toBeUndefined();
+      expect(sent.origin).toBeUndefined();
+      expect(sent["content-type"]).toBeUndefined();
+      expect(sent["idempotency-key"]).toBeUndefined();
+      expect(sent.authorization).toBeUndefined();
+    });
+
+    it("returns no buckets when the page is empty", async () => {
+      serve(respond(200, { items: [] }));
+      expect(await listBuckets()).toEqual({ ok: true, value: [] });
+      expect(calls.map((call) => call.url)).toEqual(["http://api.test/api/v1/buckets?pageSize=100"]);
+    });
+
+    it("returns MalformedResponse for a bad name and does not request the next page", async () => {
+      serve(
+        respond(200, {
+          items: [{ name: "A", ownerId: "1", creationDate: "2026-08-02T00:00:00Z" }],
+          nextPageToken: "p2",
+        }),
+        respond(200, { items: [{ ...logs, name: "logs-2" }] }),
+      );
+      expect(await listBuckets()).toMatchObject({ ok: false, error: { code: "MalformedResponse" } });
+      expect(calls).toHaveLength(1);
+    });
+
+    it("puts a bucket with cookie write headers and no body", async () => {
+      serve(respond(200, logs));
+      expect(await putBucket(mustName("logs-1"))).toEqual({ ok: true, value: accountLogs });
+      expect(calls).toHaveLength(1);
+      expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1");
+      expect(calls[0].init.method).toBe("PUT");
+      expect(calls[0].init.body ?? null).toBeNull();
+      const sent = headers(calls[0]);
+      expect(sent.accept).toBe("application/json");
+      expect(sent["content-type"]).toBe("application/json");
+      expect(sent.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+      expect(sent["x-csrf-token"]).toBe("csrf-1");
+      expect(sent.origin).toBe("http://console.test");
+      expect(sent["idempotency-key"]).toBeUndefined();
+      expect(sent.authorization).toBeUndefined();
+    });
+
+    it("treats a 200 for an existing name as that same bucket", async () => {
+      serve(respond(200, logs));
+      const result = await putBucket(mustName("logs-1"));
+      expect(result).toEqual({ ok: true, value: accountLogs });
+      expect(calls).toHaveLength(1);
+    });
+
+    it("returns AlreadyExists from a 409 without a second request", async () => {
+      serve(
+        respond(409, {
+          error: { code: "AlreadyExists", field: "name", message: "already exists" },
+          requestId: "r-1",
+        }),
+      );
+      expect(await putBucket(mustName("logs-1"))).toEqual({
+        ok: false,
+        error: { code: "AlreadyExists", message: "already exists", requestId: "r-1" },
+      });
+      expect(calls).toHaveLength(1);
+    });
+
+    it("rejects a 200 whose name is not the one requested", async () => {
+      serve(respond(200, { ...logs, name: "other-1" }));
+      expect(await putBucket(mustName("logs-1"))).toMatchObject({ ok: false, error: { code: "MalformedResponse" } });
+      expect(calls).toHaveLength(1);
+    });
+
+    it("deletes a bucket with one 204 and the same cookie write headers", async () => {
+      serve(new Response(null, { status: 204 }));
+      expect(await deleteBucket(mustName("logs-1"))).toEqual({ ok: true, value: undefined });
+      expect(calls).toHaveLength(1);
+      expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1");
+      expect(calls[0].init.method).toBe("DELETE");
+      expect(calls[0].init.body ?? null).toBeNull();
+      const sent = headers(calls[0]);
+      expect(sent.accept).toBe("application/json");
+      expect(sent["content-type"]).toBe("application/json");
+      expect(sent.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+      expect(sent["x-csrf-token"]).toBe("csrf-1");
+      expect(sent.origin).toBe("http://console.test");
+      expect(sent["idempotency-key"]).toBeUndefined();
+      expect(sent.authorization).toBeUndefined();
+    });
+
+    it("treats a 404 NotFound as a deleted bucket", async () => {
+      serve(respond(404, { error: { code: "NotFound", message: "missing" } }));
+      expect(await deleteBucket(mustName("logs-1"))).toEqual({ ok: true, value: undefined });
+      expect(calls).toHaveLength(1);
+    });
+
+    it("keeps a 404 that is not NotFound as an error", async () => {
+      serve(respond(404, { error: { code: "Forbidden", message: "no" }, requestId: "r-4" }));
+      expect(await deleteBucket(mustName("logs-1"))).toEqual({
+        ok: false,
+        error: { code: "Forbidden", message: "no", requestId: "r-4" },
+      });
+    });
+
+    it("returns the conflict when the bucket is not empty", async () => {
+      serve(respond(409, { error: { code: "Conflict", message: "bucket is not empty" }, requestId: "r-9" }));
+      expect(await deleteBucket(mustName("logs-1"))).toEqual({
+        ok: false,
+        error: { code: "Conflict", message: "bucket is not empty", requestId: "r-9" },
+      });
+    });
+
+    it("rejects a PUT 204 and a DELETE 200 as MalformedResponse", async () => {
+      serve(new Response(null, { status: 204 }));
+      expect(await putBucket(mustName("logs-1"))).toMatchObject({ ok: false, error: { code: "MalformedResponse" } });
+      serve(respond(200, logs));
+      expect(await deleteBucket(mustName("logs-1"))).toMatchObject({ ok: false, error: { code: "MalformedResponse" } });
+    });
+
+    it("redirects a cookie-mode 401 on PUT to login", async () => {
+      serve(respond(401, { error: { code: "Unauthenticated", message: "authentication required" } }));
+      await expect(putBucket(mustName("logs-1"))).rejects.toThrow(
+        "REDIRECT /login?reason=expired&next=%2Fnetwork%2Fvpcs",
+      );
+      expect(calls).toHaveLength(1);
+    });
+
+    it("does not poll an operation after a PUT 500", async () => {
+      serve(respond(500, { error: { code: "InternalError", message: "nope" } }));
+      expect(await putBucket(mustName("logs-1"))).toMatchObject({ ok: false, error: { code: "InternalError" } });
+      expect(calls).toHaveLength(1);
+      expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1");
+    });
+
+    it("returns UnsupportedMediaType from a PUT 415", async () => {
+      serve(
+        respond(415, {
+          error: { code: "UnsupportedMediaType", message: "application/json required" },
+          requestId: "r-15",
+        }),
+      );
+      expect(await putBucket(mustName("logs-1"))).toEqual({
+        ok: false,
+        error: { code: "UnsupportedMediaType", message: "application/json required", requestId: "r-15" },
+      });
+      expect(calls).toHaveLength(1);
+    });
+  });
+
   describe("IAM off (the default)", () => {
     beforeEach(() => {
       vi.stubEnv("VWS_CONSOLE_IAM", "off");
@@ -547,6 +721,27 @@ describe("console-api client", () => {
       expect(await signedInSession()).toMatchObject({ account: "123456789012" });
       expect(calls[0].init.headers).toMatchObject({ authorization: "Bearer tok" });
       expect((calls[0].init.headers as Record<string, string>).cookie).toBeUndefined();
+    });
+
+    it("puts a bucket with the bearer token and no cookie write headers", async () => {
+      nav.session = null;
+      serve(respond(200, { name: "logs-1", ownerId: "123", creationDate: "2026-08-02T00:00:00Z" }));
+      expect(await putBucket(mustName("logs-1"))).toMatchObject({ ok: true, value: { name: "logs-1" } });
+      const sent = calls[0].init.headers as Record<string, string>;
+      expect(calls[0].init.method).toBe("PUT");
+      expect(sent.authorization).toBe("Bearer tok");
+      expect(sent["content-type"]).toBe("application/json");
+      expect(sent.cookie).toBeUndefined();
+      expect(sent["x-csrf-token"]).toBeUndefined();
+      expect(sent.origin).toBeUndefined();
+      expect(sent["idempotency-key"]).toBeUndefined();
+      expect(calls).toHaveLength(1);
+    });
+
+    it("shows a PUT 401 as Unauthenticated instead of redirecting", async () => {
+      serve(respond(401, { error: { code: "Unauthenticated", message: "bad token" } }));
+      expect(await putBucket(mustName("logs-1"))).toMatchObject({ ok: false, error: { code: "Unauthenticated" } });
+      expect(calls).toHaveLength(1);
     });
   });
 
