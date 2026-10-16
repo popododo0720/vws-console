@@ -158,11 +158,6 @@ function rawBody(value: unknown): RawBody | null {
   return { bytes, contentType };
 }
 
-/**
- * Calls console-api as the signed-in user. The session cookie is forwarded from this server only,
- * and every write carries X-CSRF-Token. A missing session or a 401 redirects to the login screen.
- * Cookie writes must use application/json or the API gate refuses them before the handler.
- */
 type PostOptions = { idempotencyKey?: string; bodyText?: string };
 
 async function request(
