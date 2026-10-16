@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { parseBucketName } from "@/lib/vws-api/adapter";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { TopBar } from "@/components/sites/console/top-bar";
 
@@ -38,5 +39,20 @@ describe("TopBar account menu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /—/ }));
     expect(screen.queryByRole("menuitem", { name: "Sign out" })).toBeNull();
+  });
+
+  it("links an account bucket to its page and ignores sample buckets", () => {
+    const name = parseBucketName("logs-1");
+    if (!name) throw new Error("logs-1");
+    render(
+      <ConsoleProvider accountBuckets={[{ name, ownerId: "1", created: "2026-08-02T00:00:00Z" }]}>
+        <TopBar onMenu={() => {}} />
+      </ConsoleProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /—/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Show sample data" }));
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "logs" } });
+    expect(screen.getByRole("link", { name: /logs-1/ }).getAttribute("href")).toBe("/storage/buckets/logs-1");
+    expect(screen.queryByRole("link", { name: /vws-logs/ })).toBeNull();
   });
 });
