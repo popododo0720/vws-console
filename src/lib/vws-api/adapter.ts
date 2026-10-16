@@ -128,6 +128,7 @@ export function toInstance(item: Json): Instance {
 }
 
 export function toVolume(item: Json): Volume {
+  const instanceId = str(item.instanceId);
   return {
     id: str(item.volumeId),
     name: "",
@@ -142,7 +143,7 @@ export function toVolume(item: Json): Volume {
     created: str(item.createTime),
     availabilityZone: str(item.availabilityZone),
     region: REGION,
-    attachedTo: str(item.instanceId),
+    attachment: instanceId ? { instanceId, device: str(item.device) } : null,
   };
 }
 

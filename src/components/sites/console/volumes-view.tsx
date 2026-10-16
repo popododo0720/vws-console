@@ -3,13 +3,15 @@
 import { DetailLink } from "@/components/sites/console/resource-detail";
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
-import type { Volume } from "@/types/console";
+import type { Instance, Volume } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
 import {
+  attachVolumeAction,
   createSnapshotAction,
   createVolumeAction,
   deleteVolumesAction,
+  detachVolumeAction,
   modifyVolumeAction,
 } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
@@ -35,7 +37,17 @@ function volumeState(row: Volume) {
   return row.state ? row.state.charAt(0).toUpperCase() + row.state.slice(1) : "—";
 }
 
-export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadError: ApiError | null }) {
+export function VolumesView({
+  volumes,
+  loadError,
+  instances,
+  instanceLoadError,
+}: {
+  volumes: Volume[];
+  loadError: ApiError | null;
+  instances: Pick<Instance, "id" | "name" | "state">[];
+  instanceLoadError: ApiError | null;
+}) {
   const action = useApiAction();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(240);
@@ -46,9 +58,14 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
   const [snapDescription, setSnapDescription] = useState("");
   const [modifyOpen, setModifyOpen] = useState(false);
   const [modifySize, setModifySize] = useState(0);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [detachOpen, setDetachOpen] = useState(false);
+  const [attachInstanceId, setAttachInstanceId] = useState("");
+  const [attachDevice, setAttachDevice] = useState("/dev/sdf");
   const [form, setForm] = useState({ volumeType: VOLUME_TYPES[0], sizeGiB: 8 });
   const selected = volumes.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
+  const eligibleInstances = instances.filter((item) => item.state === "running" || item.state === "stopped");
   const backedUp = volumes.filter((item) => item.snapshotId).length;
   const refresh = () => {
     setUpdated("less than a minute ago");
@@ -154,6 +171,20 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
               }
               items={[
                 {
+                  label: "Attach volume",
+                  disabled: action.pending || !one || one.state !== "available",
+                  onSelect: () => {
+                    setAttachInstanceId(eligibleInstances[0]?.id ?? "");
+                    setAttachDevice("/dev/sdf");
+                    setAttachOpen(true);
+                  },
+                },
+                {
+                  label: "Detach volume",
+                  disabled: action.pending || !one || one.state !== "in-use",
+                  onSelect: () => setDetachOpen(true),
+                },
+                {
                   label: "Create snapshot",
                   disabled: !one,
                   onSelect: () => {
@@ -186,6 +217,7 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
         }
       />
       <ApiErrorAlert error={loadError} title="Volumes could not be loaded" />
+      <ApiErrorAlert error={instanceLoadError} title="Instances could not be loaded" />
       <ApiErrorAlert error={action.error} title="The volume action failed" />
       <ResourceTable
         rows={volumes}
@@ -218,7 +250,8 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
               ["Throughput", dash(one.throughput)],
               ["Availability Zone", one.availabilityZone],
               ["Created", dash(one.created)],
-              ["Attached instance", dash(one.attachedTo)],
+              ["Attached instance", dash(one.attachment?.instanceId ?? "")],
+              ["Device name", dash(one.attachment?.device ?? "")],
               ["Snapshot ID", dash(one.snapshotId)],
               ["Source volume ID", dash(one.sourceVolumeId)],
               ["Owner ID", dash(one.owner)],
@@ -311,6 +344,111 @@ export function VolumesView({ volumes, loadError }: { volumes: Volume[]; loadErr
             </p>
           </div>
         </div>
+      </PanelDialog>
+      <PanelDialog
+        open={attachOpen}
+        title="Attach volume"
+        onClose={() => setAttachOpen(false)}
+        footer={
+          <>
+            <OutlineButton onClick={() => setAttachOpen(false)}>Cancel</OutlineButton>
+            <OrangeButton
+              disabled={
+                action.pending ||
+                !attachInstanceId.trim() ||
+                !attachDevice.trim() ||
+                instanceLoadError !== null ||
+                eligibleInstances.length === 0
+              }
+              onClick={() => {
+                if (!one) return;
+                action.run(
+                  () =>
+                    attachVolumeAction(one.id, {
+                      instanceId: attachInstanceId.trim(),
+                      device: attachDevice.trim(),
+                    }),
+                  () => setAttachOpen(false),
+                );
+              }}
+            >
+              Attach volume
+            </OrangeButton>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <FieldLabel>Volume ID</FieldLabel>
+            <p className="text-[13px]">{one?.id ?? "—"}</p>
+          </div>
+          <div>
+            <FieldLabel>Instance</FieldLabel>
+            {instanceLoadError ? (
+              <ApiErrorAlert error={instanceLoadError} title="Instances could not be loaded" />
+            ) : eligibleInstances.length === 0 ? (
+              <p>There are no running or stopped instances in this region.</p>
+            ) : (
+              <select
+                className="field"
+                value={attachInstanceId}
+                onChange={(event) => setAttachInstanceId(event.target.value)}
+              >
+                {eligibleInstances.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name ? `${item.name} (${item.id})` : item.id}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div>
+            <FieldLabel>Device name</FieldLabel>
+            <input
+              className="field"
+              aria-label="Device name"
+              value={attachDevice}
+              onChange={(event) => setAttachDevice(event.target.value)}
+            />
+            <p className="mt-1 text-[12px] text-[#5f6b7a]">
+              A root volume typically uses /dev/sda1 or /dev/xvda. /dev/sdf is a common data volume name. The VWS API
+              accepts any non-empty device name.
+            </p>
+          </div>
+        </div>
+      </PanelDialog>
+      <PanelDialog
+        open={detachOpen}
+        title="Detach volume"
+        onClose={() => setDetachOpen(false)}
+        footer={
+          <>
+            <OutlineButton onClick={() => setDetachOpen(false)}>Cancel</OutlineButton>
+            <OrangeButton
+              disabled={action.pending}
+              onClick={() => {
+                if (!one) return;
+                action.run(
+                  () => detachVolumeAction(one.id),
+                  () => setDetachOpen(false),
+                );
+              }}
+            >
+              Detach
+            </OrangeButton>
+          </>
+        }
+      >
+        {one?.attachment ? (
+          <div className="space-y-2">
+            <p>
+              Detach {one.id} from {one.attachment.instanceId}?
+            </p>
+            {one.attachment.device ? <p>Device {one.attachment.device}.</p> : null}
+          </div>
+        ) : (
+          <p>Detach {one?.id}?</p>
+        )}
       </PanelDialog>
       <PanelDialog
         open={snapOpen}

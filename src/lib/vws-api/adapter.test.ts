@@ -101,13 +101,25 @@ describe("console-api adapter", () => {
           snapshotId: "snap-1",
           createTime: "2026-10-14T05:31:00Z",
         },
+        {
+          volumeId: "vol-3",
+          ownerId: "123456789012",
+          size: 10,
+          availabilityZone: "vws-1a",
+          volumeType: "gp3",
+          state: "in-use",
+          instanceId: "i-2",
+          device: "/dev/sdf",
+          createTime: "2026-10-14T05:32:00Z",
+        },
       ],
     });
     expect(
-      rows.map((v) => [v.id, v.state, v.sizeGiB, v.volumeType, v.attachedTo, v.snapshotId, v.owner, v.iops, v.name]),
+      rows.map((v) => [v.id, v.state, v.sizeGiB, v.volumeType, v.attachment, v.snapshotId, v.owner, v.iops, v.name]),
     ).toEqual([
-      ["vol-1", "available", 8, "gp3", "", "", "123456789012", null, ""],
-      ["vol-2", "in-use", 20, "gp2", "i-1", "snap-1", "123456789012", null, ""],
+      ["vol-1", "available", 8, "gp3", null, "", "123456789012", null, ""],
+      ["vol-2", "in-use", 20, "gp2", { instanceId: "i-1", device: "" }, "snap-1", "123456789012", null, ""],
+      ["vol-3", "in-use", 10, "gp3", { instanceId: "i-2", device: "/dev/sdf" }, "", "123456789012", null, ""],
     ]);
   });
 

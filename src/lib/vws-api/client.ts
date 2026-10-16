@@ -7,7 +7,16 @@ import { logAuth } from "./log";
 import { iamMode, iamState, IamUnavailableError, noteLoginEnabled, type IamMode } from "./mode";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
 import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
-import type { ElasticIp, Instance, SecurityGroup, Snapshot, Subnet, Volume, Vpc } from "@/types/console";
+import type {
+  ElasticIp,
+  Instance,
+  SecurityGroup,
+  Snapshot,
+  Subnet,
+  Volume,
+  VolumeAttachment,
+  Vpc,
+} from "@/types/console";
 import {
   firstItem,
   parseAddresses,
@@ -310,14 +319,24 @@ export const listInstanceTypes = (): Promise<ApiResult<InstanceType[]>> =>
 /** console-api only grows a volume; it refuses a smaller size. */
 export const modifyVolume = (id: string, size: number) => mutate(`/volumes/${seg(id)}/modify`, { size });
 
-type VolumeAttachment = { instanceId: string; device: string };
-
-export async function attachVolume(_volumeId: string, _input: VolumeAttachment): Promise<ApiResult<void>> {
-  return { ok: false, error: { code: "NotImplemented", message: "Not implemented.", requestId: null } };
+export async function attachVolume(volumeId: string, input: VolumeAttachment): Promise<ApiResult<void>> {
+  const instanceId = input.instanceId.trim();
+  const device = input.device.trim();
+  if (!instanceId || !device) {
+    return {
+      ok: false,
+      error: {
+        code: "InvalidAttachment",
+        message: "Choose an instance and a device name.",
+        requestId: null,
+      },
+    };
+  }
+  return mutate(`/volumes/${seg(volumeId)}/attach`, { instanceId, device });
 }
 
-export function detachVolume(_volumeId: string): Promise<ApiResult<void>> {
-  return Promise.resolve({ ok: false, error: { code: "NotImplemented", message: "Not implemented.", requestId: null } });
+export function detachVolume(volumeId: string): Promise<ApiResult<void>> {
+  return mutate(`/volumes/${seg(volumeId)}/detach`);
 }
 
 export const listSecurityGroups = (): Promise<ApiResult<SecurityGroup[]>> =>
