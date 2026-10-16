@@ -84,6 +84,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  globalIgnores(["vendor/braces/**"]),
 ]);
 
 export default eslintConfig;
