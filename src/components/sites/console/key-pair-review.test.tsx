@@ -81,6 +81,36 @@ describe("key pair create recovery", () => {
     await waitFor(() => expect(createKeyPairAction).toHaveBeenCalledTimes(1));
   });
 
+  it("does not warn about a lost private key after a successful import", async () => {
+    const laptop: StoredKeyPair = {
+      id: "key-89abcdef" as KeyPairId,
+      name: "laptop" as KeyPairName,
+      fingerprint: "fp",
+      type: "ed25519",
+      ownerId: "123456789012",
+    };
+    createKeyPairAction.mockResolvedValue({
+      status: "ready",
+      issued: { keyPair: laptop, privateKey: null, settlement: "succeeded" },
+    });
+    const view = renderPairs([]);
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Import key pair" }));
+    const dialog = screen.getByRole("dialog", { name: "Import key pair" });
+    const fields = within(dialog).getAllByRole("textbox");
+    fireEvent.change(fields[0], { target: { value: "laptop" } });
+    fireEvent.change(fields[1], { target: { value: "ssh-ed25519 AAAA laptop" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import key pair" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    view.rerender(
+      <ConsoleProvider>
+        <KeyPairsView keyPairs={[laptop]} loadError={null} />
+      </ConsoleProvider>,
+    );
+    expect(screen.queryByText(/cannot be shown again/)).toBeNull();
+    expect(screen.queryByText(/did not finish/)).toBeNull();
+  });
+
   it("offers Browse and rejects a private key file before persistence", async () => {
     renderPairs([]);
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));

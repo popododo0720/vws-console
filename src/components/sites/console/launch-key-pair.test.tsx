@@ -98,8 +98,46 @@ describe("launch key pair selection", () => {
   it("enables launch after an explicit key pair selection", () => {
     renderLaunch();
     expect(screen.getByRole("button", { name: "Launch instance" })).toBeDisabled();
-    fireEvent.change(screen.getByRole("combobox", { name: "Key pair" }), { target: { value: "web" } });
+    const option = screen.getByRole("option", { name: "web" }) as HTMLOptionElement;
+    fireEvent.change(screen.getByRole("combobox", { name: "Key pair" }), { target: { value: option.value } });
     expect(screen.getByRole("button", { name: "Launch instance" })).toBeEnabled();
     expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("selects a key pair named proceed-without by its id", () => {
+    const collide: StoredKeyPair = {
+      id: "key-89abcdef" as KeyPairId,
+      name: "proceed-without" as KeyPairName,
+      fingerprint: "fp",
+      type: "rsa",
+      ownerId: "123456789012",
+    };
+    render(
+      <ConsoleProvider>
+        <LaunchView
+          images={[{ id: "ami-1", name: "Amazon Linux", state: "available", owner: "amazon" }]}
+          instanceTypes={[{ id: "vws.small", vcpus: 1, memoryMiB: 1024 }]}
+          vpcs={[vpc]}
+          subnets={[subnet]}
+          keyPairs={[collide]}
+          loadError={null}
+        />
+      </ConsoleProvider>,
+    );
+    const option = screen.getByRole("option", { name: "proceed-without" }) as HTMLOptionElement;
+    expect(option.value).toBe("key-89abcdef");
+    fireEvent.change(screen.getByRole("combobox", { name: "Key pair" }), { target: { value: option.value } });
+    expect(screen.getByRole("combobox", { name: "Key pair" })).toHaveValue("key-89abcdef");
+    expect(screen.getByRole("button", { name: "Launch instance" })).toBeEnabled();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("opens key pair create from a blue text link", () => {
+    renderLaunch();
+    const link = screen.getByRole("button", { name: "Create new key pair" });
+    expect(link.className).toContain("text-[#006ce0]");
+    expect(link.className).not.toContain("bg-[#ff9900]");
+    fireEvent.click(link);
+    expect(screen.getByRole("dialog", { name: "Create key pair" })).toBeTruthy();
   });
 });
