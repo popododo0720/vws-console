@@ -4,6 +4,7 @@ import {
   parseAccountBuckets,
   parseApiError,
   parseBucketName,
+  parseStoredBucketName,
   parseImages,
   parseInstances,
   parseOperation,
@@ -423,6 +424,8 @@ describe("account buckets", () => {
     expect(parseBucketName("logs-s3alias")).toBeNull();
     expect(parseBucketName("ab--ol-s3")).toBeNull();
     expect(parseBucketName("ab--x-s3")).toBeNull();
+    expect(parseBucketName("ab--table-s3")).toBeNull();
+    expect(parseStoredBucketName("ab--table-s3")).toBe("ab--table-s3");
   });
 
   it("still reads a reserved name the API already stored", () => {

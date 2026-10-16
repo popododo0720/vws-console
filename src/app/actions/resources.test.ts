@@ -31,7 +31,8 @@ const INVALID_NAME = {
 
 const RESERVED_NAME = {
   code: "InvalidArgument",
-  message: "Bucket names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3, or --x-s3.",
+  message:
+    "Bucket names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3, --x-s3, or --table-s3.",
   requestId: null,
 };
 
@@ -77,7 +78,15 @@ describe("bucket actions", () => {
 
   it("rejects a reserved name without calling the API", async () => {
     serve();
-    for (const name of ["xn--logs", "sthree-logs", "amzn-s3-demo-ab", "logs-s3alias", "ab--ol-s3", "ab--x-s3"]) {
+    for (const name of [
+      "xn--logs",
+      "sthree-logs",
+      "amzn-s3-demo-ab",
+      "logs-s3alias",
+      "ab--ol-s3",
+      "ab--x-s3",
+      "ab--table-s3",
+    ]) {
       expect(await createBucketAction(name)).toEqual(RESERVED_NAME);
     }
     expect(calls).toEqual([]);
@@ -135,9 +144,12 @@ describe("bucket actions", () => {
   });
 
   it("deletes a reserved name the API already stored", async () => {
-    serve(new Response(null, { status: 204 }));
-    expect(await deleteBucketsAction(["xn--ab"])).toEqual(cleared(["xn--ab"]));
-    expect(calls[0].url).toBe("http://api.test/api/v1/buckets/xn--ab");
+    serve(new Response(null, { status: 204 }), new Response(null, { status: 204 }));
+    expect(await deleteBucketsAction(["xn--ab", "ab--table-s3"])).toEqual(cleared(["xn--ab", "ab--table-s3"]));
+    expect(calls.map((call) => call.url)).toEqual([
+      "http://api.test/api/v1/buckets/xn--ab",
+      "http://api.test/api/v1/buckets/ab--table-s3",
+    ]);
   });
 
   it("uploads a file and refuses a key or a body the API will not store", async () => {
@@ -162,5 +174,16 @@ describe("bucket actions", () => {
       message: "Objects larger than 4 MiB cannot be uploaded.",
     });
     expect(calls).toHaveLength(1);
+  });
+
+  it("refuses a key that walks out of the bucket without calling the API", async () => {
+    serve(respond(200, { key: "victim.txt" }));
+    for (const key of ["a/../victim.txt", "../../new-bucket", ".", "..", "a/./b.txt"]) {
+      const form = new FormData();
+      form.set("key", key);
+      form.set("file", new File(["x"], "x.txt"));
+      expect(await uploadObjectAction("logs-1", form)).toMatchObject({ code: "InvalidArgument" });
+    }
+    expect(calls).toEqual([]);
   });
 });
