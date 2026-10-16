@@ -90,7 +90,8 @@ const INVALID_BUCKET_NAME: ApiError = {
 
 const RESERVED_BUCKET_NAME: ApiError = {
   code: "InvalidArgument",
-  message: "Bucket names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3, or --x-s3.",
+  message:
+    "Bucket names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3, --x-s3, or --table-s3.",
   requestId: null,
 };
 

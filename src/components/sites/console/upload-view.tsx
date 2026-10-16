@@ -90,7 +90,16 @@ export function UploadView({
         const key = `${prefix}${file.name}`;
         body.set("key", key);
         body.set("file", file);
-        const failure = await uploadObjectAction(name, body);
+        let failure: ApiError | null;
+        try {
+          failure = await uploadObjectAction(name, body);
+        } catch {
+          failure = {
+            code: "ServiceUnavailable",
+            message: "The upload could not be sent.",
+            requestId: null,
+          };
+        }
         if (failure) {
           setError(failure);
           remaining.push(file);
