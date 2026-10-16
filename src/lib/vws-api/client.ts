@@ -17,6 +17,7 @@ import {
   nextPageToken,
   parseApiError,
   parseImages,
+  parseKeyPairs,
   parseInstanceTypes,
   type InstanceType,
   parseInstances,
@@ -25,14 +26,27 @@ import {
   parseVolumes,
   parseVpcs,
   toInstance,
+  toStoredKeyPair,
   toVolume,
   toVpc,
   type ApiError,
   type ApiResult,
   type Image,
   type LaunchRequest,
+  type Operation,
 } from "./adapter";
-import type { CreateAttempt, KeyPairCreateResult, KeyPairId, StoredKeyPair } from "@/lib/key-pair";
+import {
+  parseIdempotencyKey,
+  parseKeyPairId,
+  privateKeyFileName,
+  readAttempt,
+  type CreateAttempt,
+  type IssuedKeyPair,
+  type KeyPairCreateResult,
+  type KeyPairDraft,
+  type KeyPairId,
+  type StoredKeyPair,
+} from "@/lib/key-pair";
 
 const POLL_INTERVAL_MS = 500;
 const POLL_TIMEOUT_MS = 60_000;
@@ -116,10 +130,13 @@ async function toLogin(reason: "signin" | "expired"): Promise<never> {
  * Calls console-api as the signed-in user. The session cookie is forwarded from this server only,
  * and every write carries X-CSRF-Token. A missing session or a 401 redirects to the login screen.
  */
+type PostOptions = { idempotencyKey?: string; bodyText?: string };
+
 async function request(
   method: "GET" | "POST",
   path: string,
   body?: unknown,
+  post?: PostOptions,
 ): Promise<ApiResult<{ status: number; json: unknown }>> {
   const base = apiBase();
   if (typeof base !== "string") return { ok: false, error: base };
@@ -141,7 +158,7 @@ async function request(
     headers.authorization = `Bearer ${token}`;
   }
   if (method === "POST") {
-    headers["idempotency-key"] = randomUUID();
+    headers["idempotency-key"] = post?.idempotencyKey ?? randomUUID();
     headers["content-type"] = "application/json";
   }
   let response: ApiReply;
@@ -151,7 +168,7 @@ async function request(
     response = await apiFetch(`${base}/api/v1${path}`, {
       method,
       headers,
-      body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
+      body: method === "POST" ? (post?.bodyText ?? JSON.stringify(body ?? {})) : undefined,
     });
   } catch (error) {
     return { ok: false, error: transportError(error) };
@@ -269,22 +286,104 @@ export const getInstance = (id: string): Promise<ApiResult<Instance | null>> =>
 export const getVpc = (id: string): Promise<ApiResult<Vpc | null>> => getOne(`/vpcs/${seg(id)}`, toVpc);
 export const getVolume = (id: string): Promise<ApiResult<Volume | null>> => getOne(`/volumes/${seg(id)}`, toVolume);
 
-export const launchInstances = ({ tags, ...rest }: LaunchRequest) =>
-  mutate("/instances", Object.keys(tags).length > 0 ? { ...rest, tags } : rest);
+export const launchInstances = ({ tags, keyPair, ...rest }: LaunchRequest) => {
+  const named = keyPair.kind === "pair" ? { keyName: keyPair.name } : {};
+  const body = { ...rest, ...named };
+  return mutate("/instances", Object.keys(tags).length > 0 ? { ...body, tags } : body);
+};
 
-export function listKeyPairs(): Promise<ApiResult<StoredKeyPair[]>> {
-  throw new Error("not implemented");
+export const listKeyPairs = (): Promise<ApiResult<StoredKeyPair[]>> => listAll("/key-pairs", parseKeyPairs);
+
+const invalidKeyPairId: ApiError = {
+  code: "InvalidArgument",
+  message: "Key pair id must be key- followed by 8 to 17 hex digits.",
+  requestId: null,
+};
+
+function failedCreate(error: ApiError, issued: IssuedKeyPair | null): KeyPairCreateResult {
+  return { status: "failed", error, issued };
 }
 
-export function createKeyPair(attempt: CreateAttempt): Promise<KeyPairCreateResult> {
-  void attempt;
-  throw new Error("not implemented");
+function readCreateItem(json: unknown): { keyPair: StoredKeyPair; material: string } | null {
+  const items = (json as { items?: unknown } | null)?.items;
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const item = items[0];
+  if (typeof item !== "object" || item === null || Array.isArray(item)) return null;
+  const record = item as Record<string, unknown>;
+  try {
+    return {
+      keyPair: toStoredKeyPair(record),
+      material: typeof record.keyMaterial === "string" ? record.keyMaterial : "",
+    };
+  } catch {
+    return null;
+  }
 }
 
-export function deleteKeyPair(id: KeyPairId): Promise<ApiResult<void>> {
-  void id;
-  throw new Error("not implemented");
+function privateFile(draft: KeyPairDraft, name: string, material: string): IssuedKeyPair["privateKey"] {
+  if (!material) return null;
+  const format = draft.mode === "generate" ? draft.keyFormat : "pem";
+  return { fileName: privateKeyFileName(name, format), material, format };
 }
+
+/**
+ * The operation record has no items, so the private key is read from the 202 body
+ * before the poll. A later timeout or failure still returns that issued value.
+ */
+export async function createKeyPair(attempt: CreateAttempt): Promise<KeyPairCreateResult> {
+  const idempotencyKey = parseIdempotencyKey(attempt.idempotencyKey);
+  if (!idempotencyKey) {
+    return failedCreate(
+      { code: "InvalidArgument", message: "The idempotency key is not valid.", requestId: null },
+      null,
+    );
+  }
+  const draft = readAttempt({ idempotencyKey, body: attempt.body });
+  if ("code" in draft) return failedCreate(draft, null);
+  const sent = await request("POST", "/key-pairs", undefined, { idempotencyKey, bodyText: attempt.body });
+  if (!sent.ok) return failedCreate(sent.error, null);
+  const read = readCreateItem(sent.value.json);
+  if (!read || (draft.mode === "generate" && read.material === "")) return failedCreate(malformed("/key-pairs"), null);
+  let issued: IssuedKeyPair = {
+    keyPair: read.keyPair,
+    privateKey: privateFile(draft, read.keyPair.name, read.material),
+    settlement: "succeeded",
+  };
+  if (sent.value.status !== 202) return { status: "ready", issued };
+  let op: Operation;
+  try {
+    op = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
+  } catch {
+    return failedCreate(malformed("/key-pairs"), issued);
+  }
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  while (op.state === "running") {
+    if (Date.now() > deadline) return { status: "ready", issued: { ...issued, settlement: "still-running" } };
+    await sleep(POLL_INTERVAL_MS);
+    const polled = await request("GET", `/operations/${encodeURIComponent(op.id)}`);
+    if (!polled.ok) return failedCreate(polled.error, issued);
+    try {
+      op = parseOperation(polled.value.json);
+    } catch {
+      return failedCreate(malformed(`/operations/${op.id}`), issued);
+    }
+  }
+  if (op.state === "failed") {
+    return failedCreate(
+      op.error ?? { code: "OperationFailed", message: `Operation ${op.id} failed.`, requestId: null },
+      issued,
+    );
+  }
+  issued = { ...issued, settlement: "succeeded" };
+  return { status: "ready", issued };
+}
+
+export async function deleteKeyPair(id: KeyPairId): Promise<ApiResult<void>> {
+  const parsed = parseKeyPairId(id);
+  if (!parsed) return { ok: false, error: invalidKeyPairId };
+  return mutate(`/key-pairs/${seg(parsed)}/delete`);
+}
+
 /** console-api takes at most this many instance IDs in one batch call. */
 export const INSTANCE_BATCH_LIMIT = 20;
 

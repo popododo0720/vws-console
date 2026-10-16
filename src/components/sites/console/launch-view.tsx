@@ -69,6 +69,7 @@ export function LaunchView({
             ...(name.trim() ? [["Name", name.trim()]] : []),
             ...tags.map((item) => [item.key, item.value]),
           ]),
+          keyPair: { kind: "none" },
         }),
       () => router.push("/compute/instances"),
     );
