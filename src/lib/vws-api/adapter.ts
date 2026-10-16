@@ -75,7 +75,6 @@ const BUCKET_NAME = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 const RESERVED_PREFIX = ["xn--", "sthree-", "amzn-s3-demo-"] as const;
 const RESERVED_SUFFIX = ["-s3alias", "--ol-s3", "--x-s3"] as const;
 
-/** Charset only. The API can already store a reserved name, and the list must still show it. */
 export function parseStoredBucketName(input: string): BucketName | null {
   const name = input.trim();
   return BUCKET_NAME.test(name) ? (name as BucketName) : null;
