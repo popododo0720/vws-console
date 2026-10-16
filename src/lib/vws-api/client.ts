@@ -181,7 +181,6 @@ async function request(
   let response: ApiReply;
   let json: unknown;
   try {
-    // apiFetch retries a GET on transient failures and sends any other method exactly once.
     response = await apiFetch(`${base}/api/v1${path}`, {
       method,
       headers,
