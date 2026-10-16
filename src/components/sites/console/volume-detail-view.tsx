@@ -39,18 +39,19 @@ export function VolumeDetailView({
               ["Created", dash(volume.created)],
               [
                 "Attached instance",
-                volume.attachedTo ? (
+                volume.attachment ? (
                   <Link
                     key="att"
-                    href={`/compute/instances/${volume.attachedTo}`}
+                    href={`/compute/instances/${volume.attachment.instanceId}`}
                     className="text-[#006ce0] hover:underline"
                   >
-                    {volume.attachedTo}
+                    {volume.attachment.instanceId}
                   </Link>
                 ) : (
                   "—"
                 ),
               ],
+              ["Device name", dash(volume.attachment?.device ?? "")],
               ["Snapshot ID", dash(volume.snapshotId)],
               ["IOPS", volume.iops === null ? "—" : String(volume.iops)],
               ["Throughput", dash(volume.throughput)],

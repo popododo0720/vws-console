@@ -28,6 +28,8 @@ export type Instance = {
   launchedAt: string;
 };
 
+export type VolumeAttachment = { instanceId: string; device: string };
+
 export type Volume = {
   id: string;
   name: string;
@@ -43,7 +45,7 @@ export type Volume = {
   created: string;
   availabilityZone: string;
   region: string;
-  attachedTo: string;
+  attachment: VolumeAttachment | null;
 };
 
 export type Snapshot = {

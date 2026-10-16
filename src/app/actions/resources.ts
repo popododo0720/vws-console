@@ -2,6 +2,7 @@
 
 import * as vws from "@/lib/vws-api/client";
 import type { ApiError, ApiResult, IngressPermission, LaunchRequest } from "@/lib/vws-api/adapter";
+import type { VolumeAttachment } from "@/types/console";
 
 async function each(ids: string[], run: (id: string) => Promise<ApiResult<void>>): Promise<ApiError | null> {
   for (const id of ids) {
@@ -93,6 +94,14 @@ export async function deleteSubnetsAction(ids: string[]) {
 
 export async function modifyVolumeAction(id: string, sizeGiB: number) {
   return errorOf(vws.modifyVolume(id, sizeGiB));
+}
+
+export async function attachVolumeAction(volumeId: string, input: VolumeAttachment) {
+  return errorOf(vws.attachVolume(volumeId, input));
+}
+
+export async function detachVolumeAction(volumeId: string) {
+  return errorOf(vws.detachVolume(volumeId));
 }
 
 export async function createSecurityGroupAction(groupName: string, vpcId: string, inbound: IngressPermission[]) {

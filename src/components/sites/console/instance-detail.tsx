@@ -170,7 +170,7 @@ export function InstanceTab({
     );
   }
   if (tab === "storage") {
-    const volumes = api.volumes.filter((volume) => volume.attachedTo === instance.id);
+    const volumes = api.volumes.filter((volume) => volume.attachment?.instanceId === instance.id);
     return (
       <Section title="Block devices">
         <SimpleTable
