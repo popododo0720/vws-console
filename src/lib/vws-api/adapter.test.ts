@@ -4,6 +4,7 @@ import {
   parseApiError,
   parseImages,
   parseInstances,
+  parseKeyPairs,
   parseOperation,
   parseSubnets,
   parseVolumes,
@@ -13,6 +14,8 @@ import {
   parseSecurityGroups,
   parseSnapshots,
   toIngressPermission,
+  toInstance,
+  toStoredKeyPair,
   identityFromSession,
 } from "./adapter";
 import { makeRule } from "@/lib/security-group-rules";
@@ -313,6 +316,44 @@ describe("console-api adapter", () => {
       "eipalloc-1",
     ]);
     expect([plain.publicIpv4, plain.elasticIp, plain.publicIpAllocationId]).toEqual(["", "", ""]);
+  });
+
+  it("maps a stored key pair and drops keyMaterial", () => {
+    const row = toStoredKeyPair({
+      keyPairId: "key-0123456789abcdef0",
+      keyName: "web",
+      keyFingerprint: "SHA256:abc",
+      keyType: "rsa",
+      ownerId: "123456789012",
+      keyMaterial: "SECRET",
+    });
+    expect(row).toEqual({
+      id: "key-0123456789abcdef0",
+      name: "web",
+      fingerprint: "SHA256:abc",
+      type: "rsa",
+      ownerId: "123456789012",
+    });
+    expect(row).not.toHaveProperty("keyMaterial");
+    const [parsed] = parseKeyPairs({
+      items: [
+        {
+          keyPairId: "key-01234567",
+          keyName: "db",
+          keyFingerprint: "fp",
+          keyType: "ed25519",
+          ownerId: "1",
+          keyMaterial: "SECRET",
+        },
+      ],
+    });
+    expect(parsed).not.toHaveProperty("keyMaterial");
+    expect(parsed.type).toBe("ed25519");
+  });
+
+  it("maps keyName onto an instance and leaves a missing keyName empty", () => {
+    expect(toInstance({ ...instance, keyName: "web" }).keyPair).toBe("web");
+    expect(toInstance(instance).keyPair).toBe("");
   });
 });
 
