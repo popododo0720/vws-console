@@ -1,7 +1,13 @@
 "use server";
 
 import * as vws from "@/lib/vws-api/client";
-import type { ApiError, ApiResult, IngressPermission, LaunchRequest } from "@/lib/vws-api/adapter";
+import {
+  parseBucketName,
+  type ApiError,
+  type ApiResult,
+  type IngressPermission,
+  type LaunchRequest,
+} from "@/lib/vws-api/adapter";
 import type { VolumeAttachment } from "@/types/console";
 import { deleteBatchError, parseKeyPairId, type CreateAttempt, type KeyPairCreateResult } from "@/lib/key-pair";
 
@@ -71,6 +77,27 @@ export async function createVolumeAction(sizeGiB: number, volumeType: string) {
 
 export async function deleteVolumesAction(ids: string[]) {
   return each(ids, vws.deleteVolume);
+}
+
+const INVALID_BUCKET_NAME: ApiError = {
+  code: "InvalidArgument",
+  message: "Use 3\u201363 characters: lowercase letters, numbers, and hyphens.",
+  requestId: null,
+};
+
+export async function createBucketAction(rawName: string): Promise<ApiError | null> {
+  const name = parseBucketName(rawName);
+  if (!name) return INVALID_BUCKET_NAME;
+  const result = await vws.putBucket(name);
+  return result.ok ? null : result.error;
+}
+
+export async function deleteBucketsAction(names: string[]): Promise<ApiError | null> {
+  return each(names, async (rawName) => {
+    const name = parseBucketName(rawName);
+    if (!name) return { ok: false, error: INVALID_BUCKET_NAME };
+    return vws.deleteBucket(name);
+  });
 }
 
 export async function createSnapshotAction(volumeId: string, description: string) {
