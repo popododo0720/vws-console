@@ -66,7 +66,8 @@ describe("BucketsView", () => {
     );
     showSampleData();
     expect(screen.getByRole("link", { name: "logs-1" })).toBeTruthy();
-    expect(screen.getByText("2026-08-02T00:00:00Z")).toBeTruthy();
+    expect(screen.getByText("Aug 2, 2026, 12:00:00 AM UTC")).toBeTruthy();
+    expect(screen.queryByText("2026-08-02T00:00:00Z")).toBeNull();
     expect(screen.queryByText("vws-logs")).toBeNull();
     expect(screen.queryByText("vws-media")).toBeNull();
     const row = screen.getByRole("link", { name: "logs-1" }).closest("tr");
@@ -122,6 +123,7 @@ describe("BucketsView", () => {
   });
 
   it("deletes the selected bucket through the server action", async () => {
+    actions.deleteBucketsAction.mockResolvedValue({ deleted: ["logs-1"], error: null, failedName: null });
     render(
       <ConsoleProvider>
         <BucketsView buckets={[logsBucket()]} loadError={null} />
@@ -133,6 +135,34 @@ describe("BucketsView", () => {
     fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "logs-1" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete bucket" }));
     await waitFor(() => expect(actions.deleteBucketsAction).toHaveBeenCalledWith(["logs-1"]));
+    await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
+    expect(screen.queryByRole("dialog", { name: "Delete bucket" })).toBeNull();
+  });
+
+  it("refreshes after a partial delete and keeps the bucket that failed", async () => {
+    const media = parseBucketName("media-1");
+    if (!media) throw new Error("media-1");
+    actions.deleteBucketsAction.mockResolvedValue({
+      deleted: ["logs-1"],
+      error: { code: "Conflict", message: "bucket is not empty", requestId: "r-9" },
+      failedName: "media-1",
+    });
+    render(
+      <ConsoleProvider>
+        <BucketsView buckets={[logsBucket(), { name: media, ownerId: "123", created: "2026-09-01T00:00:00Z" }]} loadError={null} />
+      </ConsoleProvider>,
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select logs-1" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select media-1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete bucket" });
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "delete" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete bucket" }));
+    await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
+    expect(screen.getByRole("dialog", { name: "Delete bucket" })).toBeTruthy();
+    expect(screen.getByText("bucket is not empty")).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "Select media-1" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select logs-1" })).not.toBeChecked();
   });
 });
 
@@ -143,18 +173,24 @@ describe("CreateBucketView", () => {
     actions.createBucketAction.mockResolvedValue(null);
   });
 
-  it("refuses a directory bucket without calling the action", () => {
+  it("shows that versioning, public access, and directory buckets are not applied", () => {
     render(
       <ConsoleProvider>
         <CreateBucketView />
       </ConsoleProvider>,
     );
-    fireEvent.click(screen.getByRole("radio", { name: /Directory/ }));
+    expect(screen.getByRole("radio", { name: /Directory/ })).toBeDisabled();
+    expect(screen.getByText("Directory buckets are not available.")).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Disable" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Enable" })).toBeDisabled();
+    expect(screen.getByText("Bucket versioning is not available. Creating a bucket does not enable it.")).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: /Block all public access/ })).toBeDisabled();
+    expect(
+      screen.getByText("Block Public Access is not available. Creating a bucket does not apply it."),
+    ).toBeTruthy();
     fireEvent.change(screen.getByPlaceholderText("my-bucket"), { target: { value: "logs-1" } });
     fireEvent.click(screen.getByRole("button", { name: "Create bucket" }));
-    expect(screen.getByText("Directory buckets are not available.")).toBeTruthy();
-    expect(actions.createBucketAction).not.toHaveBeenCalled();
-    expect(nav.push).not.toHaveBeenCalled();
+    expect(actions.createBucketAction).toHaveBeenCalledWith("logs-1");
   });
 
   it("navigates to the bucket list when the action accepts the name", async () => {
