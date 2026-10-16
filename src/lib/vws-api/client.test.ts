@@ -27,6 +27,7 @@ import {
   createSecurityGroup,
   createVpc,
   deleteBucket,
+  getBucket,
   getVolume,
   getVpc,
   instanceBatch,
@@ -35,6 +36,7 @@ import {
   listVpcs,
   modifyVolume,
   putBucket,
+  putObject,
 } from "./client";
 
 function mustName(input: string): BucketName {
@@ -645,6 +647,65 @@ describe("console-api client", () => {
       expect(await putBucket(mustName("logs-1"))).toMatchObject({ ok: false, error: { code: "InternalError" } });
       expect(calls).toHaveLength(1);
       expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1");
+    });
+
+    it("reads one bucket and treats NotFound as missing", async () => {
+      serve(respond(200, logs));
+      expect(await getBucket(mustName("logs-1"))).toEqual({ ok: true, value: accountLogs });
+      expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1");
+      serve(respond(404, { error: { code: "NotFound", message: "missing" } }));
+      expect(await getBucket(mustName("logs-1"))).toEqual({ ok: true, value: null });
+    });
+
+    it("keeps a bucket GET 404 that is not NotFound", async () => {
+      serve(respond(404, { error: { code: "Forbidden", message: "no" }, requestId: "r-4" }));
+      expect(await getBucket(mustName("gone-1"))).toEqual({
+        ok: false,
+        error: { code: "Forbidden", message: "no", requestId: "r-4" },
+      });
+    });
+
+    it("rejects a bucket GET that is not 200", async () => {
+      serve(new Response(null, { status: 204 }));
+      expect(await getBucket(mustName("logs-1"))).toMatchObject({ ok: false, error: { code: "MalformedResponse" } });
+    });
+
+    it("puts object bytes and uses json for a cookie write", async () => {
+      const bytes = new Uint8Array([104, 101, 108, 108, 111]);
+      serve(respond(200, { bucket: "logs-1", key: "a/b.txt", size: 5 }));
+      expect(await putObject(mustName("logs-1"), "a/b.txt", bytes, "text/plain")).toEqual({
+        ok: true,
+        value: undefined,
+      });
+      expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1/objects/a/b.txt");
+      expect(calls[0].init.method).toBe("PUT");
+      expect(new Uint8Array(await (calls[0].init.body as Blob).arrayBuffer())).toEqual(bytes);
+      const sent = headers(calls[0]);
+      expect(sent["content-type"]).toBe("application/json");
+      expect(sent["x-csrf-token"]).toBe("csrf-1");
+      expect(sent["idempotency-key"]).toBeUndefined();
+    });
+
+    it("rejects an object response whose key does not match", async () => {
+      serve(respond(200, { key: "other.txt" }));
+      expect(await putObject(mustName("logs-1"), "notes.txt", new Uint8Array([1]), "text/plain")).toMatchObject({
+        ok: false,
+        error: { code: "MalformedResponse" },
+      });
+    });
+
+    it("sends the file content type when the bearer token is used", async () => {
+      vi.stubEnv("VWS_CONSOLE_IAM", "off");
+      vi.stubEnv("VWS_CONSOLE_API_TOKEN", "tok");
+      serve(respond(200, { key: "notes.txt" }));
+      expect(await putObject(mustName("logs-1"), "notes.txt", new Uint8Array([1]), "text/plain")).toEqual({
+        ok: true,
+        value: undefined,
+      });
+      const sent = headers(calls[0]);
+      expect(sent["content-type"]).toBe("text/plain");
+      expect(sent.authorization).toBe("Bearer tok");
+      expect(sent.cookie).toBeUndefined();
     });
 
     it("returns UnsupportedMediaType from a PUT 415", async () => {

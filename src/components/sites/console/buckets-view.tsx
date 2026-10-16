@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { deleteBucketsAction } from "@/app/actions/resources";
 import type { AccountBucket, ApiError } from "@/lib/vws-api/adapter";
+import { formatBucketCreationDate } from "@/lib/bucket-display";
 import { storageNav } from "@/lib/console-data";
-import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { ApiErrorAlert } from "@/components/sites/console/api-action";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, ResourceTable } from "@/components/sites/console/resource-table";
@@ -29,8 +30,9 @@ function bucketArn(name: string) {
 
 export function BucketsView({ buckets, loadError }: { buckets: readonly AccountBucket[]; loadError: ApiError | null }) {
   const api = useConsole();
-  const bucketAction = useApiAction();
   const router = useRouter();
+  const [deleteError, setDeleteError] = useState<ApiError | null>(null);
+  const [pending, startTransition] = useTransition();
   const params = useSearchParams();
   const tab = params.get("tab") === "directory" ? "directory" : "general";
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -82,7 +84,7 @@ export function BucketsView({ buckets, loadError }: { buckets: readonly AccountB
       header: "Creation date",
       minWidth: 140,
       sortValue: (row) => row.created,
-      cell: (row) => row.created,
+      cell: (row) => formatBucketCreationDate(row.created),
     },
   ];
 
@@ -97,7 +99,7 @@ export function BucketsView({ buckets, loadError }: { buckets: readonly AccountB
               info="Buckets hold objects."
             />
             <ApiErrorAlert error={loadError} title="Buckets could not be loaded" />
-            <ApiErrorAlert error={bucketAction.error} title="The bucket action failed" />
+            <ApiErrorAlert error={deleteError} title="The bucket action failed" />
             <div className="mb-3 flex gap-4 px-4 text-[14px]">
               <button
                 type="button"
@@ -227,19 +229,27 @@ export function BucketsView({ buckets, loadError }: { buckets: readonly AccountB
           <>
             <OutlineButton onClick={() => setDialog(null)}>Cancel</OutlineButton>
             <OrangeButton
-              disabled={confirm !== confirmWord || bucketAction.pending}
+              disabled={confirm !== confirmWord || pending}
               onClick={() => {
                 if (dialog === "empty") {
                   setEmptyNotice(true);
                   return;
                 }
-                bucketAction.run(
-                  () => deleteBucketsAction(selected.map((item) => item.name)),
-                  () => {
-                    setSelectedIds([]);
-                    setDialog(null);
-                  },
-                );
+                const chosen = selected.map((item) => item.name);
+                startTransition(async () => {
+                  const report = await deleteBucketsAction(chosen);
+                  if (report.deleted.length > 0) router.refresh();
+                  if (report.error) {
+                    const removed = new Set(report.deleted);
+                    setSelectedIds(selected.filter((item) => !removed.has(item.name)).map((item) => item.name));
+                    setConfirm("");
+                    setDeleteError(report.error);
+                    return;
+                  }
+                  setSelectedIds([]);
+                  setDeleteError(null);
+                  setDialog(null);
+                });
               }}
             >
               {dialog === "empty" ? "Empty" : "Delete bucket"}
@@ -253,9 +263,7 @@ export function BucketsView({ buckets, loadError }: { buckets: readonly AccountB
             : "Deleting a bucket cannot be undone. A bucket must be empty before it can be deleted."}
         </p>
         {emptyNotice ? <p className="mb-3 text-[#d13212]">Objects cannot be deleted from this console yet.</p> : null}
-        {dialog === "delete" && bucketAction.error ? (
-          <p className="mb-3 text-[#d13212]">{bucketAction.error.message}</p>
-        ) : null}
+        {dialog === "delete" && deleteError ? <p className="mb-3 text-[#d13212]">{deleteError.message}</p> : null}
         <FieldLabel>To confirm, type “{confirmWord}”.</FieldLabel>
         <input className="field" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
       </PanelDialog>

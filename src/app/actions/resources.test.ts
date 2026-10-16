@@ -15,7 +15,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("@/lib/vws-api/session", () => ({ currentSession: async () => nav.session }));
 
-import { createBucketAction, deleteBucketsAction } from "./resources";
+import { createBucketAction, deleteBucketsAction, uploadObjectAction } from "./resources";
 
 type Call = { url: string; init: RequestInit };
 
@@ -31,8 +31,7 @@ const INVALID_NAME = {
 
 const RESERVED_NAME = {
   code: "InvalidArgument",
-  message:
-    "Bucket names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3, or --x-s3.",
+  message: "Bucket names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3, or --x-s3.",
   requestId: null,
 };
 
@@ -117,7 +116,7 @@ describe("bucket actions", () => {
     ]);
   });
 
-  it("returns null when the only bucket is already gone", async () => {
+  it("treats a missing bucket as deleted", async () => {
     serve(respond(404, { error: { code: "NotFound", message: "missing" } }));
     expect(await deleteBucketsAction(["logs-1"])).toEqual(cleared(["logs-1"]));
     expect(calls).toHaveLength(1);
@@ -133,5 +132,35 @@ describe("bucket actions", () => {
       failedName: "ab",
     });
     expect(calls.map((call) => call.url)).toEqual(["http://api.test/api/v1/buckets/logs-1"]);
+  });
+
+  it("deletes a reserved name the API already stored", async () => {
+    serve(new Response(null, { status: 204 }));
+    expect(await deleteBucketsAction(["xn--ab"])).toEqual(cleared(["xn--ab"]));
+    expect(calls[0].url).toBe("http://api.test/api/v1/buckets/xn--ab");
+  });
+
+  it("uploads a file and refuses a key or a body the API will not store", async () => {
+    serve(respond(200, { bucket: "logs-1", key: "notes.txt", size: 5 }));
+    const form = new FormData();
+    form.set("key", "notes.txt");
+    form.set("file", new File(["hello"], "notes.txt", { type: "text/plain" }));
+    expect(await uploadObjectAction("logs-1", form)).toBeNull();
+    expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1/objects/notes.txt");
+    expect(new TextDecoder().decode(await (calls[0].init.body as Blob).arrayBuffer())).toBe("hello");
+
+    const slash = new FormData();
+    slash.set("key", "/notes.txt");
+    slash.set("file", new File(["x"], "notes.txt"));
+    expect(await uploadObjectAction("logs-1", slash)).toMatchObject({ code: "InvalidArgument" });
+
+    const huge = new FormData();
+    huge.set("key", "big.bin");
+    huge.set("file", new File([new Uint8Array(4 * 1024 * 1024 + 1)], "big.bin"));
+    expect(await uploadObjectAction("logs-1", huge)).toMatchObject({
+      code: "InvalidArgument",
+      message: "Objects larger than 4 MiB cannot be uploaded.",
+    });
+    expect(calls).toHaveLength(1);
   });
 });
