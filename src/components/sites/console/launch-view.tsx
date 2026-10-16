@@ -7,9 +7,11 @@ import { computeNav } from "@/lib/console-data";
 import type { ApiError, Image, InstanceType } from "@/lib/vws-api/adapter";
 import { launchInstancesAction } from "@/app/actions/resources";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { useKeyPairCreator } from "@/components/sites/console/key-pair-create";
 import { BreadcrumbBar } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
 import { FieldLabel, InfoTip, OrangeButton, OutlineButton } from "@/components/sites/console/ui";
+import type { KeyPairChoice, StoredKeyPair } from "@/lib/key-pair";
 
 type Section = "name" | "image" | "type" | "key" | "network" | "storage";
 
@@ -18,18 +20,31 @@ function formatMemory(mib: number) {
 }
 
 const NOT_SUPPORTED = "The VWS API does not take this setting yet.";
+const PROCEED_WITHOUT_KEY_PAIR = "Proceed without a key pair (Not recommended)";
+
+function launchNames(listed: StoredKeyPair[], created: StoredKeyPair[]): StoredKeyPair[] {
+  const seen = new Set(listed.map((item) => item.name));
+  const extra = created.filter((item) => {
+    if (seen.has(item.name)) return false;
+    seen.add(item.name);
+    return true;
+  });
+  return [...listed, ...extra];
+}
 
 export function LaunchView({
   images,
   instanceTypes,
   vpcs,
   subnets,
+  keyPairs,
   loadError,
 }: {
   images: Image[];
   instanceTypes: InstanceType[];
   vpcs: Vpc[];
   subnets: Subnet[];
+  keyPairs: StoredKeyPair[];
   loadError: ApiError | null;
 }) {
   const router = useRouter();
@@ -52,6 +67,17 @@ export function LaunchView({
   const [subnetChoice, setSubnetChoice] = useState("");
   const subnetId = vpcSubnets.some((subnet) => subnet.id === subnetChoice) ? subnetChoice : (vpcSubnets[0]?.id ?? "");
   const [count, setCount] = useState(1);
+  const [createdKeys, setCreatedKeys] = useState<StoredKeyPair[]>([]);
+  const [keyChoice, setKeyChoice] = useState<KeyPairChoice>({ kind: "none" });
+  const creator = useKeyPairCreator({
+    onCreated: (keyPair) => {
+      setCreatedKeys((prev) => [...prev, keyPair]);
+      setKeyChoice({ kind: "pair", name: keyPair.name });
+      router.refresh();
+    },
+  });
+  const keyOptions = launchNames(keyPairs, createdKeys);
+  const keyLabel = keyChoice.kind === "pair" ? keyChoice.name : PROCEED_WITHOUT_KEY_PAIR;
   const image = images.find((item) => item.id === imageId) ?? null;
   const type = instanceTypes.find((item) => item.id === instanceType) ?? null;
   const toggle = (key: Section) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -69,7 +95,7 @@ export function LaunchView({
             ...(name.trim() ? [["Name", name.trim()]] : []),
             ...tags.map((item) => [item.key, item.value]),
           ]),
-          keyPair: { kind: "none" },
+          keyPair: keyChoice,
         }),
       () => router.push("/compute/instances"),
     );
@@ -94,6 +120,7 @@ export function LaunchView({
             your choices.
           </p>
           <ApiErrorAlert error={loadError} title="Launch options could not be loaded" />
+          {creator.portal}
           <div className="mt-4 max-w-4xl space-y-4 pb-8">
             <Card
               title="Name and tags"
@@ -205,8 +232,37 @@ export function LaunchView({
               </p>
             </Card>
 
-            <Card title="Key pair (login)" info={NOT_SUPPORTED} open={open.key} onToggle={() => toggle("key")}>
-              <p className="text-[13px] text-[#5f6b7a]">Key pair: — ({NOT_SUPPORTED})</p>
+            <Card
+              title="Key pair (login)"
+              info="You use a key pair to connect to the instance, and you need the private key file before you launch."
+              open={open.key}
+              onToggle={() => toggle("key")}
+            >
+              <FieldLabel>Key pair</FieldLabel>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  className="field max-w-lg"
+                  aria-label="Key pair"
+                  value={keyChoice.kind === "pair" ? keyChoice.name : ""}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (!value) {
+                      setKeyChoice({ kind: "none" });
+                      return;
+                    }
+                    const found = keyOptions.find((item) => item.name === value);
+                    if (found) setKeyChoice({ kind: "pair", name: found.name });
+                  }}
+                >
+                  <option value="">{PROCEED_WITHOUT_KEY_PAIR}</option>
+                  {keyOptions.map((item) => (
+                    <option key={item.id} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                <OrangeButton onClick={creator.openGenerate}>Create new key pair</OrangeButton>
+              </div>
             </Card>
 
             <Card
@@ -282,6 +338,7 @@ export function LaunchView({
             </div>
             <SummaryRow label="Software Image (AMI)" value={image ? image.name || image.id : "—"} detail={image?.id} />
             <SummaryRow label="Virtual server type (instance type)" value={type?.id ?? "—"} />
+            <SummaryRow label="Key pair" value={keyLabel} />
             <SummaryRow label="Subnet" value={subnetId || "—"} />
             <ApiErrorAlert error={action.error} title="The instance could not be launched" />
             <div className="flex items-center justify-between pt-2">

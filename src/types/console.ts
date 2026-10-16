@@ -161,11 +161,6 @@ export type BucketObject = {
   storageClass: string;
 };
 
-export type KeyPair = {
-  name: string;
-  fingerprint: string;
-};
-
 export type Dataset = {
   instances: Instance[];
   volumes: Volume[];
@@ -175,7 +170,6 @@ export type Dataset = {
   internetGateways: InternetGateway[];
   buckets: Bucket[];
   objects: BucketObject[];
-  keyPairs: KeyPair[];
 };
 
 export type NavNode = {
