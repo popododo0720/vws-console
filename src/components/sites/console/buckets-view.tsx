@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Bucket } from "@/types/console";
+import { deleteBucketsAction } from "@/app/actions/resources";
+import type { AccountBucket, ApiError } from "@/lib/vws-api/adapter";
 import { storageNav } from "@/lib/console-data";
+import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, ResourceTable } from "@/components/sites/console/resource-table";
@@ -16,7 +18,6 @@ import {
   OrangeButton,
   OutlineButton,
   PanelDialog,
-  SampleBadge,
 } from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -26,21 +27,22 @@ function bucketArn(name: string) {
   return `arn:vws:s3:::${name}`;
 }
 
-export function BucketsView() {
+export function BucketsView({ buckets, loadError }: { buckets: readonly AccountBucket[]; loadError: ApiError | null }) {
   const api = useConsole();
+  const bucketAction = useApiAction();
   const router = useRouter();
   const params = useSearchParams();
   const tab = params.get("tab") === "directory" ? "directory" : "general";
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [action, setAction] = useState<"empty" | "delete" | null>(null);
+  const [dialog, setDialog] = useState<"empty" | "delete" | null>(null);
   const [confirm, setConfirm] = useState("");
-  const [blockedNames, setBlockedNames] = useState<string[]>([]);
+  const [emptyNotice, setEmptyNotice] = useState(false);
   const [dash, setDash] = useState(false);
   const [cards, setCards] = useState({ snapshot: false, access: false });
-  const rows = useMemo(() => api.buckets.filter((item) => item.kind === tab), [api.buckets, tab]);
+  const rows = tab === "directory" ? [] : [...buckets];
   const selected = rows.filter((item) => selectedIds.includes(item.name));
-  const generalCount = api.buckets.filter((item) => item.kind === "general").length;
-  const directoryCount = api.buckets.filter((item) => item.kind === "directory").length;
+  const generalCount = buckets.length;
+  const directoryCount = 0;
 
   const setTab = (next: "general" | "directory") => {
     const query = new URLSearchParams(params.toString());
@@ -53,12 +55,12 @@ export function BucketsView() {
 
   const openAction = (next: "empty" | "delete") => {
     setConfirm("");
-    setBlockedNames([]);
-    setAction(next);
+    setEmptyNotice(false);
+    setDialog(next);
   };
-  const confirmWord = action === "empty" ? "permanently delete" : selected.length === 1 ? selected[0].name : "delete";
+  const confirmWord = dialog === "empty" ? "permanently delete" : selected.length === 1 ? selected[0].name : "delete";
 
-  const columns: Column<Bucket>[] = [
+  const columns: Column<AccountBucket>[] = [
     {
       key: "name",
       header: "Name",
@@ -74,7 +76,7 @@ export function BucketsView() {
         </Link>
       ),
     },
-    { key: "region", header: "Region", minWidth: 160, sortValue: (row) => row.region, cell: (row) => row.region },
+    { key: "region", header: "Region", minWidth: 160, sortValue: () => "—", cell: () => "—" },
     {
       key: "created",
       header: "Creation date",
@@ -92,9 +94,10 @@ export function BucketsView() {
             <PageHeader
               mark="B"
               crumbs={[{ label: "S3", href: "/storage/buckets" }, { label: "Buckets" }]}
-              info="Buckets hold objects. This list is stored only in the browser session."
-              meta={api.mode === "sample" ? <SampleBadge /> : null}
+              info="Buckets hold objects."
             />
+            <ApiErrorAlert error={loadError} title="Buckets could not be loaded" />
+            <ApiErrorAlert error={bucketAction.error} title="The bucket action failed" />
             <div className="mb-3 flex gap-4 px-4 text-[14px]">
               <button
                 type="button"
@@ -185,7 +188,7 @@ export function BucketsView() {
                 <dl className="space-y-1 text-[13px]">
                   <div className="flex justify-between">
                     <dt>Buckets</dt>
-                    <dd>{api.buckets.length}</dd>
+                    <dd>{buckets.length}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt>Instances in region</dt>
@@ -217,41 +220,41 @@ export function BucketsView() {
         </div>
       </div>
       <PanelDialog
-        open={action !== null}
-        title={action === "empty" ? "Empty bucket" : "Delete bucket"}
-        onClose={() => setAction(null)}
+        open={dialog !== null}
+        title={dialog === "empty" ? "Empty bucket" : "Delete bucket"}
+        onClose={() => setDialog(null)}
         footer={
           <>
-            <OutlineButton onClick={() => setAction(null)}>Cancel</OutlineButton>
+            <OutlineButton onClick={() => setDialog(null)}>Cancel</OutlineButton>
             <OrangeButton
-              disabled={confirm !== confirmWord}
+              disabled={confirm !== confirmWord || bucketAction.pending}
               onClick={() => {
-                if (action === "empty") selected.forEach((item) => api.emptyBucket(item.name));
-                else {
-                  const blocked = selected.filter((item) => api.objects.some((object) => object.bucket === item.name));
-                  if (blocked.length > 0) {
-                    setConfirm("");
-                    setBlockedNames(blocked.map((item) => item.name));
-                    return;
-                  }
-                  api.deleteBuckets(selected.map((item) => item.name));
-                  setSelectedIds([]);
+                if (dialog === "empty") {
+                  setEmptyNotice(true);
+                  return;
                 }
-                setAction(null);
+                bucketAction.run(
+                  () => deleteBucketsAction(selected.map((item) => item.name)),
+                  () => {
+                    setSelectedIds([]);
+                    setDialog(null);
+                  },
+                );
               }}
             >
-              {action === "empty" ? "Empty" : "Delete bucket"}
+              {dialog === "empty" ? "Empty" : "Delete bucket"}
             </OrangeButton>
           </>
         }
       >
         <p className="mb-3">
-          {action === "empty"
+          {dialog === "empty"
             ? "Emptying permanently deletes all objects in the selected bucket. This action cannot be undone."
             : "Deleting a bucket cannot be undone. A bucket must be empty before it can be deleted."}
         </p>
-        {blockedNames.length > 0 ? (
-          <p className="mb-3 text-[#d13212]">Not empty: {blockedNames.join(", ")}. Empty the bucket first.</p>
+        {emptyNotice ? <p className="mb-3 text-[#d13212]">Objects cannot be deleted from this console yet.</p> : null}
+        {dialog === "delete" && bucketAction.error ? (
+          <p className="mb-3 text-[#d13212]">{bucketAction.error.message}</p>
         ) : null}
         <FieldLabel>To confirm, type “{confirmWord}”.</FieldLabel>
         <input className="field" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
