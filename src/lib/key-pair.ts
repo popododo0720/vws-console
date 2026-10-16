@@ -32,7 +32,6 @@ export type KeyPairDraft =
   | { mode: "generate"; name: KeyPairName; keyType: KeyType; keyFormat: KeyFormat }
   | { mode: "import"; name: KeyPairName; publicKey: string };
 
-/** Replay token. `body` is the exact POST string. The private key is never stored here. */
 export type CreateAttempt = {
   idempotencyKey: IdempotencyKey;
   body: string;
@@ -320,7 +319,6 @@ export function downloadPrivateKey(file: PrivateKeyFile): boolean {
   }
 }
 
-/** A removed key pair is already gone. Any other error stops the rest of the batch. */
 export function deleteBatchError(error: ApiError): ApiError | null {
   return error.code === "NotFound" ? null : error;
 }

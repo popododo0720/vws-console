@@ -326,10 +326,6 @@ function privateFile(draft: KeyPairDraft, name: string, material: string): Issue
   return { fileName: privateKeyFileName(name, format), material, format };
 }
 
-/**
- * The operation record has no items, so the private key is read from the 202 body
- * before the poll. A later timeout or failure still returns that issued value.
- */
 export async function createKeyPair(attempt: CreateAttempt): Promise<KeyPairCreateResult> {
   const idempotencyKey = parseIdempotencyKey(attempt.idempotencyKey);
   if (!idempotencyKey) {
