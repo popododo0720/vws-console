@@ -63,7 +63,6 @@ export function ConsoleProvider({
 }: {
   children: ReactNode;
   identity?: Identity;
-  /** True when IAM is on and users sign in; the account menu then offers Sign out. */
   signIn?: boolean;
   accountBuckets?: readonly AccountBucket[];
 }) {
