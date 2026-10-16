@@ -127,11 +127,29 @@ async function toLogin(reason: "signin" | "expired"): Promise<never> {
 type RequestResult =
   { ok: true; value: { status: number; json: unknown } } | { ok: false; status: number | null; error: ApiError };
 
+type RawBody = { bytes: Uint8Array; contentType: string };
+
+function blobBytes(bytes: Uint8Array): Blob {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return new Blob([copy]);
+}
+
+function rawBody(value: unknown): RawBody | null {
+  if (typeof value !== "object" || value === null || !("bytes" in value)) return null;
+  const bytes = (value as { bytes?: unknown }).bytes;
+  const contentType = (value as { contentType?: unknown }).contentType;
+  if (!(bytes instanceof Uint8Array) || typeof contentType !== "string") return null;
+  return { bytes, contentType };
+}
+
 /**
  * Calls console-api as the signed-in user. The session cookie is forwarded from this server only,
  * and every write carries X-CSRF-Token. A missing session or a 401 redirects to the login screen.
+ * Cookie writes must use application/json or the API gate refuses them before the handler.
  */
-async function request(method: "GET" | "PUT" | "DELETE", path: string): Promise<RequestResult>;
+async function request(method: "GET" | "DELETE", path: string): Promise<RequestResult>;
+async function request(method: "PUT", path: string, body?: RawBody): Promise<RequestResult>;
 async function request(method: "POST", path: string, body?: unknown): Promise<RequestResult>;
 async function request(
   method: "GET" | "POST" | "PUT" | "DELETE",
@@ -143,8 +161,15 @@ async function request(
   const mode = await modeOrError();
   if (typeof mode !== "string") return { ok: false, status: null, error: mode };
   const iam = mode === "on";
+  const raw = method === "PUT" ? rawBody(body) : null;
   const headers: Record<string, string> = { accept: "application/json" };
-  if (method !== "GET") headers["content-type"] = "application/json";
+  if (method !== "GET") {
+    headers["content-type"] = raw
+      ? iam
+        ? "application/json"
+        : raw.contentType || "application/octet-stream"
+      : "application/json";
+  }
   if (method === "POST") headers["idempotency-key"] = randomUUID();
   if (iam) {
     const session = await currentSession();
@@ -165,7 +190,7 @@ async function request(
     response = await apiFetch(`${base}/api/v1${path}`, {
       method,
       headers,
-      body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
+      body: method === "POST" ? JSON.stringify(body ?? {}) : raw ? blobBytes(raw.bytes) : undefined,
     });
   } catch (error) {
     return { ok: false, status: null, error: transportError(error) };
@@ -286,6 +311,47 @@ export async function putBucket(name: BucketName): Promise<ApiResult<AccountBuck
   } catch {
     return { ok: false, error: malformed(path) };
   }
+}
+
+export async function getBucket(name: BucketName): Promise<ApiResult<AccountBucket | null>> {
+  const path = `/buckets/${seg(name)}`;
+  const result = await request("GET", path);
+  if (!result.ok) {
+    if (result.status === 404 && result.error.code === "NotFound") return { ok: true, value: null };
+    return { ok: false, error: result.error };
+  }
+  if (result.value.status !== 200) return { ok: false, error: malformed(path) };
+  try {
+    return { ok: true, value: toAccountBucket(result.value.json, name) };
+  } catch {
+    return { ok: false, error: malformed(path) };
+  }
+}
+
+function objectPath(bucket: BucketName, key: string): string {
+  return `/buckets/${seg(bucket)}/objects/${key
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/")}`;
+}
+
+export async function putObject(
+  bucket: BucketName,
+  key: string,
+  bytes: Uint8Array,
+  contentType: string,
+): Promise<ApiResult<void>> {
+  const path = objectPath(bucket, key);
+  const result = await request("PUT", path, { bytes, contentType });
+  if (!result.ok) return { ok: false, error: result.error };
+  if (result.value.status !== 200) return { ok: false, error: malformed(path) };
+  const record = result.value.json;
+  const got =
+    typeof record === "object" && record !== null && "key" in record && typeof record.key === "string"
+      ? record.key
+      : "";
+  if (got !== key) return { ok: false, error: malformed(path) };
+  return { ok: true, value: undefined };
 }
 
 export async function deleteBucket(name: BucketName): Promise<ApiResult<void>> {

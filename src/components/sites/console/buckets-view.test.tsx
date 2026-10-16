@@ -14,7 +14,13 @@ const nav = vi.hoisted(() => ({
 
 const actions = vi.hoisted(() => ({
   createBucketAction: vi.fn(async () => null as ApiError | null),
-  deleteBucketsAction: vi.fn(async () => null as ApiError | null),
+  deleteBucketsAction: vi.fn(
+    async (): Promise<{ deleted: string[]; error: ApiError | null; failedName: string | null }> => ({
+      deleted: [],
+      error: null,
+      failedName: null,
+    }),
+  ),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -55,7 +61,7 @@ describe("BucketsView", () => {
     actions.createBucketAction.mockReset();
     actions.createBucketAction.mockResolvedValue(null);
     actions.deleteBucketsAction.mockReset();
-    actions.deleteBucketsAction.mockResolvedValue(null);
+    actions.deleteBucketsAction.mockResolvedValue({ deleted: [], error: null, failedName: null });
   });
 
   it("lists API buckets and leaves the sample buckets in the provider only", () => {
@@ -149,7 +155,10 @@ describe("BucketsView", () => {
     });
     render(
       <ConsoleProvider>
-        <BucketsView buckets={[logsBucket(), { name: media, ownerId: "123", created: "2026-09-01T00:00:00Z" }]} loadError={null} />
+        <BucketsView
+          buckets={[logsBucket(), { name: media, ownerId: "123", created: "2026-09-01T00:00:00Z" }]}
+          loadError={null}
+        />
       </ConsoleProvider>,
     );
     fireEvent.click(screen.getByRole("checkbox", { name: "Select logs-1" }));
@@ -159,8 +168,8 @@ describe("BucketsView", () => {
     fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "delete" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete bucket" }));
     await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
-    expect(screen.getByRole("dialog", { name: "Delete bucket" })).toBeTruthy();
-    expect(screen.getByText("bucket is not empty")).toBeTruthy();
+    const open = screen.getByRole("dialog", { name: "Delete bucket" });
+    expect(within(open).getByText("bucket is not empty")).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: "Select media-1" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Select logs-1" })).not.toBeChecked();
   });
@@ -185,9 +194,7 @@ describe("CreateBucketView", () => {
     expect(screen.getByRole("radio", { name: "Enable" })).toBeDisabled();
     expect(screen.getByText("Bucket versioning is not available. Creating a bucket does not enable it.")).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: /Block all public access/ })).toBeDisabled();
-    expect(
-      screen.getByText("Block Public Access is not available. Creating a bucket does not apply it."),
-    ).toBeTruthy();
+    expect(screen.getByText("Block Public Access is not available. Creating a bucket does not apply it.")).toBeTruthy();
     fireEvent.change(screen.getByPlaceholderText("my-bucket"), { target: { value: "logs-1" } });
     fireEvent.click(screen.getByRole("button", { name: "Create bucket" }));
     expect(actions.createBucketAction).toHaveBeenCalledWith("logs-1");

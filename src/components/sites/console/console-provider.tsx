@@ -2,18 +2,8 @@
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { createEmptyAccount, createSampleAccount, HOME_REGION, REGIONS } from "@/lib/console-data";
-import type {
-  Bucket,
-  BucketObject,
-  Dataset,
-  Instance,
-  InternetGateway,
-  RouteTable,
-  Subnet,
-  Volume,
-  Vpc,
-} from "@/types/console";
-import type { Identity } from "@/lib/vws-api/adapter";
+import type { Dataset, Instance, InternetGateway, RouteTable, Subnet, Volume, Vpc } from "@/types/console";
+import type { AccountBucket, Identity } from "@/lib/vws-api/adapter";
 
 type Mode = "empty" | "sample";
 type Density = "comfortable" | "compact";
@@ -36,8 +26,7 @@ type ConsoleApi = {
   subnets: Subnet[];
   routeTables: RouteTable[];
   internetGateways: InternetGateway[];
-  buckets: Bucket[];
-  objects: BucketObject[];
+  accountBuckets: readonly AccountBucket[];
   keyPairs: Dataset["keyPairs"];
   createRouteTable: (input: { name: string; vpcId: string }) => void;
   deleteRouteTables: (ids: string[]) => void;
@@ -47,9 +36,6 @@ type ConsoleApi = {
   attachInternetGateway: (id: string, vpcId: string) => string | null;
   detachInternetGateway: (id: string) => void;
   deleteInternetGateways: (ids: string[]) => void;
-  addObjects: (bucket: string, items: { key: string; sizeBytes: number }[]) => void;
-  createFolder: (bucket: string, key: string) => void;
-  deleteObjects: (bucket: string, keys: string[]) => void;
   addKeyPair: (name: string) => void;
 };
 
@@ -73,11 +59,13 @@ export function ConsoleProvider({
   children,
   identity = UNKNOWN,
   signIn = false,
+  accountBuckets = [],
 }: {
   children: ReactNode;
   identity?: Identity;
   /** True when IAM is on and users sign in; the account menu then offers Sign out. */
   signIn?: boolean;
+  accountBuckets?: readonly AccountBucket[];
 }) {
   const [region, setRegion] = useState<string>(HOME_REGION);
   const [mode, setMode] = useState<Mode>("empty");
@@ -107,8 +95,7 @@ export function ConsoleProvider({
       subnets,
       routeTables,
       internetGateways,
-      buckets: data.buckets,
-      objects: data.objects,
+      accountBuckets,
       keyPairs: data.keyPairs,
       showEmpty: () => {
         setMode("empty");
@@ -220,40 +207,6 @@ export function ConsoleProvider({
           internetGateways: prev.internetGateways.filter((item) => item.state === "attached" || !ids.includes(item.id)),
         }));
       },
-      addObjects: (bucket, items) => {
-        setData((prev) => {
-          const keys = items.map((item) => item.key);
-          const added: BucketObject[] = items.map((item) => ({
-            bucket,
-            key: item.key,
-            sizeBytes: item.sizeBytes,
-            modified: "Just now",
-            storageClass: "Standard",
-          }));
-          return {
-            ...prev,
-            objects: [...prev.objects.filter((item) => item.bucket !== bucket || !keys.includes(item.key)), ...added],
-          };
-        });
-      },
-      createFolder: (bucket, key) => {
-        setData((prev) =>
-          prev.objects.some((item) => item.bucket === bucket && item.key === key)
-            ? prev
-            : { ...prev, objects: [...prev.objects, { bucket, key, sizeBytes: 0, modified: "", storageClass: "" }] },
-        );
-      },
-      deleteObjects: (bucket, keys) => {
-        // A folder key removes everything under it.
-        setData((prev) => ({
-          ...prev,
-          objects: prev.objects.filter(
-            (item) =>
-              item.bucket !== bucket ||
-              !keys.some((key) => (key.endsWith("/") ? item.key.startsWith(key) : item.key === key)),
-          ),
-        }));
-      },
       addKeyPair: (name) => {
         const trimmed = name.trim();
         if (!trimmed) return;
@@ -265,7 +218,7 @@ export function ConsoleProvider({
         }));
       },
     };
-  }, [data, density, identity.accountId, identity.userName, mode, region, signIn]);
+  }, [accountBuckets, data, density, identity.accountId, identity.userName, mode, region, signIn]);
 
   return <ConsoleContext.Provider value={api}>{children}</ConsoleContext.Provider>;
 }
