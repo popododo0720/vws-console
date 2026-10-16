@@ -122,7 +122,16 @@ describe("VolumesView attach and detach", () => {
     expect(within(dialog).getByRole("option", { name: "i-stop" })).toBeTruthy();
     expect(within(dialog).queryByRole("option", { name: "boot (i-pending)" })).toBeNull();
     expect(within(dialog).queryByRole("option", { name: "other (i-2)" })).toBeNull();
-    expect(within(dialog).getByRole("textbox", { name: "Device name" })).toHaveValue("/dev/sdf");
+    const device = within(dialog).getByRole("combobox", { name: "Device name" });
+    expect(device).toHaveValue("/dev/sdf");
+    expect(within(dialog).getByRole("group", { name: "Reserved for root volume" })).toBeTruthy();
+    expect(within(device).getByRole("option", { name: "/dev/sda1" })).toBeTruthy();
+    expect(within(device).getByRole("option", { name: "/dev/xvda" })).toBeTruthy();
+    expect(within(dialog).getByRole("group", { name: "Recommended for data volumes" })).toBeTruthy();
+    expect(within(device).getByRole("option", { name: "/dev/sdf" })).toBeTruthy();
+    expect(within(device).getByRole("option", { name: "/dev/sdp" })).toBeTruthy();
+    expect(within(device).getByRole("option", { name: "Specify a custom device name" })).toBeTruthy();
+    expect(within(dialog).queryByRole("textbox", { name: "Custom device name" })).toBeNull();
     expect(within(dialog).getByRole("button", { name: "Attach volume" })).toBeTruthy();
   });
 
@@ -152,7 +161,8 @@ describe("VolumesView attach and detach", () => {
     expect(
       within(dialog).getByText("There are no running or stopped instances in this Availability Zone."),
     ).toBeTruthy();
-    expect(within(dialog).queryByRole("combobox")).toBeNull();
+    expect(within(dialog).queryByRole("combobox", { name: "Instance" })).toBeNull();
+    expect(within(dialog).getByRole("combobox", { name: "Device name" })).toBeTruthy();
   });
 
   it("sends the chosen instance and /dev/sdf to attach", () => {
@@ -161,9 +171,38 @@ describe("VolumesView attach and detach", () => {
     openActions();
     fireEvent.click(screen.getByRole("menuitem", { name: "Attach volume" }));
     const dialog = screen.getByRole("dialog", { name: "Attach volume" });
-    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "i-1" } });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Instance" }), { target: { value: "i-1" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Attach volume" }));
     expect(attachVolumeAction).toHaveBeenCalledWith("vol-1", { instanceId: "i-1", device: "/dev/sdf" });
+  });
+
+  it("sends a reserved root device and a custom device name", () => {
+    renderVolumes([volume("vol-1", "available", null)]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Attach volume" }));
+    const dialog = screen.getByRole("dialog", { name: "Attach volume" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Device name" }), {
+      target: { value: "/dev/xvda" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Attach volume" }));
+    expect(attachVolumeAction).toHaveBeenCalledWith("vol-1", { instanceId: "i-1", device: "/dev/xvda" });
+  });
+
+  it("sends a trimmed custom device name", () => {
+    renderVolumes([volume("vol-1", "available", null)]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Attach volume" }));
+    const dialog = screen.getByRole("dialog", { name: "Attach volume" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Device name" }), {
+      target: { value: "custom" },
+    });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Custom device name" }), {
+      target: { value: "  /dev/xvdz1  " },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Attach volume" }));
+    expect(attachVolumeAction).toHaveBeenCalledWith("vol-1", { instanceId: "i-1", device: "/dev/xvdz1" });
   });
 
   it("keeps the attach dialog open when the action returns an error", async () => {
@@ -176,6 +215,49 @@ describe("VolumesView attach and detach", () => {
     fireEvent.click(screen.getByRole("button", { name: "Attach volume" }));
     const dialog = screen.getByRole("dialog", { name: "Attach volume" });
     expect(await within(dialog).findByText("Volume vol-1 is already attached.")).toBeTruthy();
+  });
+
+  it("drops the previous action error when Attach volume or Detach volume opens again", async () => {
+    const error: ApiError = { code: "Conflict", message: "Volume vol-1 is already attached.", requestId: "req-1" };
+    vi.mocked(attachVolumeAction).mockResolvedValue(error);
+    renderVolumes([
+      volume("vol-1", "available", null),
+      volume("vol-2", "in-use", { instanceId: "i-1", device: "/dev/sdf" }),
+    ]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Attach volume" }));
+    const first = screen.getByRole("dialog", { name: "Attach volume" });
+    fireEvent.click(within(first).getByRole("button", { name: "Attach volume" }));
+    expect(await within(first).findByText("Volume vol-1 is already attached.")).toBeTruthy();
+    fireEvent.click(within(first).getByRole("button", { name: "Cancel" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Attach volume" }));
+    const reopened = screen.getByRole("dialog", { name: "Attach volume" });
+    expect(within(reopened).queryByText("Volume vol-1 is already attached.")).toBeNull();
+    expect(screen.queryByText("Volume vol-1 is already attached.")).toBeNull();
+  });
+
+  it("drops the previous action error when Detach volume opens", async () => {
+    const error: ApiError = { code: "Conflict", message: "Volume vol-1 is already attached.", requestId: "req-1" };
+    vi.mocked(attachVolumeAction).mockResolvedValue(error);
+    renderVolumes([
+      volume("vol-1", "available", null),
+      volume("vol-2", "in-use", { instanceId: "i-1", device: "/dev/sdf" }),
+    ]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Attach volume" }));
+    const first = screen.getByRole("dialog", { name: "Attach volume" });
+    fireEvent.click(within(first).getByRole("button", { name: "Attach volume" }));
+    expect(await within(first).findByText("Volume vol-1 is already attached.")).toBeTruthy();
+    fireEvent.click(within(first).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-2" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Detach volume" }));
+    const detach = screen.getByRole("dialog", { name: "Detach volume" });
+    expect(within(detach).queryByText("Volume vol-1 is already attached.")).toBeNull();
   });
 
   it("detaches an in-use volume from its instance", () => {
