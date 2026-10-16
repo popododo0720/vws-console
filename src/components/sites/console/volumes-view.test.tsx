@@ -21,10 +21,11 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const instances: Pick<Instance, "id" | "name" | "state">[] = [
-  { id: "i-pending", name: "boot", state: "pending" },
-  { id: "i-1", name: "web", state: "running" },
-  { id: "i-stop", name: "", state: "stopped" },
+const instances: Pick<Instance, "id" | "name" | "state" | "availabilityZone">[] = [
+  { id: "i-pending", name: "boot", state: "pending", availabilityZone: "vws-1a" },
+  { id: "i-1", name: "web", state: "running", availabilityZone: "vws-1a" },
+  { id: "i-stop", name: "", state: "stopped", availabilityZone: "vws-1a" },
+  { id: "i-2", name: "other", state: "running", availabilityZone: "vws-1b" },
 ];
 
 function volume(id: string, state: string, attachment: Volume["attachment"]): Volume {
@@ -46,10 +47,10 @@ function volume(id: string, state: string, attachment: Volume["attachment"]): Vo
   };
 }
 
-function renderVolumes(rows: Volume[]) {
+function renderVolumes(rows: Volume[], rowsInstances = instances) {
   render(
     <ConsoleProvider>
-      <VolumesView volumes={rows} loadError={null} instances={instances} instanceLoadError={null} />
+      <VolumesView volumes={rows} loadError={null} instances={rowsInstances} instanceLoadError={null} />
     </ConsoleProvider>,
   );
 }
@@ -120,8 +121,38 @@ describe("VolumesView attach and detach", () => {
     expect(within(dialog).getByRole("option", { name: "web (i-1)" })).toBeTruthy();
     expect(within(dialog).getByRole("option", { name: "i-stop" })).toBeTruthy();
     expect(within(dialog).queryByRole("option", { name: "boot (i-pending)" })).toBeNull();
+    expect(within(dialog).queryByRole("option", { name: "other (i-2)" })).toBeNull();
     expect(within(dialog).getByRole("textbox", { name: "Device name" })).toHaveValue("/dev/sdf");
     expect(within(dialog).getByRole("button", { name: "Attach volume" })).toBeTruthy();
+  });
+
+  it("describes the device name the way EC2 does", () => {
+    renderVolumes([volume("vol-1", "available", null)]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Attach volume" }));
+    const dialog = screen.getByRole("dialog", { name: "Attach volume" });
+    expect(
+      within(dialog).getByText(
+        "The device name you specify is used by EC2. The block device driver can mount the device with a device name that is different from the one you specify.",
+      ),
+    ).toBeTruthy();
+    expect(within(dialog).queryByText(/The VWS API accepts any non-empty device name/)).toBeNull();
+  });
+
+  it("says when this Availability Zone has no running or stopped instance", () => {
+    renderVolumes(
+      [volume("vol-1", "available", null)],
+      [{ id: "i-2", name: "other", state: "running", availabilityZone: "vws-1b" }],
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Attach volume" }));
+    const dialog = screen.getByRole("dialog", { name: "Attach volume" });
+    expect(
+      within(dialog).getByText("There are no running or stopped instances in this Availability Zone."),
+    ).toBeTruthy();
+    expect(within(dialog).queryByRole("combobox")).toBeNull();
   });
 
   it("sends the chosen instance and /dev/sdf to attach", () => {
@@ -143,8 +174,8 @@ describe("VolumesView attach and detach", () => {
     openActions();
     fireEvent.click(screen.getByRole("menuitem", { name: "Attach volume" }));
     fireEvent.click(screen.getByRole("button", { name: "Attach volume" }));
-    expect(await screen.findByText("Volume vol-1 is already attached.")).toBeTruthy();
-    expect(screen.getByRole("dialog", { name: "Attach volume" })).toBeTruthy();
+    const dialog = screen.getByRole("dialog", { name: "Attach volume" });
+    expect(await within(dialog).findByText("Volume vol-1 is already attached.")).toBeTruthy();
   });
 
   it("detaches an in-use volume from its instance", () => {
