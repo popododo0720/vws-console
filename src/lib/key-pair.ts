@@ -54,7 +54,8 @@ export type IssuedKeyPair = {
 export type KeyPairCreateResult =
   { status: "ready"; issued: IssuedKeyPair } | { status: "failed"; error: ApiError; issued: IssuedKeyPair | null };
 
-export type KeyPairChoice = { kind: "none" } | { kind: "pair"; name: KeyPairName };
+export type KeyPairChoice =
+  { kind: "unset" } | { kind: "opt-out" } | { kind: "none" } | { kind: "pair"; name: KeyPairName };
 
 export type KeyPairDialog =
   | { step: "closed" }
@@ -94,9 +95,18 @@ export type CreateTransition = {
 const KEY_PAIR_ID = /^key-[0-9a-f]{8,17}$/;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const RECEIPT_PREFIX = "vws.key-pair-receipt.";
+const PENDING_NAMES_KEY = "vws.key-pair-pending-names";
+const NAME_INVALID = "Enter a key pair name of 1 to 255 ASCII characters. It cannot start or end with a space.";
+const PRIVATE_KEY_REJECTED = "Enter a public key. A private key is not accepted.";
+const PRIVATE_KEY_MATERIAL = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/;
 
 function invalid(message: string): ApiError {
   return { code: "InvalidArgument", message, requestId: null };
+}
+
+function isPrivateKey(value: string): boolean {
+  const text = value.trim();
+  return PRIVATE_KEY_MATERIAL.test(text) || text.startsWith("PuTTY-User-Key-File-");
 }
 
 export function parseKeyPairId(value: string): KeyPairId | null {
@@ -104,8 +114,11 @@ export function parseKeyPairId(value: string): KeyPairId | null {
 }
 
 export function parseKeyPairName(value: string): KeyPairName | null {
-  const bytes = new TextEncoder().encode(value).length;
-  if (bytes < 1 || bytes > 255) return null;
+  if (value.length < 1 || value.length > 255) return null;
+  if (value.startsWith(" ") || value.endsWith(" ")) return null;
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.charCodeAt(index) > 127) return null;
+  }
   return value as KeyPairName;
 }
 
@@ -120,8 +133,11 @@ export function parseDraft(input: {
   keyFormat: KeyFormat;
   publicKey: string;
 }): { ok: true; value: KeyPairDraft } | { ok: false; error: ApiError } {
+  if (input.mode === "import" && isPrivateKey(input.publicKey)) {
+    return { ok: false, error: invalid(PRIVATE_KEY_REJECTED) };
+  }
   const name = parseKeyPairName(input.name);
-  if (!name) return { ok: false, error: invalid("Enter a key pair name of 1 to 255 bytes.") };
+  if (!name) return { ok: false, error: invalid(NAME_INVALID) };
   if (input.mode === "import") {
     if (input.publicKey.trim() === "") return { ok: false, error: invalid("Enter a public key.") };
     return { ok: true, value: { mode: "import", name, publicKey: input.publicKey } };
@@ -137,6 +153,9 @@ function attemptBody(draft: KeyPairDraft): string {
 }
 
 export function commitAttempt(store: ReceiptStore, draft: KeyPairDraft): CreateAttempt {
+  if (draft.mode === "import" && isPrivateKey(draft.publicKey)) {
+    throw new Error("A private key cannot be stored.");
+  }
   const idempotencyKey = parseIdempotencyKey(crypto.randomUUID());
   if (!idempotencyKey) throw new Error("The idempotency key could not be minted.");
   const attempt = { idempotencyKey, body: attemptBody(draft) };
@@ -157,12 +176,13 @@ export function readAttempt(attempt: CreateAttempt): KeyPairDraft | ApiError {
   }
   const record = parsed as Record<string, unknown>;
   const name = typeof record.keyName === "string" ? parseKeyPairName(record.keyName) : null;
-  if (!name) return invalid("Enter a key pair name of 1 to 255 bytes.");
+  if (!name) return invalid(NAME_INVALID);
   if ("publicKeyMaterial" in record) {
     if ("keyType" in record || "keyFormat" in record) return invalid("The key pair request could not be read.");
     if (typeof record.publicKeyMaterial !== "string" || record.publicKeyMaterial.trim() === "") {
       return invalid("Enter a public key.");
     }
+    if (isPrivateKey(record.publicKeyMaterial)) return invalid(PRIVATE_KEY_REJECTED);
     return { mode: "import", name, publicKey: record.publicKeyMaterial.trim() };
   }
   if (record.keyType !== "rsa" && record.keyType !== "ed25519") {
@@ -200,42 +220,69 @@ function storage(): Storage | null {
   }
 }
 
-function storedAttempt(body: string, key: IdempotencyKey): CreateAttempt | null {
-  const attempt = { idempotencyKey: key, body };
-  const draft = readAttempt(attempt);
-  if ("code" in draft) return null;
-  return attempt;
+export function scrubKeyEquivalentStorage(): void {
+  const bin = storage();
+  if (!bin) return;
+  const doomed: string[] = [];
+  for (let index = 0; index < bin.length; index += 1) {
+    const storageKey = bin.key(index);
+    if (storageKey?.startsWith(RECEIPT_PREFIX)) doomed.push(storageKey);
+  }
+  for (const storageKey of doomed) bin.removeItem(storageKey);
+}
+
+function readNames(): KeyPairName[] {
+  const raw = storage()?.getItem(PENDING_NAMES_KEY);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item) => {
+      const name = typeof item === "string" ? parseKeyPairName(item) : null;
+      return name ? [name] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function writeNames(names: readonly KeyPairName[]): void {
+  const bin = storage();
+  if (!bin) throw new Error("The browser could not store the key pair name.");
+  const unique = [...new Set(names)];
+  if (unique.length === 0) bin.removeItem(PENDING_NAMES_KEY);
+  else bin.setItem(PENDING_NAMES_KEY, JSON.stringify(unique));
+}
+
+export function readPendingNames(): KeyPairName[] {
+  scrubKeyEquivalentStorage();
+  return readNames();
+}
+
+export function forgetPendingName(name: string): void {
+  const parsed = parseKeyPairName(name);
+  if (!parsed) return;
+  writeNames(readNames().filter((item) => item !== parsed));
 }
 
 export function browserReceiptStore(): ReceiptStore {
   return {
-    read(key) {
-      const raw = storage()?.getItem(RECEIPT_PREFIX + key);
-      return raw ? storedAttempt(raw, key) : null;
+    read() {
+      scrubKeyEquivalentStorage();
+      return null;
     },
     write(attempt) {
-      const bin = storage();
-      if (!bin) throw new Error("The browser could not store the key pair request.");
-      bin.setItem(RECEIPT_PREFIX + attempt.idempotencyKey, attempt.body);
+      scrubKeyEquivalentStorage();
+      const draft = readAttempt(attempt);
+      if ("code" in draft) throw new Error("The key pair request could not be stored.");
+      writeNames([...readNames(), draft.name]);
     },
-    delete(key) {
-      storage()?.removeItem(RECEIPT_PREFIX + key);
+    delete() {
+      scrubKeyEquivalentStorage();
     },
     list() {
-      const bin = storage();
-      if (!bin) return [];
-      const out: CreateAttempt[] = [];
-      for (let index = 0; index < bin.length; index += 1) {
-        const storageKey = bin.key(index);
-        if (!storageKey?.startsWith(RECEIPT_PREFIX)) continue;
-        const idempotencyKey = parseIdempotencyKey(storageKey.slice(RECEIPT_PREFIX.length));
-        if (!idempotencyKey) continue;
-        const raw = bin.getItem(storageKey);
-        if (!raw) continue;
-        const attempt = storedAttempt(raw, idempotencyKey);
-        if (attempt) out.push(attempt);
-      }
-      return out;
+      scrubKeyEquivalentStorage();
+      return [];
     },
   };
 }

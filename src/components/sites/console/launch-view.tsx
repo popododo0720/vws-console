@@ -68,22 +68,30 @@ export function LaunchView({
   const subnetId = vpcSubnets.some((subnet) => subnet.id === subnetChoice) ? subnetChoice : (vpcSubnets[0]?.id ?? "");
   const [count, setCount] = useState(1);
   const [createdKeys, setCreatedKeys] = useState<StoredKeyPair[]>([]);
-  const [keyChoice, setKeyChoice] = useState<KeyPairChoice>({ kind: "none" });
+  const [keyChoice, setKeyChoice] = useState<KeyPairChoice>({ kind: "unset" });
+  const keyOptions = launchNames(keyPairs, createdKeys);
   const creator = useKeyPairCreator({
     onCreated: (keyPair) => {
       setCreatedKeys((prev) => [...prev, keyPair]);
       setKeyChoice({ kind: "pair", name: keyPair.name });
       router.refresh();
     },
+    knownNames: keyOptions.map((item) => item.name),
   });
-  const keyOptions = launchNames(keyPairs, createdKeys);
-  const keyLabel = keyChoice.kind === "pair" ? keyChoice.name : PROCEED_WITHOUT_KEY_PAIR;
+  const keyLabel =
+    keyChoice.kind === "pair"
+      ? keyChoice.name
+      : keyChoice.kind === "none" || keyChoice.kind === "opt-out"
+        ? PROCEED_WITHOUT_KEY_PAIR
+        : "—";
   const image = images.find((item) => item.id === imageId) ?? null;
   const type = instanceTypes.find((item) => item.id === instanceType) ?? null;
   const toggle = (key: Section) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-  const ready = Boolean(image && type && subnetId) && count >= 1 && !action.pending;
+  const keyDecided = keyChoice.kind === "pair" || keyChoice.kind === "none";
+  const ready = Boolean(image && type && subnetId) && count >= 1 && !action.pending && keyDecided;
 
-  const launch = () =>
+  const launch = () => {
+    if (keyChoice.kind !== "pair" && keyChoice.kind !== "none") return;
     action.run(
       () =>
         launchInstancesAction({
@@ -99,6 +107,7 @@ export function LaunchView({
         }),
       () => router.push("/compute/instances"),
     );
+  };
 
   return (
     <Shell tree={computeNav} navMode="overlay-only">
@@ -243,18 +252,29 @@ export function LaunchView({
                 <select
                   className="field max-w-lg"
                   aria-label="Key pair"
-                  value={keyChoice.kind === "pair" ? keyChoice.name : ""}
+                  value={
+                    keyChoice.kind === "pair"
+                      ? keyChoice.name
+                      : keyChoice.kind === "opt-out" || keyChoice.kind === "none"
+                        ? "proceed-without"
+                        : ""
+                  }
                   onChange={(event) => {
                     const value = event.target.value;
                     if (!value) {
-                      setKeyChoice({ kind: "none" });
+                      setKeyChoice({ kind: "unset" });
+                      return;
+                    }
+                    if (value === "proceed-without") {
+                      setKeyChoice({ kind: "opt-out" });
                       return;
                     }
                     const found = keyOptions.find((item) => item.name === value);
                     if (found) setKeyChoice({ kind: "pair", name: found.name });
                   }}
                 >
-                  <option value="">{PROCEED_WITHOUT_KEY_PAIR}</option>
+                  <option value="">Select a key pair</option>
+                  <option value="proceed-without">{PROCEED_WITHOUT_KEY_PAIR}</option>
                   {keyOptions.map((item) => (
                     <option key={item.id} value={item.name}>
                       {item.name}
@@ -263,6 +283,26 @@ export function LaunchView({
                 </select>
                 <OrangeButton onClick={creator.openGenerate}>Create new key pair</OrangeButton>
               </div>
+              {keyChoice.kind === "opt-out" || keyChoice.kind === "none" ? (
+                <div className="mt-3 space-y-2 text-[13px]">
+                  <p>
+                    If you proceed without a key pair, you will not be able to connect to the instance unless you
+                    already know the password that is built into this AMI.
+                  </p>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={keyChoice.kind === "none"}
+                      onChange={(event) => setKeyChoice(event.target.checked ? { kind: "none" } : { kind: "opt-out" })}
+                    />
+                    <span>
+                      I acknowledge that I will not be able to connect to this instance unless I already know the
+                      password built into this AMI.
+                    </span>
+                  </label>
+                </div>
+              ) : null}
             </Card>
 
             <Card

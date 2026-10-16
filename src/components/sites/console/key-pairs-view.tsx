@@ -27,7 +27,10 @@ const INTRO =
 export function KeyPairsView({ keyPairs, loadError }: { keyPairs: StoredKeyPair[]; loadError: ApiError | null }) {
   const router = useRouter();
   const action = useApiAction();
-  const creator = useKeyPairCreator({ onCreated: () => router.refresh() });
+  const creator = useKeyPairCreator({
+    onCreated: () => router.refresh(),
+    knownNames: keyPairs.map((item) => item.name),
+  });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const selected = keyPairs.filter((item) => selectedIds.includes(item.id));

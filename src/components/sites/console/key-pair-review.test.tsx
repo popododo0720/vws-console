@@ -72,10 +72,8 @@ describe("key pair create recovery", () => {
     const dialog = screen.getByRole("dialog", { name: "Create key pair" });
     fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "web" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create key pair" }));
-    const failure = await screen.findByRole("dialog", { name: "Create key pair" });
-    expect(failure.textContent).toContain(
-      "The key pair request did not reach the server. Retry from this dialog, or discard it.",
-    );
+    await screen.findByText("The key pair request did not reach the server. Retry from this dialog, or discard it.");
+    const failure = screen.getByRole("dialog", { name: "Create key pair" });
     expect(within(failure).getByRole("button", { name: "Retry" })).toBeTruthy();
     expect(within(failure).getByRole("button", { name: "Discard" })).toBeTruthy();
     expect(JSON.stringify(localStorage)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);

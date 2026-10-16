@@ -12,7 +12,9 @@ import {
   discardAttempt,
   downloadPrivateKey,
   finishCreate,
+  forgetPendingName,
   parseDraft,
+  readPendingNames,
   type CreateAttempt,
   type CreateTransition,
   type KeyFormat,
@@ -30,31 +32,40 @@ const emptyForm = {
   error: null,
 };
 
-const noReceipts: CreateAttempt[] = [];
-let receiptSnapshot = noReceipts;
-let receiptText = "";
-const receiptListeners = new Set<() => void>();
+const noNames: string[] = [];
+let nameSnapshot: readonly string[] = noNames;
+let nameText = "";
+const nameListeners = new Set<() => void>();
 
-function readReceipts(): CreateAttempt[] {
-  const next = browserReceiptStore().list();
-  const text = next.map((item) => `${item.idempotencyKey}\n${item.body}`).join("\n");
-  if (text === receiptText) return receiptSnapshot;
-  receiptText = text;
-  receiptSnapshot = next;
-  return receiptSnapshot;
+function readNameSnapshot(): readonly string[] {
+  const next = readPendingNames();
+  const text = next.join("\n");
+  if (text === nameText) return nameSnapshot;
+  nameText = text;
+  nameSnapshot = next;
+  return nameSnapshot;
 }
 
-function subscribeReceipts(listener: () => void) {
-  receiptListeners.add(listener);
-  return () => receiptListeners.delete(listener);
+function subscribeNames(listener: () => void) {
+  nameListeners.add(listener);
+  return () => nameListeners.delete(listener);
 }
 
-function publishReceipts() {
-  receiptText = "";
-  for (const listener of receiptListeners) listener();
+function publishNames() {
+  nameText = "";
+  for (const listener of nameListeners) listener();
 }
 
-export function useKeyPairCreator(options: { onCreated: (keyPair: StoredKeyPair) => void }): {
+const UNREACHABLE = {
+  code: "Unavailable",
+  message: "The key pair request did not reach the server. Retry from this dialog, or discard it.",
+  requestId: null,
+};
+
+export function useKeyPairCreator(options: {
+  onCreated: (keyPair: StoredKeyPair) => void;
+  knownNames: readonly string[];
+}): {
   openGenerate: () => void;
   openImport: () => void;
   portal: ReactNode;
@@ -62,31 +73,41 @@ export function useKeyPairCreator(options: { onCreated: (keyPair: StoredKeyPair)
   const dialogRef = useRef<KeyPairDialog>({ step: "closed" });
   const gate = useRef(false);
   const [dialog, setDialog] = useState<KeyPairDialog>({ step: "closed" });
-  const receipts = useSyncExternalStore(subscribeReceipts, readReceipts, () => noReceipts);
+  const pendingNames = useSyncExternalStore(subscribeNames, readNameSnapshot, () => noNames);
+  const lostNames = pendingNames.filter((name) => options.knownNames.includes(name));
+  const unfinishedNames = pendingNames.filter((name) => !options.knownNames.includes(name));
 
   function show(next: KeyPairDialog) {
     dialogRef.current = next;
     setDialog(next);
   }
 
-  function apply(attempt: CreateAttempt, transition: CreateTransition) {
-    const store = browserReceiptStore();
-    if (transition.effect === "forget") store.delete(attempt.idempotencyKey);
+  function apply(transition: CreateTransition) {
     show(transition.dialog);
-    publishReceipts();
+    publishNames();
     if (transition.published) options.onCreated(transition.published);
+  }
+
+  function clearDownloaded(name: string) {
+    forgetPendingName(name);
+    publishNames();
   }
 
   async function run(attempt: CreateAttempt) {
     show({ step: "saving", attempt });
     gate.current = false;
-    const result = await createKeyPairAction(attempt);
+    let result: Awaited<ReturnType<typeof createKeyPairAction>>;
+    try {
+      result = await createKeyPairAction(attempt);
+    } catch {
+      show({ step: "error", attempt, error: UNREACHABLE });
+      publishNames();
+      return;
+    }
     const transition = finishCreate(attempt, result);
-    apply(attempt, transition);
+    apply(transition);
     if (result.status === "ready" && result.issued.privateKey && downloadPrivateKey(result.issued.privateKey)) {
-      const store = browserReceiptStore();
-      store.delete(attempt.idempotencyKey);
-      publishReceipts();
+      clearDownloaded(result.issued.keyPair.name);
     }
   }
 
@@ -108,7 +129,7 @@ export function useKeyPairCreator(options: { onCreated: (keyPair: StoredKeyPair)
     }
     try {
       void run(commitAttempt(browserReceiptStore(), parsed.value));
-      publishReceipts();
+      publishNames();
     } catch {
       gate.current = false;
       show({
@@ -133,7 +154,7 @@ export function useKeyPairCreator(options: { onCreated: (keyPair: StoredKeyPair)
   function close() {
     const current = dialogRef.current;
     if (current.step === "download") {
-      apply(current.attempt, acknowledgeDownload(current.attempt));
+      apply(acknowledgeDownload(current.attempt));
       return;
     }
     if (current.step === "form" || current.step === "saving" || current.step === "error") show({ step: "closed" });
@@ -151,24 +172,26 @@ export function useKeyPairCreator(options: { onCreated: (keyPair: StoredKeyPair)
 
   const portal = (
     <>
-      {dialog.step === "closed" && receipts.length > 0 ? (
+      {dialog.step === "closed" && (lostNames.length > 0 || unfinishedNames.length > 0) ? (
         <div
           role="status"
           className="mx-4 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e6e8eb] bg-[#f7f8f8] px-3 py-2 text-[13px]"
         >
-          <p>
-            {receipts.length === 1
-              ? "A key pair create did not finish. Resume sends the same request."
-              : `${receipts.length} key pair creates did not finish. Resume sends the next request.`}
-          </p>
+          <div>
+            {lostNames.map((name) => (
+              <p key={name}>The private key for {name} cannot be shown again.</p>
+            ))}
+            {unfinishedNames.map((name) => (
+              <p key={name}>The create for {name} did not finish. Create the key pair again if you still need it.</p>
+            ))}
+          </div>
           <OutlineButton
             onClick={() => {
-              if (dialogRef.current.step !== "closed") return;
-              const [next] = browserReceiptStore().list();
-              if (next) void run(next);
+              for (const name of pendingNames) forgetPendingName(name);
+              publishNames();
             }}
           >
-            Resume
+            Dismiss
           </OutlineButton>
         </div>
       ) : null}
@@ -211,6 +234,37 @@ export function useKeyPairCreator(options: { onCreated: (keyPair: StoredKeyPair)
             ) : (
               <div>
                 <FieldLabel>Public key</FieldLabel>
+                <div className="mb-2">
+                  <label className="inline-flex h-8 cursor-pointer items-center rounded-lg border border-[#aab7b8] bg-white px-3 text-[13px] font-semibold">
+                    Browse
+                    <input
+                      aria-label="Browse"
+                      type="file"
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (!file) return;
+                        void file.text().then((text) => {
+                          const current = dialogRef.current;
+                          if (current.step !== "form") return;
+                          const parsed = parseDraft({
+                            mode: "import",
+                            name: current.name,
+                            keyType: current.keyType,
+                            keyFormat: current.keyFormat,
+                            publicKey: text,
+                          });
+                          if (!parsed.ok) {
+                            show({ ...current, publicKey: "", error: parsed.error });
+                            return;
+                          }
+                          show({ ...current, publicKey: text, error: null });
+                        });
+                      }}
+                    />
+                  </label>
+                </div>
                 <textarea
                   className="w-full rounded-lg border border-[#aab7b8] px-2.5 py-2 text-[13px]"
                   rows={5}
@@ -242,9 +296,7 @@ export function useKeyPairCreator(options: { onCreated: (keyPair: StoredKeyPair)
                 if (dialogRef.current.step !== "download") return;
                 const current = dialogRef.current;
                 if (!downloadPrivateKey(current.file)) return;
-                const store = browserReceiptStore();
-                store.delete(current.attempt.idempotencyKey);
-                publishReceipts();
+                clearDownloaded(current.keyPair.name);
               }}
             >
               Download
@@ -276,7 +328,7 @@ export function useKeyPairCreator(options: { onCreated: (keyPair: StoredKeyPair)
             <OutlineButton
               onClick={() => {
                 if (dialogRef.current.step !== "error") return;
-                apply(dialogRef.current.attempt, discardAttempt(dialogRef.current.attempt));
+                apply(discardAttempt(dialogRef.current.attempt));
               }}
             >
               Discard
