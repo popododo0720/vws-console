@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   nextPageToken,
+  parseAccountBuckets,
   parseApiError,
+  parseBucketName,
   parseImages,
   parseInstances,
   parseOperation,
@@ -12,6 +14,7 @@ import {
   parseInstanceTypes,
   parseSecurityGroups,
   parseSnapshots,
+  toAccountBucket,
   toIngressPermission,
   identityFromSession,
 } from "./adapter";
@@ -344,5 +347,59 @@ describe("identityFromSession with IAM off", () => {
       identityFromSession({ principal: "arn:vws:iam::123456789012:root", account: "123456789012" }, { iam: false }),
     ).toEqual({ userName: "root (IAM off)", accountId: "123456789012" });
     expect(identityFromSession(null, { iam: false })).toEqual({ userName: "root (IAM off)", accountId: "—" });
+  });
+});
+
+describe("account buckets", () => {
+  const wire = {
+    name: "logs-1",
+    ownerId: "123",
+    creationDate: "2026-08-02T00:00:00Z",
+    region: "vws-1",
+    kind: "general",
+    versioning: true,
+    blockPublicAccess: false,
+    nextPageToken: "ignored",
+  };
+
+  it("maps creationDate onto created and drops fields the list does not own", () => {
+    expect(parseAccountBuckets({ items: [wire], nextPageToken: "later" })).toEqual([
+      { name: "logs-1", ownerId: "123", created: "2026-08-02T00:00:00Z" },
+    ]);
+  });
+
+  it("returns an empty list for an empty page", () => {
+    expect(parseAccountBuckets({ items: [] })).toEqual([]);
+  });
+
+  it("rejects a page whose items are missing or null", () => {
+    expect(() => parseAccountBuckets({})).toThrow();
+    expect(() => parseAccountBuckets({ items: null })).toThrow();
+  });
+
+  it("rejects a bad name or an empty creation date, and leaves a missing owner blank", () => {
+    expect(() => toAccountBucket({ name: "A", ownerId: "1", creationDate: "2026-08-02T00:00:00Z" })).toThrow();
+    expect(() => toAccountBucket({ name: "logs-1", ownerId: "1", creationDate: "" })).toThrow();
+    expect(toAccountBucket({ name: "logs-1", creationDate: "2026-08-02T00:00:00Z" })).toEqual({
+      name: "logs-1",
+      ownerId: "",
+      created: "2026-08-02T00:00:00Z",
+    });
+  });
+
+  it("rejects a body whose name is not the one requested", () => {
+    const name = parseBucketName("logs-1");
+    if (!name) throw new Error("logs-1");
+    expect(() =>
+      toAccountBucket({ name: "other-1", ownerId: "1", creationDate: "2026-08-02T00:00:00Z" }, name),
+    ).toThrow();
+  });
+
+  it("trims a bucket name once and rejects names outside the rule", () => {
+    expect(parseBucketName(" logs-1 ")).toBe("logs-1");
+    expect(parseBucketName("ab")).toBeNull();
+    expect(parseBucketName("A")).toBeNull();
+    expect(parseBucketName("-ab")).toBeNull();
+    expect(parseBucketName("ab-")).toBeNull();
   });
 });
