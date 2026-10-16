@@ -12,7 +12,11 @@ const eslintConfig = defineConfig([
   },
   {
     files: ["src/app/**/*.{ts,tsx}", "src/components/**/*.{ts,tsx}"],
-    ignores: ["src/components/sites/console/key-pair-create.tsx"],
+    ignores: [
+      "src/components/sites/console/key-pair-create.tsx",
+      "src/app/actions/resources.ts",
+      "src/app/actions/auth.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -28,14 +32,18 @@ const eslintConfig = defineConfig([
               importNames: ["createKeyPairAction"],
               message: "Only key-pair-create.tsx calls createKeyPairAction.",
             },
+            {
+              name: "@/lib/vws-api/client",
+              importNames: ["createKeyPair"],
+              message: "Pages call createKeyPairAction.",
+            },
           ],
         },
       ],
     },
   },
   {
-    files: ["src/app/**/*.{ts,tsx}", "src/components/**/*.{ts,tsx}"],
-    ignores: ["src/app/actions/resources.ts", "src/app/actions/auth.ts"],
+    files: ["src/components/sites/console/key-pair-create.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -45,6 +53,23 @@ const eslintConfig = defineConfig([
               name: "@/lib/vws-api/client",
               importNames: ["createKeyPair"],
               message: "Pages call createKeyPairAction.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/app/actions/resources.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@/lib/key-pair",
+              importNames: ["commitAttempt", "finishCreate"],
+              message: "Only key-pair-create.tsx calls commitAttempt and finishCreate.",
             },
           ],
         },
