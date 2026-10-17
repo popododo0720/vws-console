@@ -3,7 +3,6 @@ import type {
   BucketObject,
   Dataset,
   InternetGateway,
-  KeyPair,
   NavNode,
   NavTree,
   RouteTable,
@@ -66,7 +65,7 @@ export const computeNav: NavTree = {
         { id: "sg", label: "Security Groups", href: "/network/security-groups" },
         { id: "addresses", label: "Elastic IPs", href: "/network/elastic-ips" },
         { id: "placement", label: "Placement Groups" },
-        { id: "keys", label: "Key Pairs" },
+        { id: "keys", label: "Key Pairs", href: "/network/key-pairs" },
         { id: "interfaces", label: "Network Interfaces" },
       ],
     },
@@ -219,7 +218,6 @@ export function createEmptyAccount(): Dataset {
     volumes: [],
     buckets: [],
     objects: [],
-    keyPairs: [],
     vpcs: [defaultVpc()],
     subnets: [],
     routeTables: [],
@@ -229,7 +227,6 @@ export function createEmptyAccount(): Dataset {
 
 export function createSampleAccount(): Dataset {
   const base = createEmptyAccount();
-  const keyPairs: KeyPair[] = [];
   const vpcs: Vpc[] = [
     ...base.vpcs,
     {
@@ -362,6 +359,5 @@ export function createSampleAccount(): Dataset {
     internetGateways: MOCK_INTERNET_GATEWAYS,
     buckets,
     objects: MOCK_OBJECTS,
-    keyPairs,
   };
 }

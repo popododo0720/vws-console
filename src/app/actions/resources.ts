@@ -3,6 +3,7 @@
 import * as vws from "@/lib/vws-api/client";
 import type { ApiError, ApiResult, IngressPermission, LaunchRequest } from "@/lib/vws-api/adapter";
 import type { VolumeAttachment } from "@/types/console";
+import { deleteBatchError, parseKeyPairId, type CreateAttempt, type KeyPairCreateResult } from "@/lib/key-pair";
 
 async function each(ids: string[], run: (id: string) => Promise<ApiResult<void>>): Promise<ApiError | null> {
   for (const id of ids) {
@@ -141,4 +142,27 @@ export async function releaseAddressesAction(ids: string[]) {
 
 export async function deleteSnapshotsAction(ids: string[]) {
   return each(ids, vws.deleteSnapshot);
+}
+
+export async function createKeyPairAction(attempt: CreateAttempt): Promise<KeyPairCreateResult> {
+  return vws.createKeyPair(attempt);
+}
+
+const invalidKeyPairId: ApiError = {
+  code: "InvalidArgument",
+  message: "Key pair id must be key- followed by 8 to 17 hex digits.",
+  requestId: null,
+};
+
+export async function deleteKeyPairsAction(ids: string[]): Promise<ApiError | null> {
+  for (const raw of ids) {
+    const id = parseKeyPairId(raw);
+    if (!id) return invalidKeyPairId;
+    const result = await vws.deleteKeyPair(id);
+    if (!result.ok) {
+      const stopping = deleteBatchError(result.error);
+      if (stopping) return stopping;
+    }
+  }
+  return null;
 }

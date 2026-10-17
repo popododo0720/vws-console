@@ -1,3 +1,4 @@
+import { parseKeyPairId, parseKeyPairName, type KeyPairChoice, type StoredKeyPair } from "@/lib/key-pair";
 import type {
   ElasticIp,
   Instance,
@@ -29,6 +30,7 @@ export type LaunchRequest = {
   subnetId: string;
   count: number;
   tags: Record<string, string>;
+  keyPair: KeyPairChoice;
 };
 
 export type Operation = { id: string; state: OperationState; error: ApiError | null };
@@ -121,7 +123,7 @@ export function toInstance(item: Json): Instance {
     region: REGION,
     vpcId: str(item.vpcId),
     subnetId: str(item.subnetId),
-    keyPair: "",
+    keyPair: str(item.keyName),
     imageId: str(item.imageId),
     launchedAt: str(item.launchTime),
   };
@@ -285,6 +287,23 @@ export function toSnapshot(item: Json): Snapshot {
 export const parseSecurityGroups = (page: unknown) => list(page).map(toSecurityGroup);
 export const parseAddresses = (page: unknown) => list(page).map(toAddress);
 export const parseSnapshots = (page: unknown) => list(page).map(toSnapshot);
+
+export function toStoredKeyPair(item: Record<string, unknown>): StoredKeyPair {
+  const id = parseKeyPairId(str(item.keyPairId));
+  const name = parseKeyPairName(str(item.keyName));
+  if (!id || !name) throw new Error("key pair");
+  return {
+    id,
+    name,
+    fingerprint: str(item.keyFingerprint),
+    type: str(item.keyType),
+    ownerId: str(item.ownerId),
+  };
+}
+
+export function parseKeyPairs(page: unknown): StoredKeyPair[] {
+  return list(page).map(toStoredKeyPair);
+}
 
 /** Reads the first item of a 202 mutation response, which carries the new resource. */
 export function firstItem(body: unknown, key: string): string {
