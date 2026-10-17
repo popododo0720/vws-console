@@ -17,6 +17,12 @@ export type ApiError = { code: string; message: string; requestId: string | null
 
 export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: ApiError };
 
+declare const brand: unique symbol;
+
+export type BucketName = string & { readonly [brand]: "BucketName" };
+
+export type AccountBucket = { name: BucketName; ownerId: string; created: string };
+
 export type OperationState = "running" | "succeeded" | "failed";
 
 export type Image = { id: string; name: string; state: string; owner: string };
@@ -65,6 +71,43 @@ function list(page: unknown): Json[] {
 
 export function nextPageToken(page: unknown): string {
   return str(obj(page).nextPageToken);
+}
+
+const BUCKET_NAME = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+const RESERVED_PREFIX = ["xn--", "sthree-", "amzn-s3-demo-"] as const;
+const RESERVED_SUFFIX = ["-s3alias", "--ol-s3", "--x-s3", "--table-s3"] as const;
+
+export function parseStoredBucketName(input: string): BucketName | null {
+  const name = input.trim();
+  return BUCKET_NAME.test(name) ? (name as BucketName) : null;
+}
+
+export function reservedBucketName(name: BucketName): boolean {
+  return (
+    RESERVED_PREFIX.some((prefix) => name.startsWith(prefix)) || RESERVED_SUFFIX.some((suffix) => name.endsWith(suffix))
+  );
+}
+
+export function parseBucketName(input: string): BucketName | null {
+  const name = parseStoredBucketName(input);
+  if (!name || reservedBucketName(name)) return null;
+  return name;
+}
+
+export function toAccountBucket(item: unknown, expected?: BucketName): AccountBucket {
+  const record = obj(item);
+  const name = parseStoredBucketName(typeof record.name === "string" ? record.name : "");
+  if (!name) throw new Error("invalid bucket name");
+  if (expected !== undefined && name !== expected) throw new Error("unexpected bucket name");
+  const created = record.creationDate;
+  if (typeof created !== "string" || created.length === 0) throw new Error("invalid creationDate");
+  return { name, ownerId: typeof record.ownerId === "string" ? record.ownerId : "", created };
+}
+
+export function parseAccountBuckets(page: unknown): AccountBucket[] {
+  const items = obj(page).items;
+  if (!Array.isArray(items)) throw new Error("expected items");
+  return items.map((item) => toAccountBucket(item));
 }
 
 /** Reads `{"error":{"code","message"},"requestId"}`. Returns null for any other body. */
