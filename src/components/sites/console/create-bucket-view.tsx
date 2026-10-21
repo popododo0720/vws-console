@@ -93,7 +93,11 @@ export function CreateBucketView() {
                 Bucket names must be 3–63 characters, unique in this account, and use only lowercase letters, numbers,
                 and hyphens.
               </p>
-              {error ? <p className="mt-1 text-[#d13212]">{error}</p> : null}
+              {error ? (
+                <p role="alert" className="mt-1 text-[#d13212]">
+                  {error}
+                </p>
+              ) : null}
             </div>
           </Section>
           <Section title="Block Public Access settings for this bucket">
