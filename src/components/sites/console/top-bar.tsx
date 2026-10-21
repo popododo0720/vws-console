@@ -38,14 +38,14 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
         detail: item.id,
         href: "/storage/volumes",
       })),
-      ...consoleApi.buckets.map((item) => ({
+      ...consoleApi.accountBuckets.map((item) => ({
         label: item.name,
-        detail: item.region,
-        href: "/storage/buckets",
+        detail: "Bucket",
+        href: `/storage/buckets/${encodeURIComponent(item.name)}`,
       })),
     ].filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(q));
     return [...pages, ...resources].slice(0, 8);
-  }, [consoleApi.buckets, consoleApi.instances, consoleApi.volumes, query]);
+  }, [consoleApi.accountBuckets, consoleApi.instances, consoleApi.volumes, query]);
 
   return (
     <header className="flex h-10 shrink-0 items-center gap-2 bg-[#161d26] px-3 text-white">

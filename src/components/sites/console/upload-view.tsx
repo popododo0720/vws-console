@@ -1,28 +1,40 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { uploadObjectAction } from "@/app/actions/resources";
+import type { AccountBucket, ApiError } from "@/lib/vws-api/adapter";
+import { MAX_OBJECT_BYTES } from "@/lib/object-upload";
 import { storageNav } from "@/lib/console-data";
 import { formatBytes } from "@/lib/bucket-objects";
-import { useConsole } from "@/components/sites/console/console-provider";
+import { ApiErrorAlert } from "@/components/sites/console/api-action";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
-import { OrangeButton, OutlineButton, SampleBadge } from "@/components/sites/console/ui";
+import { OrangeButton, OutlineButton } from "@/components/sites/console/ui";
 
-export function UploadView({ name }: { name: string }) {
-  const api = useConsole();
-  const router = useRouter();
+export function UploadView({
+  name,
+  bucket,
+  loadError,
+}: {
+  name: string;
+  bucket: AccountBucket | null;
+  loadError: ApiError | null;
+}) {
   const prefix = useSearchParams().get("prefix") ?? "";
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [pending, startTransition] = useTransition();
   const input = useRef<HTMLInputElement>(null);
-  const bucket = api.buckets.find((item) => item.name === name);
   const base = `/storage/buckets/${encodeURIComponent(name)}`;
   const back = prefix ? `${base}?prefix=${encodeURIComponent(prefix)}` : base;
 
   const add = (list: FileList | null) => {
     if (!list) return;
+    setNotice(null);
     setFiles((prev) => {
       const seen = new Set(prev.map((file) => file.name));
       return [...prev, ...Array.from(list).filter((file) => !seen.has(file.name))];
@@ -40,25 +52,78 @@ export function UploadView({ name }: { name: string }) {
     return (
       <Shell tree={storageNav}>
         <PageHeader crumbs={crumbs} />
-        <div className="px-4 py-6 text-[13px]">
-          <p className="font-semibold">Bucket not found</p>
-          <Link href="/storage/buckets" className="mt-3 inline-block text-[#006ce0] hover:underline">
-            Back to buckets
-          </Link>
-        </div>
+        <ApiErrorAlert error={loadError} title="The bucket could not be loaded" />
+        {loadError ? null : (
+          <div className="px-4 py-6 text-[13px]">
+            <p className="font-semibold">Bucket not found</p>
+            <Link href="/storage/buckets" className="mt-3 inline-block text-[#006ce0] hover:underline">
+              Back to buckets
+            </Link>
+          </div>
+        )}
       </Shell>
     );
   }
+
+  const upload = () => {
+    const chosen = [...files];
+    startTransition(async () => {
+      const stored: string[] = [];
+      const remaining: File[] = [];
+      let failed = false;
+      for (const file of chosen) {
+        if (failed) {
+          remaining.push(file);
+          continue;
+        }
+        if (file.size > MAX_OBJECT_BYTES) {
+          setError({
+            code: "InvalidArgument",
+            message: "Objects larger than 4 MiB cannot be uploaded.",
+            requestId: null,
+          });
+          remaining.push(file);
+          failed = true;
+          continue;
+        }
+        const body = new FormData();
+        const key = `${prefix}${file.name}`;
+        body.set("key", key);
+        body.set("file", file);
+        let failure: ApiError | null;
+        try {
+          failure = await uploadObjectAction(name, body);
+        } catch {
+          failure = {
+            code: "ServiceUnavailable",
+            message: "The upload could not be sent.",
+            requestId: null,
+          };
+        }
+        if (failure) {
+          setError(failure);
+          remaining.push(file);
+          failed = true;
+          continue;
+        }
+        stored.push(key);
+      }
+      setFiles(remaining);
+      setNotice(stored.length > 0 ? `Stored ${stored.join(", ")}. This console cannot list objects.` : null);
+      if (!failed) setError(null);
+    });
+  };
 
   return (
     <Shell tree={storageNav}>
       <div className="min-h-0 flex-1 overflow-auto bg-[#f3f3f5]">
         <PageHeader
           crumbs={crumbs}
-          info="Only file names and sizes are recorded here. File contents are not stored."
-          meta={api.mode === "sample" ? <SampleBadge /> : null}
+          info="Uploaded files are stored in the bucket. This console cannot list them afterward."
         />
+        <ApiErrorAlert error={error} title="The upload failed" />
         <div className="mx-auto max-w-[900px] space-y-4 px-4 pb-8 text-[13px]">
+          {notice ? <p className="rounded-lg border border-[#e6e8eb] bg-white px-4 py-3">{notice}</p> : null}
           <section className="rounded-lg border border-[#e6e8eb] bg-white p-4">
             <p className="mb-3 text-[#5f6b7a]">
               Add the files you want to upload. Destination: s3://{name}/{prefix}
@@ -132,16 +197,7 @@ export function UploadView({ name }: { name: string }) {
             <Link href={back}>
               <OutlineButton type="button">Cancel</OutlineButton>
             </Link>
-            <OrangeButton
-              disabled={files.length === 0}
-              onClick={() => {
-                api.addObjects(
-                  name,
-                  files.map((file) => ({ key: `${prefix}${file.name}`, sizeBytes: file.size })),
-                );
-                router.push(back);
-              }}
-            >
+            <OrangeButton disabled={files.length === 0 || pending} onClick={upload}>
               Upload
             </OrangeButton>
           </div>
