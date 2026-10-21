@@ -56,6 +56,12 @@ docs/design-references/console/
 # Reference captures (not committed; may contain third-party assets)
 docs/design-references/comparison.png
 docs/design-references/**/*.local.png
+# No reference images are tracked at all (AGENTS.md, issue #91)
+docs/design-references/**/*.png
+docs/design-references/**/*.jpg
+docs/design-references/**/*.jpeg
+docs/design-references/**/*.webp
+docs/design-references/**/*.gif
 /test-results/
 /playwright-report/
 e2e-live/.auth/
