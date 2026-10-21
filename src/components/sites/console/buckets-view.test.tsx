@@ -145,6 +145,23 @@ describe("BucketsView", () => {
     expect(screen.queryByRole("dialog", { name: "Delete bucket" })).toBeNull();
   });
 
+  it("removes the deleted bucket from the list without a reload", async () => {
+    actions.deleteBucketsAction.mockResolvedValue({ deleted: ["logs-1"], error: null, failedName: null });
+    render(
+      <ConsoleProvider>
+        <BucketsView buckets={[logsBucket()]} loadError={null} />
+      </ConsoleProvider>,
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select logs-1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete bucket" });
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "logs-1" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete bucket" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Delete bucket" })).toBeNull());
+    expect(screen.queryByRole("link", { name: "logs-1" })).toBeNull();
+    expect(screen.getByRole("heading", { name: /General purpose buckets/ })).toHaveTextContent("(0)");
+  });
+
   it("refreshes after a partial delete and keeps the bucket that failed", async () => {
     const media = parseBucketName("media-1");
     if (!media) throw new Error("media-1");
