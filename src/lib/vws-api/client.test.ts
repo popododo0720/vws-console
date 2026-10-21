@@ -37,7 +37,10 @@ import {
   modifyVolume,
   attachVolume,
   detachVolume,
+  authorizeIngress,
 } from "./client";
+import { ingressPermissions } from "@/components/sites/console/sg-permissions";
+import { makeRule } from "@/lib/security-group-rules";
 
 type Call = { url: string; init: RequestInit };
 
@@ -215,6 +218,38 @@ describe("console-api client", () => {
     );
     expect(await createSecurityGroup("web", "vpc-1")).toEqual({ ok: true, value: "sg-9" });
     expect(calls[0].init.body).toBe('{"groupName":"web","vpcId":"vpc-1"}');
+  });
+
+  it("posts AWS IpPermissions[] for all new rules in one authorize-ingress call", async () => {
+    serve(respond(202, { operation: { id: "op-sg", state: "succeeded" }, items: [] }));
+    const { permissions } = ingressPermissions([
+      makeRule("in", "TCP", "22", "0.0.0.0/0", "r1", "admin"),
+      makeRule("in", "TCP", "8000-8080", "10.0.0.0/16"),
+      makeRule("in", "All", "All", "10.1.0.0/16"),
+    ]);
+    expect(await authorizeIngress("sg-1", permissions)).toEqual({ ok: true, value: undefined });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("http://api.test/api/v1/security-groups/sg-1/authorize-ingress");
+    expect(calls[0].init.method).toBe("POST");
+    expect((calls[0].init.headers as Record<string, string>)["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({
+      ipPermissions: [
+        { ipProtocol: "tcp", fromPort: 22, toPort: 22, ipRanges: [{ cidrIp: "0.0.0.0/0", description: "admin" }] },
+        { ipProtocol: "tcp", fromPort: 8000, toPort: 8080, ipRanges: [{ cidrIp: "10.0.0.0/16" }] },
+        { ipProtocol: "-1", ipRanges: [{ cidrIp: "10.1.0.0/16" }] },
+      ],
+    });
+  });
+
+  it("does not retry a rejected authorize-ingress call", async () => {
+    serve(
+      respond(400, { error: { code: "InvalidParameterValue", message: "unsupported", requestId: "req-sg" } }),
+      respond(202, { operation: { id: "op-late", state: "succeeded" }, items: [] }),
+    );
+    const { permissions } = ingressPermissions([makeRule("in", "TCP", "22", "0.0.0.0/0")]);
+    const result = await authorizeIngress("sg-1", permissions);
+    expect(result.ok).toBe(false);
+    expect(calls).toHaveLength(1);
   });
 
   it("launches with tags only when there are some", async () => {
