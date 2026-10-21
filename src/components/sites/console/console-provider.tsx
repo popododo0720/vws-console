@@ -230,7 +230,8 @@ export function ConsoleProvider({
         if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(name)) {
           return "Use 3–63 characters: lowercase letters, numbers, and hyphens.";
         }
-        if (data.buckets.some((item) => item.name === name)) return "A bucket with that name already exists.";
+        if (data.buckets.some((item) => item.name === name))
+          return "BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.";
         setData((prev) => ({
           ...prev,
           buckets: [
