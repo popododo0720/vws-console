@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { RefreshCw } from "lucide-react";
 import type { Bucket } from "@/types/console";
 import { storageNav } from "@/lib/console-data";
 import { useConsole } from "@/components/sites/console/console-provider";
@@ -74,7 +75,13 @@ export function BucketsView() {
         </Link>
       ),
     },
-    { key: "region", header: "Region", minWidth: 160, sortValue: (row) => row.region, cell: (row) => row.region },
+    {
+      key: "region",
+      header: "VWS Region",
+      minWidth: 160,
+      sortValue: (row) => row.region,
+      cell: (row) => row.region,
+    },
     {
       key: "created",
       header: "Creation date",
@@ -123,7 +130,6 @@ export function BucketsView() {
               >
                 Directory buckets
               </button>
-              <InfoTip text="General purpose buckets are the default. Directory buckets are a separate list in this preview." />
             </div>
             <div className="mx-4 rounded-lg border border-[#e6e8eb] bg-white p-3">
               <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -138,6 +144,7 @@ export function BucketsView() {
                     Buckets are containers for data stored in object storage.
                   </p>
                 </div>
+                <RefreshButton onClick={() => router.refresh()} />
                 <OutlineButton
                   disabled={selected.length !== 1}
                   onClick={() => void copyToClipboard(bucketArn(selected[0].name), "buckets-view")}
@@ -156,7 +163,6 @@ export function BucketsView() {
               </div>
               <ResourceTable
                 className="px-0 pb-0"
-                bodyClassName="min-h-[420px]"
                 rows={rows}
                 getId={(row) => row.name}
                 columns={columns}
@@ -169,6 +175,7 @@ export function BucketsView() {
                 emptyAction={{ label: "Create bucket", href: "/storage/buckets/create" }}
                 filterPlaceholder="Find buckets by name"
                 initialSort={{ key: "name", dir: "asc" }}
+                hideRefresh
               />
             </div>
           </div>
@@ -257,6 +264,19 @@ export function BucketsView() {
         <input className="field" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
       </PanelDialog>
     </Shell>
+  );
+}
+
+function RefreshButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Refresh"
+      className="grid size-8 place-items-center rounded-full border-2 border-[#006ce0] text-[#006ce0] hover:bg-[#f2f8fd]"
+      onClick={onClick}
+    >
+      <RefreshCw className="size-3.5" />
+    </button>
   );
 }
 
