@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { RefreshCw } from "lucide-react";
 import type { SecurityGroup } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { downloadCsv } from "@/lib/csv";
@@ -35,7 +36,7 @@ export function SecurityGroupsView({
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(220);
-  const [updated, setUpdated] = useState("Last updated less than a minute ago");
+  const [updated, setUpdated] = useState("less than a minute ago");
   const [ruleTab, setRuleTab] = useState("in");
   const selected = securityGroups.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
@@ -146,11 +147,21 @@ export function SecurityGroupsView({
     <Shell tree={computeNav}>
       <PageHeader
         mark="C"
-        crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: `Security Groups (${securityGroups.length})` }]}
+        crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: "Security Groups" }]}
         info="A security group is a set of allow rules for instances in a VPC."
-        meta={updated}
         actions={
           <>
+            <span className="text-right text-[12px] leading-4 text-[#5f6b7a]">
+              Last updated
+              <br />
+              {updated}
+            </span>
+            <RefreshButton
+              onClick={() => {
+                setUpdated("less than a minute ago");
+                action.refresh();
+              }}
+            />
             <MenuButton
               className={menuTriggerClass()}
               label={
@@ -217,11 +228,7 @@ export function SecurityGroupsView({
         emptyTitle="No security groups"
         emptyMessage="You do not have any security groups in this region"
         filterPlaceholder="Find security groups by attribute or tag"
-        presets={[{ id: "default", label: "Default groups", match: (row) => row.groupName === "default" }]}
-        onRefresh={() => {
-          setUpdated("Last updated less than a minute ago");
-          action.refresh();
-        }}
+        hideRefresh
       />
       <DetailDock
         title={one ? one.groupName : "Select a security group"}
@@ -247,5 +254,18 @@ export function SecurityGroupsView({
         ) : null}
       </DetailDock>
     </Shell>
+  );
+}
+
+function RefreshButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Refresh"
+      className="grid size-8 place-items-center rounded-full border-2 border-[#006ce0] text-[#006ce0] hover:bg-[#f2f8fd]"
+      onClick={onClick}
+    >
+      <RefreshCw className="size-3.5" />
+    </button>
   );
 }
