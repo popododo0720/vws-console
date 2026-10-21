@@ -1,14 +1,14 @@
 import type { SecurityGroupRule } from "@/types/console";
-import { toIngressPermission, type IngressPermission } from "@/lib/vws-api/adapter";
+import { toIpPermission, type IpPermission } from "@/lib/vws-api/adapter";
 
-/** Maps inbound rules onto authorize-ingress bodies; the first rule the API cannot take stops it. */
+/** Maps inbound rules onto the IpPermissions of one authorize-ingress call; the first bad rule stops it. */
 export function ingressPermissions(rules: SecurityGroupRule[]): {
-  permissions: IngressPermission[];
+  permissions: IpPermission[];
   error: string | null;
 } {
-  const permissions: IngressPermission[] = [];
+  const permissions: IpPermission[] = [];
   for (const [index, rule] of rules.entries()) {
-    const mapped = toIngressPermission(rule);
+    const mapped = toIpPermission(rule);
     if (!mapped.ok) return { permissions: [], error: `Rule ${index + 1}: ${mapped.error}` };
     permissions.push(mapped.value);
   }

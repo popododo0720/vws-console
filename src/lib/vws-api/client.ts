@@ -22,7 +22,7 @@ import {
   parseAddresses,
   parseSecurityGroups,
   parseSnapshots,
-  type IngressPermission,
+  type IpPermission,
   nextPageToken,
   parseApiError,
   parseImages,
@@ -462,7 +462,8 @@ export async function createSecurityGroup(groupName: string, vpcId: string): Pro
   return id ? { ok: true, value: id } : { ok: false, error: malformed("/security-groups") };
 }
 
-export const authorizeIngress = (groupId: string, ipPermissions: IngressPermission) =>
+/** Adds every permission in one AuthorizeSecurityGroupIngress call, so the API applies all of them or none. */
+export const authorizeIngress = (groupId: string, ipPermissions: IpPermission[]) =>
   mutate(`/security-groups/${seg(groupId)}/authorize-ingress`, { ipPermissions });
 export const deleteSecurityGroup = (id: string) => mutate(`/security-groups/${seg(id)}/delete`);
 

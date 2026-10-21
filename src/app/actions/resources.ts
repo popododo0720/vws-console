@@ -1,7 +1,7 @@
 "use server";
 
 import * as vws from "@/lib/vws-api/client";
-import type { ApiError, ApiResult, IngressPermission, LaunchRequest } from "@/lib/vws-api/adapter";
+import type { ApiError, ApiResult, IpPermission, LaunchRequest } from "@/lib/vws-api/adapter";
 import type { VolumeAttachment } from "@/types/console";
 import { deleteBatchError, parseKeyPairId, type CreateAttempt, type KeyPairCreateResult } from "@/lib/key-pair";
 
@@ -105,19 +105,16 @@ export async function detachVolumeAction(volumeId: string) {
   return errorOf(vws.detachVolume(volumeId));
 }
 
-export async function createSecurityGroupAction(groupName: string, vpcId: string, inbound: IngressPermission[]) {
+export async function createSecurityGroupAction(groupName: string, vpcId: string, inbound: IpPermission[]) {
   const created = await vws.createSecurityGroup(groupName, vpcId);
   if (!created.ok) return created.error;
   return authorizeIngressAction(created.value, inbound);
 }
 
-/** console-api takes one rule per call, so rules are added in order and the first failure stops the rest. */
-export async function authorizeIngressAction(groupId: string, inbound: IngressPermission[]) {
-  for (const permission of inbound) {
-    const result = await vws.authorizeIngress(groupId, permission);
-    if (!result.ok) return result.error;
-  }
-  return null;
+/** Sends all new inbound rules in one call; a group created without rules makes no call. */
+export async function authorizeIngressAction(groupId: string, inbound: IpPermission[]) {
+  if (inbound.length === 0) return null;
+  return errorOf(vws.authorizeIngress(groupId, inbound));
 }
 
 export async function deleteSecurityGroupsAction(ids: string[]) {
