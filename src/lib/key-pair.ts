@@ -126,6 +126,12 @@ export function parseIdempotencyKey(value: string): IdempotencyKey | null {
   return IDEMPOTENCY_KEY.test(value) ? (value as IdempotencyKey) : null;
 }
 
+export function publicKeyError(value: string): ApiError | null {
+  if (isPrivateKey(value)) return invalid(PRIVATE_KEY_REJECTED);
+  if (value.trim() === "") return invalid("Enter a public key.");
+  return null;
+}
+
 export function parseDraft(input: {
   mode: "generate" | "import";
   name: string;
@@ -139,7 +145,8 @@ export function parseDraft(input: {
   const name = parseKeyPairName(input.name);
   if (!name) return { ok: false, error: invalid(NAME_INVALID) };
   if (input.mode === "import") {
-    if (input.publicKey.trim() === "") return { ok: false, error: invalid("Enter a public key.") };
+    const error = publicKeyError(input.publicKey);
+    if (error) return { ok: false, error };
     return { ok: true, value: { mode: "import", name, publicKey: input.publicKey } };
   }
   return { ok: true, value: { mode: "generate", name, keyType: input.keyType, keyFormat: input.keyFormat } };

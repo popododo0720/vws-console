@@ -14,6 +14,7 @@ import {
   finishCreate,
   forgetPendingName,
   parseDraft,
+  publicKeyError,
   readPendingNames,
   type CreateAttempt,
   type CreateTransition,
@@ -248,15 +249,9 @@ export function useKeyPairCreator(options: {
                         void file.text().then((text) => {
                           const current = dialogRef.current;
                           if (current.step !== "form") return;
-                          const parsed = parseDraft({
-                            mode: "import",
-                            name: current.name,
-                            keyType: current.keyType,
-                            keyFormat: current.keyFormat,
-                            publicKey: text,
-                          });
-                          if (!parsed.ok) {
-                            show({ ...current, publicKey: "", error: parsed.error });
+                          const error = publicKeyError(text);
+                          if (error) {
+                            show({ ...current, publicKey: "", error });
                             return;
                           }
                           show({ ...current, publicKey: text, error: null });
