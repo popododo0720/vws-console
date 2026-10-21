@@ -188,7 +188,7 @@ describe("BucketsView", () => {
     const open = screen.getByRole("dialog", { name: "Delete bucket" });
     expect(within(open).getByText("bucket is not empty")).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: "Select media-1" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Select logs-1" })).not.toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: "Select logs-1" })).toBeNull();
   });
 });
 

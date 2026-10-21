@@ -36,14 +36,16 @@ export function BucketsView({ buckets, loadError }: { buckets: readonly AccountB
   const params = useSearchParams();
   const tab = params.get("tab") === "directory" ? "directory" : "general";
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deletedNames, setDeletedNames] = useState<ReadonlySet<string>>(() => new Set());
   const [dialog, setDialog] = useState<"empty" | "delete" | null>(null);
   const [confirm, setConfirm] = useState("");
   const [emptyNotice, setEmptyNotice] = useState(false);
   const [dash, setDash] = useState(false);
   const [cards, setCards] = useState({ snapshot: false, access: false });
-  const rows = tab === "directory" ? [] : [...buckets];
+  const visibleBuckets = buckets.filter((bucket) => !deletedNames.has(bucket.name));
+  const rows = tab === "directory" ? [] : visibleBuckets;
   const selected = rows.filter((item) => selectedIds.includes(item.name));
-  const generalCount = buckets.length;
+  const generalCount = visibleBuckets.length;
   const directoryCount = 0;
 
   const setTab = (next: "general" | "directory") => {
@@ -190,7 +192,7 @@ export function BucketsView({ buckets, loadError }: { buckets: readonly AccountB
                 <dl className="space-y-1 text-[13px]">
                   <div className="flex justify-between">
                     <dt>Buckets</dt>
-                    <dd>{buckets.length}</dd>
+                    <dd>{visibleBuckets.length}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt>Instances in region</dt>
@@ -238,7 +240,10 @@ export function BucketsView({ buckets, loadError }: { buckets: readonly AccountB
                 const chosen = selected.map((item) => item.name);
                 startTransition(async () => {
                   const report = await deleteBucketsAction(chosen);
-                  if (report.deleted.length > 0) router.refresh();
+                  if (report.deleted.length > 0) {
+                    setDeletedNames((current) => new Set([...current, ...report.deleted]));
+                    router.refresh();
+                  }
                   if (report.error) {
                     const removed = new Set(report.deleted);
                     setSelectedIds(selected.filter((item) => !removed.has(item.name)).map((item) => item.name));
