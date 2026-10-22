@@ -54,7 +54,7 @@ type ConsoleApi = {
   }) => string | null;
   deleteBuckets: (names: string[]) => void;
   emptyBucket: (name: string) => void;
-  addObjects: (bucket: string, items: { key: string; sizeBytes: number }[]) => void;
+  addObjects: (bucket: string, items: { key: string; sizeBytes: number }[]) => void | Promise<void>;
   createFolder: (bucket: string, key: string) => void;
   deleteObjects: (bucket: string, keys: string[]) => void;
 };
