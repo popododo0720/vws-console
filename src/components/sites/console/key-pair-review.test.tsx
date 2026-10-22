@@ -53,6 +53,15 @@ describe("key pair create recovery", () => {
     );
   });
 
+  it("drops the warning when the last pending name is dismissed", () => {
+    localStorage.setItem("vws.key-pair-pending-names", JSON.stringify(["web"]));
+    renderPairs([web]);
+    expect(screen.getByRole("status").textContent).toContain("The private key for web cannot be shown again.");
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(localStorage.getItem("vws.key-pair-pending-names")).toBeNull();
+  });
+
   it("drops a stored idempotency receipt on load", () => {
     const secret = "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----";
     localStorage.setItem(
