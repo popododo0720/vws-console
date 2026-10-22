@@ -111,6 +111,37 @@ describe("key pair create recovery", () => {
     expect(screen.queryByText(/did not finish/)).toBeNull();
   });
 
+  it("imports the contents of a public key file chosen before the name", async () => {
+    const laptop: StoredKeyPair = {
+      id: "key-89abcdef" as KeyPairId,
+      name: "laptop" as KeyPairName,
+      fingerprint: "fp",
+      type: "ed25519",
+      ownerId: "123456789012",
+    };
+    createKeyPairAction.mockResolvedValue({
+      status: "ready",
+      issued: { keyPair: laptop, privateKey: null, settlement: "succeeded" },
+    });
+    renderPairs([]);
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Import key pair" }));
+    const dialog = screen.getByRole("dialog", { name: "Import key pair" });
+    const publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILaptop laptop";
+    const file = new File([publicKey], "laptop.pub", { type: "text/plain" });
+    fireEvent.change(within(dialog).getByLabelText("Browse"), { target: { files: [file] } });
+    await waitFor(() =>
+      expect((within(dialog).getAllByRole("textbox")[1] as HTMLTextAreaElement).value).toBe(publicKey),
+    );
+    fireEvent.change(within(dialog).getAllByRole("textbox")[0], { target: { value: "laptop" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import key pair" }));
+    await waitFor(() => expect(createKeyPairAction).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(createKeyPairAction.mock.calls[0][0].body)).toEqual({
+      keyName: "laptop",
+      publicKeyMaterial: publicKey,
+    });
+  });
+
   it("offers Browse and rejects a private key file before persistence", async () => {
     renderPairs([]);
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));
