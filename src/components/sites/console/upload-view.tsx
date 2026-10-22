@@ -16,17 +16,42 @@ export function UploadView({ name }: { name: string }) {
   const prefix = useSearchParams().get("prefix") ?? "";
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const uploadInFlight = useRef(false);
+  const addedDuringUpload = useRef(false);
   const bucket = api.buckets.find((item) => item.name === name);
   const base = `/storage/buckets/${encodeURIComponent(name)}`;
   const back = prefix ? `${base}?prefix=${encodeURIComponent(prefix)}` : base;
 
   const add = (list: FileList | null) => {
     if (!list) return;
+    if (uploadInFlight.current) addedDuringUpload.current = true;
     setFiles((prev) => {
       const seen = new Set(prev.map((file) => file.name));
       return [...prev, ...Array.from(list).filter((file) => !seen.has(file.name))];
     });
+  };
+
+  const upload = async () => {
+    const chosen = [...files];
+    if (chosen.length === 0) return;
+    uploadInFlight.current = true;
+    addedDuringUpload.current = false;
+    setUploading(true);
+    try {
+      await api.addObjects(
+        name,
+        chosen.map((file) => ({ key: `${prefix}${file.name}`, sizeBytes: file.size })),
+      );
+    } catch {
+      return;
+    } finally {
+      uploadInFlight.current = false;
+      setUploading(false);
+    }
+    setFiles((current) => current.filter((file) => !chosen.includes(file)));
+    if (!addedDuringUpload.current) router.push(back);
   };
 
   const crumbs = [
@@ -132,16 +157,7 @@ export function UploadView({ name }: { name: string }) {
             <Link href={back}>
               <OutlineButton type="button">Cancel</OutlineButton>
             </Link>
-            <OrangeButton
-              disabled={files.length === 0}
-              onClick={() => {
-                api.addObjects(
-                  name,
-                  files.map((file) => ({ key: `${prefix}${file.name}`, sizeBytes: file.size })),
-                );
-                router.push(back);
-              }}
-            >
+            <OrangeButton disabled={files.length === 0 || uploading} onClick={() => void upload()}>
               Upload
             </OrangeButton>
           </div>
