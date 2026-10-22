@@ -109,4 +109,16 @@ describe("UploadView", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/storage/buckets/vws-logs"));
     expect(screen.queryByText("first.txt")).not.toBeInTheDocument();
   });
+
+  it("keeps the batch listed when the upload fails", async () => {
+    addObjects.mockRejectedValueOnce(new Error("upload failed"));
+    render(<UploadView name="vws-logs" />);
+
+    addFiles(file("first.txt"));
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Upload" })).toBeEnabled());
+    expect(screen.getByText("first.txt")).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
 });
