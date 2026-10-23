@@ -237,25 +237,44 @@ export function toSecurityGroup(item: Json): SecurityGroup {
   };
 }
 
-export type IngressPermission = { ipProtocol: string; fromPort: number; toPort: number; cidrIp: string };
+type Described = { description?: string };
 
-/** Maps a console rule onto one authorize-ingress body, or explains why the API cannot take it. */
-export function toIngressPermission(
+/** One AWS EC2 IpPermission, in the camelCase the console API takes. */
+export type IpPermission = {
+  ipProtocol: string;
+  fromPort?: number;
+  toPort?: number;
+  ipRanges?: ({ cidrIp: string } & Described)[];
+  ipv6Ranges?: ({ cidrIpv6: string } & Described)[];
+  userIdGroupPairs?: ({ groupId: string } & Described)[];
+  prefixListIds?: ({ prefixListId: string } & Described)[];
+};
+
+/**
+ * Maps a console rule onto one AWS IpPermission, or explains why it is not a rule.
+ * The API decides which sources and descriptions it can store; this only shapes the request.
+ */
+export function toIpPermission(
   rule: SecurityGroupRule,
-): { ok: true; value: IngressPermission } | { ok: false; error: string } {
-  const protocol = Object.entries(protocolLabels).find(([, label]) => label === rule.protocol)?.[0];
-  if (!protocol) return { ok: false, error: `The VWS API does not take protocol ${rule.protocol}.` };
-  if (rule.source.startsWith("sg-"))
-    return { ok: false, error: "The VWS API only takes CIDR sources, not security group IDs." };
-  let fromPort = 0;
-  let toPort = 0;
-  if (protocol === "tcp" || protocol === "udp") {
+): { ok: true; value: IpPermission } | { ok: false; error: string } {
+  const ipProtocol = Object.entries(protocolLabels).find(([, label]) => label === rule.protocol)?.[0];
+  if (!ipProtocol) return { ok: false, error: `The VWS API does not take protocol ${rule.protocol}.` };
+  const permission: IpPermission = { ipProtocol };
+  if (ipProtocol === "tcp" || ipProtocol === "udp") {
     const match = /^(\d+)(?:-(\d+))?$/.exec(rule.port);
     if (!match) return { ok: false, error: `Port range ${rule.port} is not a port or a range.` };
-    fromPort = Number(match[1]);
-    toPort = match[2] === undefined ? fromPort : Number(match[2]);
+    permission.fromPort = Number(match[1]);
+    permission.toPort = match[2] === undefined ? permission.fromPort : Number(match[2]);
+  } else if (ipProtocol === "icmp") {
+    // AWS spells "all ICMP types and codes" as type -1 and code -1.
+    permission.fromPort = -1;
+    permission.toPort = -1;
   }
-  return { ok: true, value: { ipProtocol: protocol, fromPort, toPort, cidrIp: rule.source } };
+  const description = rule.description.trim();
+  const described: Described = description ? { description } : {};
+  if (rule.source.startsWith("sg-")) permission.userIdGroupPairs = [{ groupId: rule.source, ...described }];
+  else permission.ipRanges = [{ cidrIp: rule.source, ...described }];
+  return { ok: true, value: permission };
 }
 
 export function toAddress(item: Json): ElasticIp {
