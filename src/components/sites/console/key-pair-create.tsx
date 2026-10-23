@@ -35,14 +35,12 @@ const emptyForm = {
 
 const noNames: string[] = [];
 let nameSnapshot: readonly string[] = noNames;
-let nameText = "";
 const nameListeners = new Set<() => void>();
 
 function readNameSnapshot(): readonly string[] {
   const next = readPendingNames();
-  const text = next.join("\n");
-  if (text === nameText) return nameSnapshot;
-  nameText = text;
+  const unchanged = next.length === nameSnapshot.length && next.every((name, index) => name === nameSnapshot[index]);
+  if (unchanged) return nameSnapshot;
   nameSnapshot = next;
   return nameSnapshot;
 }
@@ -53,7 +51,6 @@ function subscribeNames(listener: () => void) {
 }
 
 function publishNames() {
-  nameText = "";
   for (const listener of nameListeners) listener();
 }
 
