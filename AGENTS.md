@@ -112,3 +112,16 @@ Bots are insider risks too. The rules below have no exceptions.
 5. **Separation of duties**: author bot ≠ verifier bot ≠ merge decision. An author bot never merges its own PR. Merge only when base == main and every CI check on the head commit is success.
 6. **Isolation and emergency stop**: a bot or agent is stopped immediately at the user's request, or by the orchestrator stopping that bot's session and revoking its token (`gh auth`/PAT revoke). Risky work runs only in a sandbox (the box or a temporary cluster). No access to production clusters.
 7. **Incident disclosure**: rule violations and incidents are never hidden; record them in an issue as `Cause / Impact / Action / Prevention` (label `incident`).
+
+### Script push, PR and merge
+
+A deterministic script (the factory orchestrator in vws-deploy `docs/factory-orchestrator.md`, the handoff submit) may push a branch, open a pull request and merge one. A script merge happens only when all of these hold:
+
+- every CI check on the head commit is green;
+- `verify-gate` passes;
+- the `vws-verify` App check run passes;
+- the pull request has no conflicts;
+- the merge is a squash, made with `--match-head-commit` set to the verified head;
+- the pull request is not labeled `blocked`.
+
+`ORCHESTRATE_MERGE=apply` is approved only under these conditions. The lead (dr eggbot) is woken only for a decision or a failure (issue scope, real conflicts, a failed check), not for a routine push, pull request or merge. Guardrails 1, 4 and 2 still hold: the author bot is never the verifier, nothing pushes to main, and every pull request body has `Part of #N` with no closing keyword.
