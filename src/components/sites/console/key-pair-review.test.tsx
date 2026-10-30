@@ -90,6 +90,23 @@ describe("key pair create recovery", () => {
     await waitFor(() => expect(createKeyPairAction).toHaveBeenCalledTimes(1));
   });
 
+  it("guides the user after a duplicate create returns 409", async () => {
+    createKeyPairAction.mockResolvedValue({
+      status: "failed",
+      error: { code: "AlreadyExists", message: "The keypair 'web' already exists.", requestId: "r-9" },
+      issued: null,
+    });
+    renderPairs([]);
+    fireEvent.click(screen.getByRole("button", { name: "Create key pair" }));
+    const dialog = screen.getByRole("dialog", { name: "Create key pair" });
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "web" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create key pair" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe(
+      "The key pair 'web' already exists. Its private key cannot be downloaded again. Delete the key pair, then create a new one.",
+    );
+  });
+
   it("does not warn about a lost private key after a successful import", async () => {
     const laptop: StoredKeyPair = {
       id: "key-89abcdef" as KeyPairId,

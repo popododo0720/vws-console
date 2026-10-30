@@ -336,6 +336,13 @@ export function finishCreate(attempt: CreateAttempt, result: KeyPairCreateResult
   };
 }
 
+export function createFailureMessage(attempt: CreateAttempt, error: ApiError): string {
+  if (error.code !== "AlreadyExists") return error.message;
+  const draft = readAttempt(attempt);
+  if ("code" in draft || draft.mode !== "generate") return error.message;
+  return `The key pair '${draft.name}' already exists. Its private key cannot be downloaded again. Delete the key pair, then create a new one.`;
+}
+
 export function acknowledgeDownload(attempt: CreateAttempt): CreateTransition {
   void attempt;
   return closed(null, "forget");
