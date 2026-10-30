@@ -17,6 +17,7 @@ export function UploadView({ name }: { name: string }) {
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const uploadInFlight = useRef(false);
   const addedDuringUpload = useRef(false);
@@ -38,13 +39,17 @@ export function UploadView({ name }: { name: string }) {
     if (chosen.length === 0) return;
     uploadInFlight.current = true;
     addedDuringUpload.current = false;
+    setError(null);
     setUploading(true);
     try {
       await api.addObjects(
         name,
         chosen.map((file) => ({ key: `${prefix}${file.name}`, sizeBytes: file.size })),
       );
-    } catch {
+    } catch (failure) {
+      setError(
+        failure instanceof Error && failure.message ? failure.message : "The upload could not be completed. Try again.",
+      );
       return;
     } finally {
       uploadInFlight.current = false;
@@ -84,6 +89,12 @@ export function UploadView({ name }: { name: string }) {
           meta={api.mode === "sample" ? <SampleBadge /> : null}
         />
         <div className="mx-auto max-w-[900px] space-y-4 px-4 pb-8 text-[13px]">
+          {error ? (
+            <div role="alert" className="rounded-lg border border-[#d91515] bg-[#fff7f7] px-3 py-2 text-[#16191f]">
+              <p className="font-semibold text-[#d91515]">Upload failed</p>
+              <p className="mt-1">{error}</p>
+            </div>
+          ) : null}
           <section className="rounded-lg border border-[#e6e8eb] bg-white p-4">
             <p className="mb-3 text-[#5f6b7a]">
               Add the files you want to upload. Destination: s3://{name}/{prefix}

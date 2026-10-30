@@ -121,4 +121,23 @@ describe("UploadView", () => {
     expect(screen.getByText("first.txt")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
+
+  it("shows the backend message when the upload is rejected", async () => {
+    addObjects.mockRejectedValueOnce(new Error("Access Denied"));
+    render(<UploadView name="vws-logs" />);
+
+    addFiles(file("first.txt"));
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Upload failed");
+    expect(alert).toHaveTextContent("Access Denied");
+    expect(screen.getByRole("button", { name: "Upload" })).toBeEnabled();
+    expect(push).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/storage/buckets/vws-logs"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });
