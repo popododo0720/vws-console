@@ -13,7 +13,7 @@ import {
   parseInstanceTypes,
   parseSecurityGroups,
   parseSnapshots,
-  toIngressPermission,
+  toIpPermission,
   toInstance,
   toStoredKeyPair,
   identityFromSession,
@@ -233,22 +233,60 @@ describe("console-api adapter", () => {
     expect(parseSecurityGroups({ items: [{ groupId: "sg-2" }] })[0].rules).toEqual([]);
   });
 
-  it("turns console rules into authorize-ingress bodies and refuses what the API cannot take", () => {
-    expect(toIngressPermission(makeRule("in", "TCP", "8000-8080", "10.0.0.0/16"))).toEqual({
+  it("turns console rules into AWS IpPermission objects", () => {
+    expect(toIpPermission(makeRule("in", "TCP", "8000-8080", "10.0.0.0/16"))).toEqual({
       ok: true,
-      value: { ipProtocol: "tcp", fromPort: 8000, toPort: 8080, cidrIp: "10.0.0.0/16" },
+      value: { ipProtocol: "tcp", fromPort: 8000, toPort: 8080, ipRanges: [{ cidrIp: "10.0.0.0/16" }] },
     });
-    expect(toIngressPermission(makeRule("in", "All", "All", "0.0.0.0/0"))).toEqual({
+    expect(toIpPermission(makeRule("in", "UDP", "53", "10.0.0.0/8"))).toEqual({
       ok: true,
-      value: { ipProtocol: "-1", fromPort: 0, toPort: 0, cidrIp: "0.0.0.0/0" },
+      value: { ipProtocol: "udp", fromPort: 53, toPort: 53, ipRanges: [{ cidrIp: "10.0.0.0/8" }] },
     });
-    expect(toIngressPermission(makeRule("in", "ICMP", "All", "0.0.0.0/0"))).toMatchObject({
-      value: { ipProtocol: "icmp", fromPort: 0, toPort: 0 },
+    expect(toIpPermission(makeRule("in", "All", "All", "0.0.0.0/0"))).toEqual({
+      ok: true,
+      value: { ipProtocol: "-1", ipRanges: [{ cidrIp: "0.0.0.0/0" }] },
     });
-    expect(toIngressPermission(makeRule("in", "TCP", "22", "sg-0123456789abcdef"))).toEqual({
+    expect(toIpPermission(makeRule("in", "ICMP", "All", "0.0.0.0/0"))).toEqual({
+      ok: true,
+      value: { ipProtocol: "icmp", fromPort: -1, toPort: -1, ipRanges: [{ cidrIp: "0.0.0.0/0" }] },
+    });
+  });
+
+  it("puts a description on the range and a group source in userIdGroupPairs", () => {
+    expect(toIpPermission(makeRule("in", "TCP", "22", "203.0.113.0/24", "r1", "  office  "))).toEqual({
+      ok: true,
+      value: {
+        ipProtocol: "tcp",
+        fromPort: 22,
+        toPort: 22,
+        ipRanges: [{ cidrIp: "203.0.113.0/24", description: "office" }],
+      },
+    });
+    expect(toIpPermission(makeRule("in", "TCP", "22", "10.0.0.0/8", "r2", "   ")).ok && "no description").toBe(
+      "no description",
+    );
+    expect(toIpPermission(makeRule("in", "TCP", "22", "sg-0123456789abcdef", "r3", "bastion"))).toEqual({
+      ok: true,
+      value: {
+        ipProtocol: "tcp",
+        fromPort: 22,
+        toPort: 22,
+        userIdGroupPairs: [{ groupId: "sg-0123456789abcdef", description: "bastion" }],
+      },
+    });
+  });
+
+  it("refuses a rule that is not a protocol or port range", () => {
+    expect(toIpPermission(makeRule("in", "GRE", "All", "0.0.0.0/0"))).toEqual({
       ok: false,
-      error: "The VWS API only takes CIDR sources, not security group IDs.",
+      error: "The VWS API does not take protocol GRE.",
     });
+    for (const port of ["", "22-", "-1", "80,443", "ssh"]) {
+      expect(toIpPermission(makeRule("in", "TCP", port, "0.0.0.0/0"))).toEqual({
+        ok: false,
+        error: `Port range ${port} is not a port or a range.`,
+      });
+    }
   });
 
   it("maps addresses and snapshots", () => {
