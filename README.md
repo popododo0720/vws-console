@@ -54,6 +54,18 @@ Detection fails closed. On a timeout, a network error or an answer without `logi
 
 `npx playwright test -c playwright.live.config.ts` starts console-api with its fake backend (`VWS_CONSOLE_API_DIR`, default `../vws-console-api`, needs Go) with `-iam=fake`, a generated root password and `-console-origins` for the test console, signs in through `/login` and runs the live tests against it. `npx playwright test -c playwright.live-iam-off.config.ts` runs the resource flows with IAM off (token, no sign-in).
 
+## Health, readiness and metrics
+
+The console is a VWS service: it is deployed to Kubernetes like the other `vws-*` components, so it serves the same probe and scrape endpoints (decision for #68). They answer without sign-in (the proxy skips them), are never cached, and never print configuration values, tokens or console-api responses.
+
+| Endpoint       | Purpose                                                                                                                                                                                                                                                                                              |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /healthz` | Liveness. `200` `{"status":"ok"}` while the server answers; it checks no dependency, so a console-api outage does not restart the console.                                                                                                                                                           |
+| `GET /readyz`  | Readiness. `200` when `VWS_CONSOLE_IAM` and `VWS_CONSOLE_API_URL` are valid and, if `VWS_CONSOLE_API_URL` is set, console-api answers one unauthenticated `GET /api/v1/auth/session` below 500 within 2 s. Otherwise `503` with `{"status":"unavailable","checks":[{"name","status","reason"}]}`.    |
+| `GET /metrics` | Prometheus text. Every metric starts with `vws_console_`: `vws_console_http_requests_total{method}`, `vws_console_api_requests_total{method,outcome}`, `vws_console_api_request_duration_seconds{method,outcome}` and the Node.js process metrics (`vws_console_process_*`, `vws_console_nodejs_*`). |
+
+`/metrics` carries no secrets but is unauthenticated, like the other VWS services' ops endpoints; restrict it to the scraper with a NetworkPolicy. OpenTelemetry traces are not exported yet; #53 tracks them.
+
 ## Screens
 
 | Screen          | Route                      |
