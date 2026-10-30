@@ -9,6 +9,7 @@ import {
   acceptsNewAttempt,
   browserReceiptStore,
   commitAttempt,
+  createFailureMessage,
   discardAttempt,
   downloadPrivateKey,
   finishCreate,
@@ -336,7 +337,7 @@ export function useKeyPairCreator(options: {
           </>
         }
       >
-        {failure ? <p role="alert">{failure.error.message}</p> : null}
+        {failure ? <p role="alert">{createFailureMessage(failure.attempt, failure.error)}</p> : null}
       </PanelDialog>
     </>
   );
