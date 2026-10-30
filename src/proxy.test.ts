@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { proxy } from "./proxy";
+import { config, proxy } from "./proxy";
 
 function req(path: string, cookies: Record<string, string> = {}) {
   const cookie = Object.entries(cookies)
@@ -61,6 +61,21 @@ describe("proxy", () => {
     expect(deleted(response)).toEqual([]);
     expect(response.headers.get("location")).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("never redirects or refuses the probe and metrics endpoints", async () => {
+    for (const path of ["/healthz", "/readyz", "/metrics"]) {
+      expect((await proxy(req(path))).headers.get("location")).toBeNull();
+    }
+    vi.stubEnv("VWS_CONSOLE_IAM", "yes");
+    expect((await proxy(req("/readyz"))).status).not.toBe(503);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the probe and metrics endpoints out of the matcher, but not lookalike pages", () => {
+    const matcher = new RegExp(`^${config.matcher[0]}$`);
+    for (const path of ["/healthz", "/readyz", "/metrics"]) expect(matcher.test(path)).toBe(false);
+    for (const path of ["/metricsx", "/healthz/x", "/compute/instances"]) expect(matcher.test(path)).toBe(true);
   });
 
   it("asks for no sign-in when console-api is not configured", async () => {

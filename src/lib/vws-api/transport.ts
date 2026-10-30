@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { recordApiCall, statusOutcome } from "@/lib/ops/metrics";
 
 /** Per-attempt deadline for a console-api call, overridable with VWS_CONSOLE_API_TIMEOUT_MS. */
 export const DEFAULT_TIMEOUT_MS = 10_000;
@@ -53,6 +54,8 @@ export async function apiFetch(url: string, init: RequestInit, options: ApiFetch
   const sleep = options.sleep ?? defaultSleep;
   const limit = options.timeoutMs ?? timeoutMs();
   const requestId = randomUUID();
+  const started = performance.now();
+  const seconds = () => (performance.now() - started) / 1000;
   let failure: ApiTransportError | null = null;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     if (attempt > 1) await sleep(backoffMs(attempt - 1, options.random));
@@ -65,6 +68,7 @@ export async function apiFetch(url: string, init: RequestInit, options: ApiFetch
       });
       const text = await response.text();
       if (attempt < attempts && RETRYABLE_STATUS.has(response.status)) continue;
+      recordApiCall({ method, outcome: statusOutcome(response.status), seconds: seconds() });
       return { status: response.status, headers: response.headers, text, requestId, attempts: attempt };
     } catch (error) {
       const name = (error as { name?: unknown } | null)?.name;
@@ -72,5 +76,7 @@ export async function apiFetch(url: string, init: RequestInit, options: ApiFetch
       failure = new ApiTransportError(timedOut ? "timeout" : "network", requestId, attempt);
     }
   }
-  throw failure ?? new ApiTransportError("network", requestId, attempts);
+  const error = failure ?? new ApiTransportError("network", requestId, attempts);
+  recordApiCall({ method, outcome: error.kind, seconds: seconds() });
+  throw error;
 }

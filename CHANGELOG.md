@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/healthz`, `/readyz` and `/metrics` (Prometheus, `vws_console_` prefix) for Kubernetes probes and scraping (#68).
+
 ### Fixed
 
 - Count the README token badge in CI so it reflects the current default branch instead of a stale hosted count.
