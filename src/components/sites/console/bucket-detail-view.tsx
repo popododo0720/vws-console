@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { AccountBucket, ApiError } from "@/lib/vws-api/adapter";
+import { deleteObjectAction, getObjectAction } from "@/app/actions/resources";
+import type { AccountBucket, ApiError, BucketName, ObjectContent } from "@/lib/vws-api/adapter";
+import { copyToClipboard } from "@/lib/clipboard";
 import { formatBucketCreationDate } from "@/lib/bucket-display";
 import { storageNav } from "@/lib/console-data";
 import { ApiErrorAlert } from "@/components/sites/console/api-action";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
-import { OutlineButton } from "@/components/sites/console/ui";
+import { FieldLabel, OrangeButton, OutlineButton, PanelDialog } from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
 
 export function BucketDetailView({
@@ -75,7 +77,7 @@ export function BucketDetailView({
             { label: "Buckets", href: "/storage/buckets" },
             { label: name },
           ]}
-          info="Objects in this bucket cannot be listed from this console."
+          info="Objects in this bucket cannot be listed from this console. Find one by its key."
         />
         <div className="mb-3 flex gap-4 px-4 text-[14px]">
           {(["objects", "properties"] as const).map((item) => (
@@ -93,24 +95,7 @@ export function BucketDetailView({
           ))}
         </div>
         {tab === "objects" ? (
-          <div className="mx-4 mb-6 rounded-lg border border-[#e6e8eb] bg-white p-3 text-[13px]">
-            <h2 className="text-[16px] font-semibold">Objects</h2>
-            <p className="my-3 text-[#5f6b7a]">This console cannot list objects in this bucket.</p>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <OutlineButton disabled>Copy S3 URI</OutlineButton>
-              <OutlineButton disabled>Delete</OutlineButton>
-              <OutlineButton disabled>Create folder</OutlineButton>
-              <Link
-                href={uploadHref}
-                className="inline-flex h-8 items-center rounded-lg bg-[#ff9900] px-3 text-[13px] font-semibold text-[#16191f] hover:bg-[#ec7211]"
-              >
-                Upload
-              </Link>
-            </div>
-            <p className="text-[#5f6b7a]">
-              Creating folders and deleting objects need an object list, which this console does not have.
-            </p>
-          </div>
+          <ObjectsPanel bucket={bucket.name} uploadHref={uploadHref} />
         ) : (
           <div className="mx-4 mb-6 rounded-lg border border-[#e6e8eb] bg-white p-4 text-[13px]">
             <h2 className="mb-3 text-[16px] font-semibold">Bucket overview</h2>
@@ -143,5 +128,207 @@ export function BucketDetailView({
         )}
       </div>
     </Shell>
+  );
+}
+
+const DELETE_WORD = "permanently delete";
+
+function objectType(key: string): string {
+  const name = key.split("/").pop() ?? key;
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot + 1) : "—";
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes.toFixed(1)} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value.toFixed(1)} ${units[unit]}`;
+}
+
+function saveFile(object: ObjectContent) {
+  const copy = new Uint8Array(object.bytes.byteLength);
+  copy.set(object.bytes);
+  const url = URL.createObjectURL(new Blob([copy], { type: object.contentType || "application/octet-stream" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = object.key.split("/").pop() || object.key;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function ObjectsPanel({ bucket, uploadHref }: { bucket: BucketName; uploadHref: string }) {
+  const [query, setQuery] = useState("");
+  const [object, setObject] = useState<ObjectContent | null>(null);
+  const [searched, setSearched] = useState<string | null>(null);
+  const [selected, setSelected] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [dialog, setDialog] = useState(false);
+  const [confirm, setConfirm] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const find = (event: FormEvent) => {
+    event.preventDefault();
+    const key = query;
+    if (!key) return;
+    startTransition(async () => {
+      const result = await getObjectAction(bucket, key);
+      setSelected(false);
+      setNotice(null);
+      if (!result.ok) {
+        setError(result.error);
+        setObject(null);
+        setSearched(null);
+        return;
+      }
+      setError(null);
+      setObject(result.value);
+      setSearched(key);
+    });
+  };
+
+  const remove = () => {
+    if (!object) return;
+    const key = object.key;
+    startTransition(async () => {
+      const failure = await deleteObjectAction(bucket, key);
+      if (failure) {
+        setError(failure);
+        setConfirm("");
+        return;
+      }
+      setError(null);
+      setObject(null);
+      setSelected(false);
+      setDialog(false);
+      setNotice(`Successfully deleted ${key}.`);
+    });
+  };
+
+  const rows = object ? [object] : [];
+
+  return (
+    <div className="mx-4 mb-6 rounded-lg border border-[#e6e8eb] bg-white p-3 text-[13px]">
+      <ApiErrorAlert error={error} title="The object action failed" />
+      {notice ? (
+        <p role="status" className="mb-3 rounded border border-[#037f0c] bg-[#f2fcf3] px-3 py-2 text-[#037f0c]">
+          {notice}
+        </p>
+      ) : null}
+      <h2 className="text-[16px] font-semibold">
+        Objects <span className="font-normal text-[#5f6b7a]">({rows.length})</span>
+      </h2>
+      <p className="my-3 text-[#5f6b7a]">This console cannot list objects in this bucket. Find an object by its key.</p>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <OutlineButton
+          disabled={!selected || !object}
+          onClick={() => object && void copyToClipboard(`s3://${bucket}/${object.key}`, "bucket-objects")}
+        >
+          Copy S3 URI
+        </OutlineButton>
+        <OutlineButton disabled={!selected || !object} onClick={() => object && saveFile(object)}>
+          Download
+        </OutlineButton>
+        <OutlineButton
+          disabled={!selected || !object}
+          onClick={() => {
+            setConfirm("");
+            setDialog(true);
+          }}
+        >
+          Delete
+        </OutlineButton>
+        <OutlineButton disabled>Create folder</OutlineButton>
+        <Link
+          href={uploadHref}
+          className="inline-flex h-8 items-center rounded-lg bg-[#ff9900] px-3 text-[13px] font-semibold text-[#16191f] hover:bg-[#ec7211]"
+        >
+          Upload
+        </Link>
+      </div>
+      <form className="mb-3" role="search" onSubmit={find}>
+        <input
+          type="search"
+          className="field w-full max-w-md"
+          aria-label="Find objects by key"
+          placeholder="Find objects by key"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </form>
+      <table className="w-full text-left">
+        <thead>
+          <tr className="border-b border-[#e6e8eb] text-[#5f6b7a]">
+            <th className="w-8 py-2" />
+            <th className="py-2 font-semibold">Name</th>
+            <th className="py-2 font-semibold">Type</th>
+            <th className="py-2 font-semibold">Last modified</th>
+            <th className="py-2 font-semibold">Size</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key} className="border-b border-[#e6e8eb]">
+              <td className="py-2">
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${row.key}`}
+                  checked={selected}
+                  onChange={(event) => setSelected(event.target.checked)}
+                />
+              </td>
+              <td className="py-2 text-[#006ce0]">{row.key}</td>
+              <td className="py-2">{objectType(row.key)}</td>
+              <td className="py-2">{row.lastModified ? formatBucketCreationDate(row.lastModified) : "—"}</td>
+              <td className="py-2">{formatSize(row.size)}</td>
+            </tr>
+          ))}
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="py-6 text-center">
+                <p className="font-semibold">No objects</p>
+                <p className="text-[#5f6b7a]">
+                  {searched !== null
+                    ? `No object has the key ${searched}.`
+                    : pending
+                      ? "Loading object"
+                      : "Enter an object key to find it."}
+                </p>
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+      <PanelDialog
+        open={dialog}
+        title="Delete objects"
+        onClose={() => setDialog(false)}
+        footer={
+          <>
+            <OutlineButton onClick={() => setDialog(false)}>Cancel</OutlineButton>
+            <OrangeButton disabled={confirm !== DELETE_WORD || pending} onClick={remove}>
+              Delete objects
+            </OrangeButton>
+          </>
+        }
+      >
+        <p className="mb-3">Deleting the specified objects can&apos;t be undone.</p>
+        {object ? <p className="mb-3 font-semibold">{object.key}</p> : null}
+        {error ? <p className="mb-3 text-[#d13212]">{error.message}</p> : null}
+        <FieldLabel>To confirm deletion, type “{DELETE_WORD}” in the text input field.</FieldLabel>
+        <input
+          className="field"
+          aria-label="Confirm deletion"
+          value={confirm}
+          onChange={(event) => setConfirm(event.target.value)}
+        />
+      </PanelDialog>
+    </div>
   );
 }

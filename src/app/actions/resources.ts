@@ -10,6 +10,7 @@ import {
   type ApiResult,
   type IngressPermission,
   type LaunchRequest,
+  type ObjectContent,
 } from "@/lib/vws-api/adapter";
 import type { VolumeAttachment } from "@/types/console";
 import { deleteBatchError, parseKeyPairId, type CreateAttempt, type KeyPairCreateResult } from "@/lib/key-pair";
@@ -137,6 +138,21 @@ export async function uploadObjectAction(rawBucket: string, formData: FormData):
   const bytes = new Uint8Array(await file.arrayBuffer());
   const result = await vws.putObject(bucket, key, bytes, file.type || "application/octet-stream");
   return result.ok ? null : result.error;
+}
+
+/** Reads one object for the Objects tab. A missing key is null, so the tab can say no object matched. */
+export async function getObjectAction(rawBucket: string, key: string): Promise<ApiResult<ObjectContent | null>> {
+  const bucket = parseStoredBucketName(rawBucket);
+  if (!bucket) return { ok: false, error: INVALID_BUCKET_NAME };
+  const result = await vws.getObject(bucket, key);
+  if (!result.ok && result.error.code === "NoSuchKey") return { ok: true, value: null };
+  return result;
+}
+
+export async function deleteObjectAction(rawBucket: string, key: string): Promise<ApiError | null> {
+  const bucket = parseStoredBucketName(rawBucket);
+  if (!bucket) return INVALID_BUCKET_NAME;
+  return errorOf(vws.deleteObject(bucket, key));
 }
 
 export async function createSnapshotAction(volumeId: string, description: string) {

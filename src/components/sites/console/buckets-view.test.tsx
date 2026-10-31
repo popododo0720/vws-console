@@ -166,7 +166,7 @@ describe("BucketsView", () => {
     if (!media) throw new Error("media-1");
     actions.deleteBucketsAction.mockResolvedValue({
       deleted: ["logs-1"],
-      error: { code: "Conflict", message: "bucket is not empty", requestId: "r-9" },
+      error: { code: "BucketNotEmpty", message: "The bucket you tried to delete is not empty.", requestId: "r-9" },
       failedName: "media-1",
     });
     render(
@@ -185,7 +185,7 @@ describe("BucketsView", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete bucket" }));
     await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
     const open = screen.getByRole("dialog", { name: "Delete bucket" });
-    expect(within(open).getByText("bucket is not empty")).toBeTruthy();
+    expect(within(open).getByText("The bucket you tried to delete is not empty.")).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: "Select media-1" })).toBeChecked();
     expect(screen.queryByRole("checkbox", { name: "Select logs-1" })).toBeNull();
   });

@@ -28,6 +28,8 @@ import {
   type AccountBucket,
   type BucketName,
   type IngressPermission,
+  type ObjectContent,
+  toObjectContent,
   nextPageToken,
   parseApiError,
   parseImages,
@@ -140,8 +142,10 @@ async function toLogin(reason: "signin" | "expired"): Promise<never> {
   redirect(query ? `${LOGIN_PATH}?${query}` : LOGIN_PATH);
 }
 
+/** On a failure, kind is the console-api error kind ("bucket", "object", …), or "" when it sent none. */
 type RequestResult =
-  { ok: true; value: { status: number; json: unknown } } | { ok: false; status: number | null; error: ApiError };
+  | { ok: true; value: { status: number; json: unknown } }
+  | { ok: false; status: number | null; kind?: string; error: ApiError };
 
 type RawBody = { bytes: Uint8Array; contentType: string };
 
@@ -217,9 +221,11 @@ async function request(
   // With IAM off a 401 means a wrong token, which signing in cannot fix, so it is shown as an error.
   if (response.status === 401 && iam) return toLogin("expired");
   if (response.status < 200 || response.status > 299) {
+    const kind = (json as { error?: { kind?: unknown } } | null)?.error?.kind;
     return {
       ok: false,
       status: response.status,
+      kind: typeof kind === "string" ? kind : "",
       error: parseApiError(json) ?? {
         code: "InternalError",
         message: `The VWS console API answered HTTP ${response.status}.`,
@@ -315,10 +321,67 @@ export const listVpcs = (): Promise<ApiResult<Vpc[]>> => listAll("/vpcs", parseV
 export const listSubnets = (): Promise<ApiResult<Subnet[]>> => listAll("/subnets", parseSubnets);
 export const listBuckets = (): Promise<ApiResult<AccountBucket[]>> => listAll("/buckets", parseAccountBuckets, 100);
 
+/** The S3 call a failure came from; a few console-api codes mean different S3 errors per call. */
+type S3Call = "createBucket" | "headBucket" | "deleteBucket" | "putObject" | "getObject" | "deleteObject";
+
+/**
+ * console-api's texts for the two bucket-create errors its S3 surface refines
+ * (vws-console-api `resource/error.go` BucketOwnedMessage and BucketDeletingMessage,
+ * `surface/s3rest` s3Refinement). The JSON surface sends no flag, only the text.
+ */
+const BUCKET_OWNED_MESSAGE = "Your previous request to create the named bucket succeeded and you already own it.";
+const BUCKET_DELETING_MESSAGE =
+  "A conflicting conditional action is currently in progress against this resource. Try again.";
+
+const NO_SUCH_BUCKET = { code: "NoSuchBucket", message: "The specified bucket does not exist." };
+const NO_SUCH_KEY = { code: "NoSuchKey", message: "The specified key does not exist." };
+
+/**
+ * console-api's generic codes as the S3 error codes and messages, as its own S3
+ * surface maps them (awscode S3Default/S3ByKind plus s3Refinement). A code with
+ * no S3 meaning for the call passes through unchanged.
+ */
+function s3Error(code: string, kind: string, message: string, call: S3Call): { code: string; message: string } | null {
+  const onObject = kind === "object";
+  switch (code) {
+    case "NotFound":
+      return onObject ? NO_SUCH_KEY : NO_SUCH_BUCKET;
+    case "AlreadyExists":
+      if (onObject) return { code: "PreconditionFailed", message: "An object with this key already exists." };
+      if (message === BUCKET_OWNED_MESSAGE) return { code: "BucketAlreadyOwnedByYou", message };
+      return {
+        code: "BucketAlreadyExists",
+        message: "The requested bucket name is not available. Select a different name and try again.",
+      };
+    case "Conflict":
+      if (onObject) return null;
+      if (message === BUCKET_DELETING_MESSAGE) return { code: "OperationAborted", message };
+      if (call === "deleteBucket")
+        return { code: "BucketNotEmpty", message: "The bucket you tried to delete is not empty." };
+      if (call === "createBucket") return { code: "OperationAborted", message: message || BUCKET_DELETING_MESSAGE };
+      return null;
+    case "IdempotencyMismatch":
+      return { code: "OperationAborted", message: message || BUCKET_DELETING_MESSAGE };
+    case "PayloadTooLarge":
+      return call === "putObject"
+        ? { code: "EntityTooLarge", message: "Your proposed upload exceeds the maximum allowed object size." }
+        : { code: "EntityTooLarge", message: message || "The object is too large for this console to download." };
+    default:
+      return null;
+  }
+}
+
+function s3Failure(result: Extract<RequestResult, { ok: false }>, call: S3Call): ApiError {
+  // A delete-object failure without a kind is about the bucket, as before.
+  const fallbackKind = call === "putObject" || call === "getObject" ? "object" : "bucket";
+  const mapped = s3Error(result.error.code, result.kind || fallbackKind, result.error.message, call);
+  return mapped ? { ...mapped, requestId: result.error.requestId } : result.error;
+}
+
 export async function putBucket(name: BucketName): Promise<ApiResult<AccountBucket>> {
   const path = `/buckets/${seg(name)}`;
   const result = await request("PUT", path);
-  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.ok) return { ok: false, error: s3Failure(result, "createBucket") };
   if (result.value.status !== 200) return { ok: false, error: malformed(path) };
   try {
     return { ok: true, value: toAccountBucket(result.value.json, name) };
@@ -332,7 +395,7 @@ export async function getBucket(name: BucketName): Promise<ApiResult<AccountBuck
   const result = await request("GET", path);
   if (!result.ok) {
     if (result.status === 404 && result.error.code === "NotFound") return { ok: true, value: null };
-    return { ok: false, error: result.error };
+    return { ok: false, error: s3Failure(result, "headBucket") };
   }
   if (result.value.status !== 200) return { ok: false, error: malformed(path) };
   try {
@@ -349,17 +412,22 @@ function objectPath(bucket: BucketName, key: string): string {
     .join("/")}`;
 }
 
+function invalidKey(key: string): ApiError | null {
+  const problem = objectKeyProblem(key);
+  return problem ? { code: "InvalidArgument", message: problem, requestId: null } : null;
+}
+
 export async function putObject(
   bucket: BucketName,
   key: string,
   bytes: Uint8Array,
   contentType: string,
 ): Promise<ApiResult<void>> {
-  const keyProblem = objectKeyProblem(key);
-  if (keyProblem) return { ok: false, error: { code: "InvalidArgument", message: keyProblem, requestId: null } };
+  const keyError = invalidKey(key);
+  if (keyError) return { ok: false, error: keyError };
   const path = objectPath(bucket, key);
   const result = await request("PUT", path, { bytes, contentType });
-  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.ok) return { ok: false, error: s3Failure(result, "putObject") };
   if (result.value.status !== 200) return { ok: false, error: malformed(path) };
   const record = result.value.json;
   const got =
@@ -370,12 +438,43 @@ export async function putObject(
   return { ok: true, value: undefined };
 }
 
+/** Reads one object with its bytes; console-api sends the bytes base64-encoded in `body`. */
+export async function getObject(bucket: BucketName, key: string): Promise<ApiResult<ObjectContent>> {
+  const keyError = invalidKey(key);
+  if (keyError) return { ok: false, error: keyError };
+  const path = objectPath(bucket, key);
+  const result = await request("GET", path);
+  if (!result.ok) return { ok: false, error: s3Failure(result, "getObject") };
+  if (result.value.status !== 200) return { ok: false, error: malformed(path) };
+  try {
+    return { ok: true, value: toObjectContent(result.value.json, bucket, key) };
+  } catch {
+    return { ok: false, error: malformed(path) };
+  }
+}
+
+/** Deletes one object. A missing key is already deleted, as S3 DeleteObject answers 204 for it. */
+export async function deleteObject(bucket: BucketName, key: string): Promise<ApiResult<void>> {
+  const keyError = invalidKey(key);
+  if (keyError) return { ok: false, error: keyError };
+  const path = objectPath(bucket, key);
+  const result = await request("DELETE", path);
+  if (!result.ok) {
+    if (result.status === 404 && result.error.code === "NotFound" && result.kind === "object") {
+      return { ok: true, value: undefined };
+    }
+    return { ok: false, error: s3Failure(result, "deleteObject") };
+  }
+  if (result.value.status !== 204) return { ok: false, error: malformed(path) };
+  return { ok: true, value: undefined };
+}
+
 export async function deleteBucket(name: BucketName): Promise<ApiResult<void>> {
   const path = `/buckets/${seg(name)}`;
   const result = await request("DELETE", path);
   if (!result.ok) {
     if (result.status === 404 && result.error.code === "NotFound") return { ok: true, value: undefined };
-    return { ok: false, error: result.error };
+    return { ok: false, error: s3Failure(result, "deleteBucket") };
   }
   if (result.value.status !== 204) return { ok: false, error: malformed(path) };
   return { ok: true, value: undefined };
