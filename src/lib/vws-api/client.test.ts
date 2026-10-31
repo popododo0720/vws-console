@@ -691,6 +691,56 @@ describe("console-api client", () => {
       });
     });
 
+    it("returns BucketAlreadyOwnedByYou with console-api's text when the caller already owns the bucket", async () => {
+      const message = "Your previous request to create the named bucket succeeded and you already own it.";
+      serve(respond(409, { error: { code: "AlreadyExists", kind: "bucket", message }, requestId: "r-5" }));
+      expect(await putBucket(mustName("logs-1"))).toEqual({
+        ok: false,
+        error: { code: "BucketAlreadyOwnedByYou", message, requestId: "r-5" },
+      });
+      expect(calls).toHaveLength(1);
+    });
+
+    it("returns OperationAborted, not BucketNotEmpty, for a create while the caller's bucket is still being deleted", async () => {
+      const message = "A conflicting conditional action is currently in progress against this resource. Try again.";
+      serve(respond(409, { error: { code: "Conflict", kind: "bucket", message }, requestId: "r-6" }));
+      expect(await putBucket(mustName("logs-1"))).toEqual({
+        ok: false,
+        error: { code: "OperationAborted", message, requestId: "r-6" },
+      });
+      expect(calls).toHaveLength(1);
+    });
+
+    it("never answers BucketNotEmpty to a create, whatever the Conflict text", async () => {
+      serve(respond(409, { error: { code: "Conflict", kind: "bucket", message: "busy" }, requestId: "r-7" }));
+      expect(await putBucket(mustName("logs-1"))).toEqual({
+        ok: false,
+        error: { code: "OperationAborted", message: "busy", requestId: "r-7" },
+      });
+    });
+
+    it("returns OperationAborted for a delete during the bucket's own deletion", async () => {
+      const message = "A conflicting conditional action is currently in progress against this resource. Try again.";
+      serve(respond(409, { error: { code: "Conflict", kind: "bucket", message }, requestId: "r-8" }));
+      expect(await deleteBucket(mustName("logs-1"))).toEqual({
+        ok: false,
+        error: { code: "OperationAborted", message, requestId: "r-8" },
+      });
+    });
+
+    it("maps IdempotencyMismatch to OperationAborted, as console-api's S3 table does", async () => {
+      serve(
+        respond(409, {
+          error: { code: "IdempotencyMismatch", kind: "bucket", message: "token reused" },
+          requestId: "r-2",
+        }),
+      );
+      expect(await putBucket(mustName("logs-1"))).toEqual({
+        ok: false,
+        error: { code: "OperationAborted", message: "token reused", requestId: "r-2" },
+      });
+    });
+
     it("passes through codes S3 has no name for", async () => {
       serve(respond(403, { error: { code: "PermissionDenied", kind: "bucket", message: "denied" }, requestId: "r-3" }));
       expect(await putBucket(mustName("logs-1"))).toEqual({
@@ -884,6 +934,19 @@ describe("console-api client", () => {
           message: "Your proposed upload exceeds the maximum allowed object size.",
           requestId: "r-8",
         },
+      });
+    });
+
+    it("keeps console-api's text for a download over the size limit, not the upload message", async () => {
+      serve(
+        respond(413, {
+          error: { code: "PayloadTooLarge", kind: "object", message: "object is larger than 4 MiB" },
+          requestId: "r-9",
+        }),
+      );
+      expect(await getObject(mustName("logs-1"), "a.bin")).toEqual({
+        ok: false,
+        error: { code: "EntityTooLarge", message: "object is larger than 4 MiB", requestId: "r-9" },
       });
     });
 
