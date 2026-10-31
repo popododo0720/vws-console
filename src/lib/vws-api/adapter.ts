@@ -23,6 +23,18 @@ export type BucketName = string & { readonly [brand]: "BucketName" };
 
 export type AccountBucket = { name: BucketName; ownerId: string; created: string };
 
+/** One stored object as console-api describes it, without its bytes. */
+export type StoredObject = {
+  bucket: BucketName;
+  key: string;
+  size: number;
+  contentType: string;
+  lastModified: string;
+  etag: string;
+};
+
+export type ObjectContent = StoredObject & { bytes: Uint8Array };
+
 export type OperationState = "running" | "succeeded" | "failed";
 
 export type Image = { id: string; name: string; state: string; owner: string };
@@ -102,6 +114,35 @@ export function toAccountBucket(item: unknown, expected?: BucketName): AccountBu
   const created = record.creationDate;
   if (typeof created !== "string" || created.length === 0) throw new Error("invalid creationDate");
   return { name, ownerId: typeof record.ownerId === "string" ? record.ownerId : "", created };
+}
+
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+function decodeBase64(text: string): Uint8Array {
+  if (!BASE64.test(text)) throw new Error("invalid base64 body");
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+/** Reads a GET object reply. It must name the requested bucket and key, and its size must match its bytes. */
+export function toObjectContent(item: unknown, bucket: BucketName, key: string): ObjectContent {
+  const record = obj(item);
+  if (record.bucket !== bucket || record.key !== key) throw new Error("unexpected object");
+  const size = record.size;
+  if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0) throw new Error("invalid size");
+  const bytes = decodeBase64(record.body === null || record.body === undefined ? "" : str(record.body));
+  if (bytes.byteLength !== size) throw new Error("size does not match body");
+  return {
+    bucket,
+    key,
+    size,
+    contentType: str(record.contentType),
+    lastModified: str(record.lastModified),
+    etag: str(record.etag),
+    bytes,
+  };
 }
 
 export function parseAccountBuckets(page: unknown): AccountBucket[] {

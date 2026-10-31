@@ -30,7 +30,9 @@ import {
   createVpc,
   deleteKeyPair,
   deleteBucket,
+  deleteObject,
   getBucket,
+  getObject,
   getVolume,
   getVpc,
   instanceBatch,
@@ -621,16 +623,20 @@ describe("console-api client", () => {
       expect(calls).toHaveLength(1);
     });
 
-    it("returns AlreadyExists from a 409 without a second request", async () => {
+    it("returns BucketAlreadyExists from a 409 without a second request", async () => {
       serve(
         respond(409, {
-          error: { code: "AlreadyExists", field: "name", message: "already exists" },
+          error: { code: "AlreadyExists", kind: "bucket", field: "name", message: "already exists" },
           requestId: "r-1",
         }),
       );
       expect(await putBucket(mustName("logs-1"))).toEqual({
         ok: false,
-        error: { code: "AlreadyExists", message: "already exists", requestId: "r-1" },
+        error: {
+          code: "BucketAlreadyExists",
+          message: "The requested bucket name is not available. Select a different name and try again.",
+          requestId: "r-1",
+        },
       });
       expect(calls).toHaveLength(1);
     });
@@ -672,11 +678,24 @@ describe("console-api client", () => {
       });
     });
 
-    it("returns the conflict when the bucket is not empty", async () => {
-      serve(respond(409, { error: { code: "Conflict", message: "bucket is not empty" }, requestId: "r-9" }));
+    it("returns BucketNotEmpty when the bucket is not empty", async () => {
+      serve(
+        respond(409, {
+          error: { code: "Conflict", kind: "bucket", id: "logs-1", message: "bucket is not empty" },
+          requestId: "r-9",
+        }),
+      );
       expect(await deleteBucket(mustName("logs-1"))).toEqual({
         ok: false,
-        error: { code: "Conflict", message: "bucket is not empty", requestId: "r-9" },
+        error: { code: "BucketNotEmpty", message: "The bucket you tried to delete is not empty.", requestId: "r-9" },
+      });
+    });
+
+    it("passes through codes S3 has no name for", async () => {
+      serve(respond(403, { error: { code: "PermissionDenied", kind: "bucket", message: "denied" }, requestId: "r-3" }));
+      expect(await putBucket(mustName("logs-1"))).toEqual({
+        ok: false,
+        error: { code: "PermissionDenied", message: "denied", requestId: "r-3" },
       });
     });
 
@@ -721,6 +740,151 @@ describe("console-api client", () => {
     it("rejects a bucket GET that is not 200", async () => {
       serve(new Response(null, { status: 204 }));
       expect(await getBucket(mustName("logs-1"))).toMatchObject({ ok: false, error: { code: "MalformedResponse" } });
+    });
+
+    const stored = {
+      bucket: "logs-1",
+      key: "a/b.txt",
+      ownerId: "1",
+      size: 5,
+      etag: "e1",
+      contentType: "text/plain",
+      lastModified: "2026-08-02T00:00:00Z",
+      body: "aGVsbG8=",
+    };
+
+    it("gets an object and decodes its base64 body", async () => {
+      serve(respond(200, stored));
+      expect(await getObject(mustName("logs-1"), "a/b.txt")).toEqual({
+        ok: true,
+        value: {
+          bucket: "logs-1",
+          key: "a/b.txt",
+          size: 5,
+          etag: "e1",
+          contentType: "text/plain",
+          lastModified: "2026-08-02T00:00:00Z",
+          bytes: new Uint8Array([104, 101, 108, 108, 111]),
+        },
+      });
+      expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1/objects/a/b.txt");
+      expect(calls[0].init.method).toBe("GET");
+      const sent = headers(calls[0]);
+      expect(sent.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+      expect(sent["x-csrf-token"]).toBeUndefined();
+    });
+
+    it("encodes each key segment but keeps the slashes", async () => {
+      serve(respond(200, { ...stored, key: "dir name/ü?.txt", size: 0, body: null }));
+      expect(await getObject(mustName("logs-1"), "dir name/ü?.txt")).toMatchObject({ ok: true, value: { size: 0 } });
+      expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1/objects/dir%20name/%C3%BC%3F.txt");
+    });
+
+    it("retries a GET object 503 and then succeeds", async () => {
+      serve(respond(503, { error: { code: "Unavailable", message: "busy" } }), respond(200, stored));
+      expect(await getObject(mustName("logs-1"), "a/b.txt")).toMatchObject({ ok: true });
+      expect(calls).toHaveLength(2);
+    });
+
+    it("maps a missing key to NoSuchKey and a missing bucket to NoSuchBucket", async () => {
+      serve(
+        respond(404, {
+          error: { code: "NotFound", kind: "object", id: "a/b.txt", message: "missing" },
+          requestId: "r-5",
+        }),
+        respond(404, {
+          error: { code: "NotFound", kind: "bucket", id: "logs-1", message: "missing" },
+          requestId: "r-6",
+        }),
+      );
+      expect(await getObject(mustName("logs-1"), "a/b.txt")).toEqual({
+        ok: false,
+        error: { code: "NoSuchKey", message: "The specified key does not exist.", requestId: "r-5" },
+      });
+      expect(await getObject(mustName("logs-1"), "a/b.txt")).toEqual({
+        ok: false,
+        error: { code: "NoSuchBucket", message: "The specified bucket does not exist.", requestId: "r-6" },
+      });
+    });
+
+    it("rejects an object reply for another key, a bad body or a size that does not match", async () => {
+      for (const body of [
+        { ...stored, key: "other.txt" },
+        { ...stored, bucket: "logs-2" },
+        { ...stored, body: "not base64!" },
+        { ...stored, size: 6 },
+        { ...stored, size: -1 },
+      ]) {
+        serve(respond(200, body));
+        expect(await getObject(mustName("logs-1"), "a/b.txt")).toMatchObject({
+          ok: false,
+          error: { code: "MalformedResponse" },
+        });
+      }
+    });
+
+    it("does not send a GET or DELETE for a key that walks out of the bucket", async () => {
+      serve(respond(200, stored));
+      for (const key of ["a/../victim.txt", "..", ""]) {
+        expect(await getObject(mustName("logs-1"), key)).toMatchObject({
+          ok: false,
+          error: { code: "InvalidArgument" },
+        });
+        expect(await deleteObject(mustName("logs-1"), key)).toMatchObject({
+          ok: false,
+          error: { code: "InvalidArgument" },
+        });
+      }
+      expect(calls).toEqual([]);
+    });
+
+    it("deletes an object with one 204 and the cookie write headers, never retried", async () => {
+      serve(new Response(null, { status: 204 }));
+      expect(await deleteObject(mustName("logs-1"), "a/b.txt")).toEqual({ ok: true, value: undefined });
+      expect(calls).toHaveLength(1);
+      expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1/objects/a/b.txt");
+      expect(calls[0].init.method).toBe("DELETE");
+      const sent = headers(calls[0]);
+      expect(sent["x-csrf-token"]).toBe("csrf-1");
+      expect(sent.origin).toBe("http://console.test");
+      serve(respond(503, { error: { code: "Unavailable", message: "busy" } }));
+      expect(await deleteObject(mustName("logs-1"), "a/b.txt")).toMatchObject({
+        ok: false,
+        error: { code: "Unavailable" },
+      });
+      expect(calls).toHaveLength(2);
+    });
+
+    it("treats a missing key as deleted, as S3 does, but not a missing bucket", async () => {
+      serve(
+        respond(404, { error: { code: "NotFound", kind: "object", message: "missing" } }),
+        respond(404, { error: { code: "NotFound", kind: "bucket", message: "missing" }, requestId: "r-7" }),
+      );
+      expect(await deleteObject(mustName("logs-1"), "a/b.txt")).toEqual({ ok: true, value: undefined });
+      expect(await deleteObject(mustName("gone-1"), "a/b.txt")).toEqual({
+        ok: false,
+        error: { code: "NoSuchBucket", message: "The specified bucket does not exist.", requestId: "r-7" },
+      });
+    });
+
+    it("rejects a DELETE object 200 as MalformedResponse", async () => {
+      serve(respond(200, {}));
+      expect(await deleteObject(mustName("logs-1"), "a/b.txt")).toMatchObject({
+        ok: false,
+        error: { code: "MalformedResponse" },
+      });
+    });
+
+    it("maps an upload over the size limit to EntityTooLarge", async () => {
+      serve(respond(413, { error: { code: "PayloadTooLarge", kind: "object", message: "too big" }, requestId: "r-8" }));
+      expect(await putObject(mustName("logs-1"), "a.bin", new Uint8Array([1]), "application/octet-stream")).toEqual({
+        ok: false,
+        error: {
+          code: "EntityTooLarge",
+          message: "Your proposed upload exceeds the maximum allowed object size.",
+          requestId: "r-8",
+        },
+      });
     });
 
     it("puts object bytes and uses json for a cookie write", async () => {
