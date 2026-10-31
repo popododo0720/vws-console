@@ -15,7 +15,13 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("@/lib/vws-api/session", () => ({ currentSession: async () => nav.session }));
 
-import { createBucketAction, deleteBucketsAction, uploadObjectAction } from "./resources";
+import {
+  createBucketAction,
+  deleteBucketsAction,
+  deleteObjectAction,
+  getObjectAction,
+  uploadObjectAction,
+} from "./resources";
 
 type Call = { url: string; init: RequestInit };
 
@@ -110,12 +116,12 @@ describe("bucket actions", () => {
   it("stops after a conflict and does not delete later names", async () => {
     serve(
       new Response(null, { status: 204 }),
-      respond(409, { error: { code: "Conflict", message: "bucket is not empty" }, requestId: "r-9" }),
+      respond(409, { error: { code: "Conflict", kind: "bucket", message: "bucket is not empty" }, requestId: "r-9" }),
       new Response(null, { status: 204 }),
     );
     expect(await deleteBucketsAction(["logs-1", "logs-2", "logs-3"])).toEqual({
       deleted: ["logs-1"],
-      error: { code: "Conflict", message: "bucket is not empty", requestId: "r-9" },
+      error: { code: "BucketNotEmpty", message: "The bucket you tried to delete is not empty.", requestId: "r-9" },
       failedName: "logs-2",
     });
     expect(calls).toHaveLength(2);
@@ -150,6 +156,43 @@ describe("bucket actions", () => {
       "http://api.test/api/v1/buckets/xn--ab",
       "http://api.test/api/v1/buckets/ab--table-s3",
     ]);
+  });
+
+  it("gets an object, and reads a missing key as no object", async () => {
+    serve(
+      respond(200, { bucket: "logs-1", key: "notes.txt", size: 2, body: "aGk=", contentType: "text/plain" }),
+      respond(404, { error: { code: "NotFound", kind: "object", message: "missing" } }),
+    );
+    expect(await getObjectAction("logs-1", "notes.txt")).toMatchObject({
+      ok: true,
+      value: { key: "notes.txt", size: 2, bytes: new Uint8Array([104, 105]) },
+    });
+    expect(await getObjectAction("logs-1", "gone.txt")).toEqual({ ok: true, value: null });
+    expect(calls.map((call) => [call.init.method, call.url])).toEqual([
+      ["GET", "http://api.test/api/v1/buckets/logs-1/objects/notes.txt"],
+      ["GET", "http://api.test/api/v1/buckets/logs-1/objects/gone.txt"],
+    ]);
+  });
+
+  it("returns NoSuchBucket from get and delete, and refuses a bad bucket name without calling", async () => {
+    const missing = () => respond(404, { error: { code: "NotFound", kind: "bucket", message: "missing" } });
+    serve(missing(), missing());
+    const noBucket = { code: "NoSuchBucket", message: "The specified bucket does not exist.", requestId: null };
+    expect(await getObjectAction("logs-1", "a.txt")).toEqual({ ok: false, error: noBucket });
+    expect(await deleteObjectAction("logs-1", "a.txt")).toEqual(noBucket);
+    expect(await getObjectAction("../x", "a.txt")).toEqual({ ok: false, error: INVALID_NAME });
+    expect(await deleteObjectAction("A", "a.txt")).toEqual(INVALID_NAME);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("deletes an object once and is idempotent on a key already gone", async () => {
+    serve(
+      new Response(null, { status: 204 }),
+      respond(404, { error: { code: "NotFound", kind: "object", message: "missing" } }),
+    );
+    expect(await deleteObjectAction("logs-1", "notes.txt")).toBeNull();
+    expect(await deleteObjectAction("logs-1", "notes.txt")).toBeNull();
+    expect(calls.map((call) => call.init.method)).toEqual(["DELETE", "DELETE"]);
   });
 
   it("uploads a file and refuses a key or a body the API will not store", async () => {
