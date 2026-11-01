@@ -190,3 +190,49 @@ describe("BucketsView", () => {
     expect(screen.queryByRole("checkbox", { name: "Select logs-1" })).toBeNull();
   });
 });
+
+describe("BucketsView parity", () => {
+  beforeEach(() => {
+    nav.search = "";
+    nav.refresh.mockReset();
+  });
+
+  function renderEmptyBuckets() {
+    render(
+      <ConsoleProvider>
+        <BucketsView buckets={[]} loadError={null} />
+      </ConsoleProvider>,
+    );
+  }
+
+  it("names the region column VWS Region", () => {
+    renderEmptyBuckets();
+    expect(screen.getByRole("columnheader", { name: /VWS Region/ })).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: /^Region$/ })).toBeNull();
+  });
+
+  it("puts the only refresh button in the top row next to Copy ARN", () => {
+    renderEmptyBuckets();
+    const refreshButton = screen.getByRole("button", { name: "Refresh" });
+    const copyArn = screen.getByRole("button", { name: "Copy ARN" });
+    expect(screen.getAllByRole("button", { name: "Refresh" })).toHaveLength(1);
+    expect(refreshButton.parentElement).toBe(copyArn.parentElement);
+    expect(refreshButton.compareDocumentPosition(copyArn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(refreshButton);
+    expect(nav.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("has no Info link beside the Directory buckets tab", () => {
+    renderEmptyBuckets();
+    const directoryTab = screen.getByRole("button", { name: "Directory buckets" });
+    const tabs = directoryTab.parentElement as HTMLElement;
+    expect(within(tabs).queryByRole("button", { name: /Info/ })).toBeNull();
+    expect(within(tabs).queryByText("Info")).toBeNull();
+  });
+
+  it("shows the empty state for the general purpose tab", () => {
+    renderEmptyBuckets();
+    expect(screen.getByText("No buckets")).toBeTruthy();
+    expect(screen.getByText("You don't have any buckets.")).toBeTruthy();
+  });
+});
