@@ -25,8 +25,9 @@ cmd_english() {
 
 # Reference images are local-only (AGENTS.md, issue #91): docs/design-references/ tracks nothing but .gitkeep.
 cmd_references() {
-  local tracked
-  tracked=$(git ls-files -- docs/design-references | grep -v -x -F docs/design-references/.gitkeep || true)
+  local listed tracked
+  listed=$(git ls-files -- docs/design-references) || die "references: git ls-files failed"
+  tracked=$(grep -v -x -F docs/design-references/.gitkeep <<<"$listed" || true)
   [[ -z $tracked ]] || die "references: docs/design-references/ is local-only (AGENTS.md); untrack: ${tracked//$'\n'/ }"
 }
 
