@@ -44,7 +44,11 @@ jobs:
         run: scripts/guard-agents.sh agents
       - name: AGENTS.md has the /correct loop, incident form and label (vws-deploy#448)
         run: scripts/guard.sh correct
-      - name: guard.sh fails on an empty /correct loop section
+      - name: Tracked files are English (allowlist .github/english-allowlist)
+        run: scripts/guard.sh english
+      - name: No tracked reference images under docs/design-references (#91)
+        run: scripts/guard.sh references
+      - name: guard.sh fails on broken inputs (/correct loop, Hangul, tracked reference image)
         run: scripts/guard_test.sh
 
   # verify-gate (#249): red unless the PR has the verify-approved label and a comment with a
