@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Tests for scripts/guard.sh correct (popododo0720/vws-deploy#448): it passes on this repo's files and
+# Tests for scripts/guard.sh: each check passes on this repo's files. correct (popododo0720/vws-deploy#448)
 # fails when the AGENTS.md /correct loop section, the incident form or the incident label is missing or
-# empty. Each case runs on a throwaway copy in a temp dir; the work tree is never changed.
+# empty; english fails on a tracked file with Hangul that the allowlist does not cover; references fails
+# on a tracked reference image (issue #91). Each case runs on a throwaway copy in a temp dir (its own git
+# repo, so git ls-files sees only the copy); the work tree is never changed.
 # Run: scripts/guard_test.sh
 set -euo pipefail
 export LC_ALL=C.UTF-8
@@ -18,18 +20,20 @@ copy() {
     .github/english-allowlist; do
     [[ -f $root/$f ]] && cp "$root/$f" "$dest/$f"
   done
-  return 0
+  git -C "$dest" init -q
+  git -C "$dest" add -A
 }
 
+# expect WANT LABEL DIR [CHECK]: run scripts/guard.sh CHECK (default correct) in DIR. A failure counts
+# only when a line names the cause ("CHECK: ..." or "guard: CHECK: ..."), so a missing or broken
+# scripts/guard.sh cannot make a "fail" case pass.
 expect() {
-  local want=$1 label=$2 dir=$3 rc=0
-  (cd "$dir" && bash scripts/guard.sh correct) >"$tmp/out" 2>&1 || rc=$?
-  # A failure counts only when guard-agents.sh correct names the cause, so a missing or broken
-  # scripts/guard.sh cannot make a "fail" case pass.
+  local want=$1 label=$2 dir=$3 check=${4:-correct} rc=0
+  (cd "$dir" && bash scripts/guard.sh "$check") >"$tmp/out" 2>&1 || rc=$?
   local ok=0
   if [[ $want == pass ]]; then
     [[ $rc -eq 0 ]] && ok=1
-  elif [[ $rc -ne 0 ]] && grep -q '^correct: ' "$tmp/out"; then
+  elif [[ $rc -ne 0 ]] && grep -q -E "^(guard: )?${check}: " "$tmp/out"; then
     ok=1
   fi
   if [[ $ok -eq 1 ]]; then
@@ -70,6 +74,24 @@ expect fail "no incident form" "$d"
 d=$(case_dir no-label)
 [[ -f $d/.github/labels.yml ]] && sed -i '/^- name: incident$/d' "$d/.github/labels.yml"
 expect fail "labels.yml without the incident label" "$d"
+
+d=$(case_dir english)
+expect pass "this repo's tracked files and English allowlist" "$d" english
+printf '# \xed\x95\x9c\xea\xb8\x80\n' >"$d/notes.md"
+git -C "$d" add notes.md
+expect fail "a tracked file with Hangul" "$d" english
+printf 'notes.md\n' >>"$d/.github/english-allowlist"
+expect fail "an allowlist line without a reason" "$d" english
+
+d=$(case_dir references)
+mkdir -p "$d/docs/design-references/ec2"
+: >"$d/docs/design-references/.gitkeep"
+git -C "$d" add docs/design-references/.gitkeep
+expect pass "docs/design-references/ with only .gitkeep" "$d" references
+printf '\x89PNG\r\n' >"$d/docs/design-references/ec2/instances.png"
+expect pass "an untracked local reference image" "$d" references
+git -C "$d" add -f docs/design-references/ec2/instances.png
+expect fail "a tracked reference image" "$d" references
 
 if [[ $fails -ne 0 ]]; then
   echo "guard_test: ${fails} case(s) failed" >&2

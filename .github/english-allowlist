@@ -1,0 +1,3 @@
+# <glob> <reason>. Read by scripts/guard-agents.sh english (scripts/guard.sh english).
+scripts/guard-agents.sh canonical vws-deploy copy (identity check); it accepts the Korean rules-table heading of other repos
+src/app/favicon.ico binary icon with no text; its bytes happen to decode as Hangul
