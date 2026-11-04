@@ -92,6 +92,18 @@ printf '\x89PNG\r\n' >"$d/docs/design-references/ec2/instances.png"
 expect pass "an untracked local reference image" "$d" references
 git -C "$d" add -f docs/design-references/ec2/instances.png
 expect fail "a tracked reference image" "$d" references
+git -C "$d" rm -q --cached docs/design-references/ec2/instances.png
+mkdir -p "$d/docs/design-references/sub"
+printf '\x89PNG\r\n' >"$d/docs/design-references/sub/.gitkeep"
+git -C "$d" add -f docs/design-references/sub/.gitkeep
+expect fail "a tracked file named .gitkeep in a subdirectory" "$d" references
+git -C "$d" rm -q --cached docs/design-references/sub/.gitkeep
+git -C "$d" rm -q --cached docs/design-references/.gitkeep
+rm "$d/docs/design-references/.gitkeep"
+mkdir -p "$d/docs/design-references/.gitkeep"
+printf '\x89PNG\r\n' >"$d/docs/design-references/.gitkeep/aws.png"
+git -C "$d" add -f docs/design-references/.gitkeep/aws.png
+expect fail "an image under a directory named .gitkeep" "$d" references
 
 if [[ $fails -ne 0 ]]; then
   echo "guard_test: ${fails} case(s) failed" >&2
