@@ -76,7 +76,9 @@ describe("saveInboundRulesAction", () => {
     api.authorizeIngress.mockResolvedValueOnce(fail("ServiceUnavailable"));
     const error = await saveInboundRulesAction(GROUP, changes);
     expect(error).toMatchObject({ code: "ServiceUnavailable", requestId: "req-1" });
-    expect(error?.message).toContain("Rule TCP 443 from 0.0.0.0/0 was not added");
+    expect(error?.message).toBe(
+      "Rule TCP 443 from 0.0.0.0/0 was not added: ServiceUnavailable Already saved: deleted TCP 80 from 0.0.0.0/0.",
+    );
     expect(groups.get(GROUP)).toEqual([tcp(22)]);
     expect(await saveInboundRulesAction(GROUP, changes)).toBeNull();
     expect(groups.get(GROUP)).toEqual([tcp(22), tcp(443)]);

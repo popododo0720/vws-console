@@ -2,14 +2,13 @@ import type { IngressPermission, SecurityGroupRule } from "@/types/console";
 import { toIngressPermission, toIngressRule } from "@/lib/vws-api/adapter";
 import { ruleKey } from "@/lib/security-group-rules";
 
-/** A stored rule the user left as it was keeps its stored values, so an ICMP type or code is not rewritten. */
+/** A stored rule whose type and ports the user left as they were keeps its stored ports, so ICMP type and code survive. */
 function wantedPermission(rule: SecurityGroupRule) {
-  if (rule.permission) {
-    const stored = toIngressRule(rule.permission);
-    if (stored.protocol === rule.protocol && stored.port === rule.port && stored.source === rule.source)
-      return { ok: true as const, value: rule.permission };
-  }
-  return toIngressPermission(rule);
+  const mapped = toIngressPermission(rule);
+  if (!mapped.ok || !rule.permission) return mapped;
+  const stored = toIngressRule(rule.permission);
+  if (stored.protocol !== rule.protocol || stored.port !== rule.port) return mapped;
+  return { ok: true as const, value: { ...rule.permission, cidrIp: mapped.value.cidrIp } };
 }
 
 /** Maps inbound rules onto the values console-api stores; the first rule it cannot take, or a repeat, stops it. */

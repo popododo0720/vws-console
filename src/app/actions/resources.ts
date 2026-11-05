@@ -243,15 +243,19 @@ const send = (groupId: string, op: RuleOp) =>
 async function applyRuleChanges(groupId: string, changes: RuleChanges): Promise<ApiError | null> {
   const current = await currentRules(groupId);
   if (!current.ok) return current.error;
+  const done: string[] = [];
+  const verb = (op: RuleOp) => (op.kind === "revoke" ? "deleted" : "added");
   for (const op of planRuleOps(current.value, changes)) {
     const result = await send(groupId, op);
-    if (result.ok) continue;
-    const reread = await currentRules(groupId);
-    if (reread.ok && opApplied(reread.value, op)) continue;
-    const verb = op.kind === "revoke" ? "deleted" : "added";
+    const reread = result.ok ? null : await currentRules(groupId);
+    if (result.ok || (reread?.ok && opApplied(reread.value, op))) {
+      done.push(`${verb(op)} ${permissionLabel(op.permission)}`);
+      continue;
+    }
+    const saved = done.length > 0 ? ` Already saved: ${done.join("; ")}.` : "";
     return {
       ...result.error,
-      message: `Rule ${permissionLabel(op.permission)} was not ${verb}: ${result.error.message}`,
+      message: `Rule ${permissionLabel(op.permission)} was not ${verb(op)}: ${result.error.message}${saved}`,
     };
   }
   return null;

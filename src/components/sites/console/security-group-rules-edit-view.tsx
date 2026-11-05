@@ -89,7 +89,11 @@ function InboundRulesForm({ crumbs, group }: { crumbs: { label: string; href?: s
 
   const save = (confirmed: RuleChanges) =>
     action.run(
-      () => saveInboundRulesAction(group.id, confirmed),
+      async () => {
+        const failed = await saveInboundRulesAction(group.id, confirmed);
+        if (failed) router.refresh();
+        return failed;
+      },
       () => router.push(back),
     );
 

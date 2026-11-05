@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizeCidr,
+  permissionLabel,
   opApplied,
   parseIngressPermission,
   planRuleChanges,
@@ -108,5 +109,16 @@ describe("planRuleOps", () => {
     expect(opApplied([tcp(22)], { kind: "revoke", permission: tcp(80) })).toBe(true);
     expect(opApplied([tcp(22)], { kind: "authorize", permission: tcp(22) })).toBe(true);
     expect(opApplied([tcp(22)], { kind: "revoke", permission: tcp(22) })).toBe(false);
+  });
+});
+
+describe("permissionLabel", () => {
+  it("shows an ICMP type and code so a preview cannot hide a change to them", () => {
+    expect(permissionLabel({ ipProtocol: "icmp", fromPort: 3, toPort: 4, cidrIp: "10.0.0.0/8" })).toBe(
+      "ICMP 3-4 from 10.0.0.0/8",
+    );
+    expect(permissionLabel({ ipProtocol: "icmp", fromPort: 0, toPort: 0, cidrIp: "10.0.0.0/8" })).toBe(
+      "ICMP from 10.0.0.0/8",
+    );
   });
 });

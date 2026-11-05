@@ -12,12 +12,12 @@ const actions = vi.hoisted(() => ({
   deleteSecurityGroupsAction: vi.fn(),
   createSecurityGroupAction: vi.fn(),
 }));
-const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 
 vi.mock("@/app/actions/auth", () => ({ logoutAction: vi.fn() }));
 vi.mock("@/app/actions/resources", () => actions);
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push }),
+  useRouter: () => ({ refresh, push }),
   usePathname: () => "/network/security-groups",
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -61,6 +61,7 @@ describe("Edit inbound rules", () => {
     expect(within(preview).getByText("Rules to delete (1)")).toBeTruthy();
     expect(within(preview).getByText("TCP 22 from 0.0.0.0/0")).toBeTruthy();
     expect(within(preview).getByText("TCP 22 from 10.1.0.0/16")).toBeTruthy();
+    expect(within(preview).getByText("Rules to add (1)")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
     const dialog = screen.getByRole("dialog", { name: "Delete inbound rules" });
@@ -90,6 +91,48 @@ describe("Edit inbound rules", () => {
       remove: [],
       add: [{ ipProtocol: "tcp", fromPort: 443, toPort: 443, cidrIp: "0.0.0.0/0" }],
     });
+  });
+
+  it("keeps the ICMP type and code when only the source changes", async () => {
+    renderEdit();
+    fireEvent.change(screen.getByLabelText("Rule 2 source"), { target: { value: "192.168.0.0/16" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Delete and save" }));
+    });
+    expect(actions.saveInboundRulesAction).toHaveBeenCalledWith(GROUP_ID, {
+      remove: [{ ipProtocol: "icmp", fromPort: 3, toPort: 4, cidrIp: "10.0.0.0/8" }],
+      add: [{ ipProtocol: "icmp", fromPort: 3, toPort: 4, cidrIp: "192.168.0.0/16" }],
+    });
+  });
+
+  it("re-reads the group after a partial failure and previews against what the API now holds", async () => {
+    actions.saveInboundRulesAction.mockResolvedValue({
+      code: "ServiceUnavailable",
+      message: "Rule TCP 22 from 10.0.0.0/8 was not added: try later Already saved: deleted TCP 22 from 0.0.0.0/0.",
+      requestId: "r1",
+    });
+    const { rerender } = renderEdit();
+    fireEvent.change(screen.getByLabelText("Rule 1 source"), { target: { value: "10.0.0.0/8" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Delete and save" }));
+    });
+    expect(refresh).toHaveBeenCalled();
+    expect(screen.getByText(/Already saved: deleted TCP 22 from 0.0.0.0\/0/)).toBeTruthy();
+
+    const afterRevoke = { ...group, rules: group.rules.slice(1) };
+    rerender(
+      <ConsoleProvider>
+        <SecurityGroupRulesEditView id={GROUP_ID} direction="in" group={afterRevoke} loadError={null} />
+      </ConsoleProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Rule 1 source"), { target: { value: "0.0.0.0/0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview changes" }));
+    const preview = screen.getByRole("region", { name: "Preview changes" });
+    expect(within(preview).getByText("Rules to add (1)")).toBeTruthy();
+    expect(within(preview).getByText("TCP 22 from 0.0.0.0/0")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save rules" })).toBeEnabled();
   });
 
   it("refuses a rule that repeats another", () => {

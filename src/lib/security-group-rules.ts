@@ -148,7 +148,10 @@ export function opApplied(current: IngressPermission[], op: RuleOp): boolean {
 /** A short label for one stored rule, such as "TCP 22 from 10.0.0.0/16". */
 export function permissionLabel(permission: IngressPermission): string {
   if (permission.ipProtocol === "-1") return `All traffic from ${permission.cidrIp}`;
-  if (permission.ipProtocol === "icmp") return `ICMP from ${permission.cidrIp}`;
+  if (permission.ipProtocol === "icmp")
+    return permission.fromPort === 0 && permission.toPort === 0
+      ? `ICMP from ${permission.cidrIp}`
+      : `ICMP ${permission.fromPort}-${permission.toPort} from ${permission.cidrIp}`;
   const protocol = permission.ipProtocol.toUpperCase();
   const port =
     permission.fromPort === permission.toPort
