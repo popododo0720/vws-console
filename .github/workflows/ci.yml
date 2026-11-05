@@ -67,3 +67,13 @@ jobs:
 
       - name: E2E smoke
         run: npm run test:e2e
+
+      # The OTel e2e runs the pinned OpenTelemetry Collector that scripts/otelcol.sh downloads and checks by sha256.
+      - name: Cache the OpenTelemetry Collector
+        uses: actions/cache@v6
+        with:
+          path: .cache/otelcol
+          key: otelcol-contrib-0.164.0-linux-amd64
+
+      - name: E2E OpenTelemetry (real Collector)
+        run: npm run test:e2e:otel
