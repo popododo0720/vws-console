@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { METRICS_PATH, recordHttpRequest } from "@/lib/ops/metrics";
+import { withSpan } from "@/lib/ops/span";
 import { logAuth } from "@/lib/vws-api/log";
 import { iamState } from "@/lib/vws-api/mode";
 import { CSRF_COOKIE, SESSION_COOKIE } from "@/lib/vws-api/session-cookies";
@@ -15,34 +16,38 @@ export const OPS_PATHS: ReadonlySet<string> = new Set(["/healthz", "/readyz"]);
  * error keeps the cookies, so a link to /login?reason=expired cannot sign a working session out.
  */
 async function sessionRejected(base: string, session: string): Promise<boolean> {
-  const started = performance.now();
-  try {
-    // One attempt only: this runs before /login renders, and an unconfirmed session is kept anyway.
-    const reply = await apiFetch(
-      base,
-      route("/auth/session"),
-      { headers: { accept: "application/json", cookie: `${SESSION_COOKIE}=${session}` } },
-      { timeoutMs: SESSION_CHECK_TIMEOUT_MS, retry: false, iamMode: "on" },
-    );
-    const rejected = reply.status === 401;
-    logAuth({
-      event: "auth.expired_cookie_cleared",
-      outcome: rejected ? "success" : "skipped",
-      status: reply.status,
-      requestId: reply.requestId,
-      durationMs: performance.now() - started,
-    });
-    return rejected;
-  } catch {
-    logAuth({
-      event: "auth.expired_cookie_cleared",
-      outcome: "error",
-      status: null,
-      requestId: null,
-      durationMs: performance.now() - started,
-    });
-    return false;
-  }
+  return withSpan("vws.session_check", "internal", { "vws.iam_mode": "on" }, async (span) => {
+    const started = performance.now();
+    try {
+      // One attempt only: this runs before /login renders, and an unconfirmed session is kept anyway.
+      const reply = await apiFetch(
+        base,
+        route("/auth/session"),
+        { headers: { accept: "application/json", cookie: `${SESSION_COOKIE}=${session}` } },
+        { timeoutMs: SESSION_CHECK_TIMEOUT_MS, retry: false, iamMode: "on" },
+      );
+      const rejected = reply.status === 401;
+      span.set({ "vws.outcome": rejected ? "rejected" : "kept" });
+      logAuth({
+        event: "auth.expired_cookie_cleared",
+        outcome: rejected ? "success" : "skipped",
+        status: reply.status,
+        requestId: reply.requestId,
+        durationMs: performance.now() - started,
+      });
+      return rejected;
+    } catch {
+      span.set({ "vws.outcome": "unconfirmed" });
+      logAuth({
+        event: "auth.expired_cookie_cleared",
+        outcome: "error",
+        status: null,
+        requestId: null,
+        durationMs: performance.now() - started,
+      });
+      return false;
+    }
+  });
 }
 
 /**

@@ -6,6 +6,7 @@ import { currentSession } from "./session";
 import { logAuth } from "./log";
 import { iamMode, iamState, IamUnavailableError, noteLoginEnabled, type IamMode } from "./mode";
 import { recordOperationPoll } from "@/lib/ops/metrics";
+import { withSpan } from "@/lib/ops/span";
 import { objectKeyProblem } from "@/lib/object-upload";
 import type { CreateSnapshotInput, CreateVolumeInput } from "@/lib/ebs";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
@@ -863,6 +864,10 @@ export async function getSession(): Promise<ApiResult<SessionInfo>> {
  * there is no session, or it no longer answers. Pages still redirect through their own calls.
  */
 export async function signedInSession(): Promise<SessionInfo | null> {
+  return withSpan("vws.session", "internal", {}, readSignedInSession);
+}
+
+async function readSignedInSession(): Promise<SessionInfo | null> {
   const state = await iamState();
   if (state !== "on" && state !== "off") return null;
   const iam = state === "on";
