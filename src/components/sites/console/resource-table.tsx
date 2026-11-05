@@ -221,7 +221,7 @@ export function ResourceTable<T>({
                   >
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1"
+                      className="flex w-full items-center justify-between gap-2"
                       onClick={() => toggleSort(column.key)}
                     >
                       {column.header}
@@ -276,25 +276,18 @@ export function ResourceTable<T>({
           </table>
         </div>
         {filtered.length === 0 ? (
-          <div className="flex min-h-[150px] flex-1 flex-col items-center justify-center px-6 py-8 text-center">
+          <div className="flex flex-col items-center px-6 py-4 text-center">
             <p className="font-semibold">{rows.length === 0 ? emptyTitle : "No matches"}</p>
             <p className="mt-1 max-w-md text-[13px] text-[#5f6b7a]">
               {rows.length === 0 ? emptyMessage : "Nothing matches the current filter."}
             </p>
             {rows.length === 0 && emptyAction ? (
               emptyAction.href ? (
-                <Link
-                  href={emptyAction.href}
-                  className="mt-4 inline-flex h-8 items-center rounded-lg border border-[#c6c9ce] bg-white px-3 text-[13px] font-semibold text-[#16191f] hover:bg-[#f7f8f8]"
-                >
+                <Link href={emptyAction.href} className={emptyActionClass}>
                   {emptyAction.label}
                 </Link>
               ) : (
-                <button
-                  type="button"
-                  className="mt-4 inline-flex h-8 items-center rounded-lg border border-[#c6c9ce] bg-white px-3 text-[13px] font-semibold text-[#16191f] hover:bg-[#f7f8f8]"
-                  onClick={emptyAction.onClick}
-                >
+                <button type="button" className={emptyActionClass} onClick={emptyAction.onClick}>
                   {emptyAction.label}
                 </button>
               )
@@ -305,6 +298,9 @@ export function ResourceTable<T>({
     </div>
   );
 }
+
+const emptyActionClass =
+  "mt-2 inline-flex h-8 items-center rounded-full border-2 border-[#006ce0] bg-white px-5 text-[13px] font-bold text-[#006ce0] hover:bg-[#f2f8fd]";
 
 export function NameCell({ value, onRename }: { value: string; onRename?: (name: string) => void }) {
   const [editing, setEditing] = useState(false);

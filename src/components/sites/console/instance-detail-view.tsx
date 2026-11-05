@@ -1,5 +1,6 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
 import { computeNav } from "@/lib/console-data";
@@ -85,9 +86,18 @@ export function InstanceDetailView({
           { label: "Instances", href: "/compute/instances" },
           { label },
         ]}
+        title={`Instance summary for ${label}`}
         info="A single instance in the current region, read from the VWS API."
         actions={
           <>
+            <button
+              type="button"
+              aria-label="Refresh instance"
+              className="grid size-8 place-items-center rounded-full border border-[#006ce0] text-[#006ce0] hover:bg-[#f2f8fd]"
+              onClick={action.refresh}
+            >
+              <RefreshCw className="size-3.5" />
+            </button>
             <OutlineButton>Connect</OutlineButton>
             <MenuButton
               className={blueMenuTriggerClass()}
@@ -179,7 +189,6 @@ export function InstanceDetailView({
       </PanelDialog>
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-6">
         <section className="rounded-lg border border-[#d5dbdb] p-4">
-          <h2 className="mb-3 text-[16px] font-bold">Instance summary</h2>
           <InstanceDetails instance={instance} />
         </section>
         <div className="mt-4 flex gap-4 overflow-x-auto border-b border-[#e6e8eb] text-[13px]">
