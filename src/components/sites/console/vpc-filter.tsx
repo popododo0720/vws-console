@@ -7,7 +7,7 @@ export function VpcFilter({
   value,
   onChange,
 }: {
-  vpcs: Pick<Vpc, "id" | "name">[];
+  vpcs: readonly Pick<Vpc, "id" | "name">[];
   value: string;
   onChange: (vpcId: string) => void;
 }) {
