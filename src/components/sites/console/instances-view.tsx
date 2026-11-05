@@ -1,7 +1,7 @@
 "use client";
 
 import { copyToClipboard } from "@/lib/clipboard";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { CircleCheck, ExternalLink, RefreshCw } from "lucide-react";
 import type { Instance } from "@/types/console";
@@ -47,6 +47,8 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
   const [dock, setDock] = useState(300);
   const [connectOpen, setConnectOpen] = useState(false);
   const [panel, setPanel] = useState("details");
+  const [loads, setLoads] = useState({ instances, count: 0 });
+  if (loads.instances !== instances) setLoads({ instances, count: loads.count + 1 });
   const selected = instances.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
 
@@ -150,11 +152,7 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
         info="Instances are virtual machines in the current region, read from the VWS API."
         actions={
           <>
-            <span className="text-right text-[12px] leading-4 text-[#5f6b7a]">
-              Last updated
-              <br />
-              less than a minute ago
-            </span>
+            <LastUpdated key={loads.count} />
             <button
               type="button"
               aria-label="Refresh instances"
@@ -288,16 +286,16 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
         ) : (
           <div className="grid gap-5 lg:grid-cols-3">
             <StatusCard title="Instance alarm states" link="View in CloudWatch">
-              <StatusFact label="In alarm" value="None" />
+              <StatusFact label="In alarm" value={loadError ? null : "None"} />
             </StatusCard>
             <StatusCard title="Service health" link="View Service Health Dashboard">
-              <StatusFact label="EC2 service status" value="Operating normally" />
+              <StatusFact label="EC2 service status" value={loadError ? null : "Operating normally"} />
             </StatusCard>
             <StatusCard title="Health events affecting EC2 instances" link="View VWS Health Dashboard">
               <div className="grid grid-cols-2 divide-x divide-[#e6e8eb]">
-                <StatusFact label="Open events" value="None" />
+                <StatusFact label="Open events" value={loadError ? null : "None"} />
                 <div className="pl-5">
-                  <StatusFact label="Upcoming events" value="None" />
+                  <StatusFact label="Upcoming events" value={loadError ? null : "None"} />
                 </div>
               </div>
             </StatusCard>
@@ -334,14 +332,42 @@ function StatusCard({ title, link, children }: { title: string; link: string; ch
   );
 }
 
-function StatusFact({ label, value }: { label: string; value: string }) {
+function StatusFact({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="text-[13px]">
       <p className="font-semibold">{label}</p>
-      <p className="flex items-center gap-1 text-[#037f0c]">
-        <CircleCheck className="size-3.5" />
-        {value}
-      </p>
+      {value ? (
+        <p className="flex items-center gap-1 text-[#037f0c]">
+          <CircleCheck className="size-3.5" />
+          {value}
+        </p>
+      ) : (
+        <p className="text-[#5f6b7a]">Unavailable</p>
+      )}
     </div>
+  );
+}
+
+export function elapsedLabel(ms: number) {
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return "less than a minute ago";
+  if (minutes < 60) return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+  const hours = Math.floor(minutes / 60);
+  return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+}
+
+function LastUpdated() {
+  const [loadedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(loadedAt);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return (
+    <span className="text-right text-[12px] leading-4 text-[#5f6b7a]">
+      Last updated
+      <br />
+      {elapsedLabel(now - loadedAt)}
+    </span>
   );
 }

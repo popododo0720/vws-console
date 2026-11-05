@@ -1,7 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
-import { InstancesView } from "@/components/sites/console/instances-view";
+import { InstancesView, elapsedLabel } from "@/components/sites/console/instances-view";
 
 vi.mock("@/app/actions/auth", () => ({ logoutAction: vi.fn() }));
 vi.mock("@/app/actions/resources", () => ({
@@ -65,5 +65,46 @@ describe("InstancesView parity", () => {
     const events = screen.getByRole("heading", { name: "Health events affecting EC2 instances" }).closest("article");
     expect(events?.textContent).toContain("Open events");
     expect(events?.textContent).toContain("Upcoming events");
+  });
+
+  it("ages Last updated and resets it when new data arrives", () => {
+    vi.useFakeTimers();
+    try {
+      const view = render(
+        <ConsoleProvider>
+          <InstancesView instances={[]} loadError={null} />
+        </ConsoleProvider>,
+      );
+      act(() => vi.advanceTimersByTime(10 * 60_000));
+      expect(screen.getByText(/Last updated/).textContent).toContain("10 minutes ago");
+      view.rerender(
+        <ConsoleProvider>
+          <InstancesView instances={[]} loadError={null} />
+        </ConsoleProvider>,
+      );
+      expect(screen.getByText(/Last updated/).textContent).toContain("less than a minute ago");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("formats elapsed time in minutes and hours", () => {
+    expect(elapsedLabel(59_999)).toBe("less than a minute ago");
+    expect(elapsedLabel(60_000)).toBe("1 minute ago");
+    expect(elapsedLabel(3 * 3_600_000)).toBe("3 hours ago");
+  });
+
+  it("does not report healthy status when instances fail to load", () => {
+    render(
+      <ConsoleProvider>
+        <InstancesView
+          instances={[]}
+          loadError={{ code: "ServiceUnavailable", message: "Backend unavailable", requestId: "req-1" }}
+        />
+      </ConsoleProvider>,
+    );
+    expect(screen.queryByText("Operating normally")).toBeNull();
+    expect(screen.queryByText("None")).toBeNull();
+    expect(screen.getAllByText("Unavailable")).toHaveLength(4);
   });
 });
