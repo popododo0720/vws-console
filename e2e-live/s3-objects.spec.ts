@@ -90,6 +90,11 @@ test("uploads with per-file status, opens the object, downloads the same bytes a
     await page.getByRole("dialog").getByRole("button", { name: "Delete objects" }).click();
     await expect(page).toHaveURL(new RegExp(`/storage/buckets/${bucket}$`));
 
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`/storage/buckets/${bucket}/object\\?prefix=docs%2Fdata\\.bin$`));
+    await expect(page.getByText("Object not found")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Object overview" })).toHaveCount(0);
+
     await page.goto(objectPage);
     await expect(page.getByText("Object not found")).toBeVisible();
     await expect(page.getByText(`${key} is not in ${bucket}.`)).toBeVisible();
@@ -100,6 +105,35 @@ test("uploads with per-file status, opens the object, downloads the same bytes a
     expect((await gone.json()).error.code).toBe("NoSuchKey");
   } finally {
     await request.delete(`${api}/buckets/${bucket}`, { headers: { authorization: "Bearer dev-token" } });
+  }
+});
+
+test("opens and downloads an object at the 4 MiB upload limit", async ({ page, request }) => {
+  const bucket = `e2e-max-${Date.now().toString(36)}`;
+  const largest = Buffer.from(Uint8Array.from({ length: MAX_OBJECT_BYTES }, (_, index) => index % 251));
+  const headers = { authorization: "Bearer dev-token" };
+  try {
+    expect((await request.put(`${api}/buckets/${bucket}`, { headers })).ok()).toBe(true);
+    await page.goto(`/storage/buckets/${bucket}/upload`);
+    const row = page.getByRole("row").filter({ hasText: "max.bin" });
+    await expect(async () => {
+      await page
+        .getByLabel("Add files")
+        .setInputFiles([{ name: "max.bin", mimeType: "application/octet-stream", buffer: largest }]);
+      await expect(row).toContainText("Pending", { timeout: 1_000 });
+    }).toPass();
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
+    await expect(row).toContainText("Succeeded");
+
+    await page.getByRole("link", { name: "max.bin" }).click();
+    await expect(page.getByRole("heading", { name: "Object overview" })).toBeVisible();
+    await expect(field(page, "Size")).toHaveText("4.0 MB");
+    const saved = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download", exact: true }).click();
+    expect((await readFile((await (await saved).path())!)).equals(largest)).toBe(true);
+  } finally {
+    await request.delete(`${api}/buckets/${bucket}/objects/max.bin`, { headers });
+    await request.delete(`${api}/buckets/${bucket}`, { headers });
   }
 });
 

@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const nav = vi.hoisted(() => ({
   session: { session: "sess-1", csrf: "csrf-1" } as { session: string; csrf: string } | null,
+  revalidated: [] as string[],
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: (path: string, type: string) => nav.revalidated.push(`${type} ${path}`),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -189,9 +194,25 @@ describe("bucket actions", () => {
       new Response(null, { status: 204 }),
       respond(404, { error: { code: "NotFound", kind: "object", message: "missing" } }),
     );
+    nav.revalidated = [];
     expect(await deleteObjectAction("logs-1", "notes.txt")).toBeNull();
     expect(await deleteObjectAction("logs-1", "notes.txt")).toBeNull();
     expect(calls.map((call) => call.init.method)).toEqual(["DELETE", "DELETE"]);
+    expect(nav.revalidated).toEqual(["page /storage/buckets/[name]/object", "page /storage/buckets/[name]/object"]);
+  });
+
+  it("drops cached object pages only after a delete or upload succeeds", async () => {
+    nav.revalidated = [];
+    serve(
+      respond(404, { error: { code: "NotFound", kind: "bucket", message: "missing" } }),
+      respond(404, { error: { code: "NotFound", kind: "bucket", message: "missing" } }),
+    );
+    expect(await deleteObjectAction("logs-1", "a.txt")).toMatchObject({ code: "NoSuchBucket" });
+    const form = new FormData();
+    form.set("key", "a.txt");
+    form.set("file", new File(["x"], "a.txt"));
+    expect(await uploadObjectAction("logs-1", form)).toMatchObject({ code: "NoSuchBucket" });
+    expect(nav.revalidated).toEqual([]);
   });
 
   it("uploads a file and refuses a key or a body the API will not store", async () => {

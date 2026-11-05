@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import * as vws from "@/lib/vws-api/client";
 import { fileProblem, objectKeyProblem } from "@/lib/object-upload";
 import {
@@ -22,6 +23,9 @@ async function each(ids: string[], run: (id: string) => Promise<ApiResult<void>>
   }
   return null;
 }
+
+/** The object page, so Back after a delete or an overwrite does not show the old object from the client cache. */
+const OBJECT_PAGE = "/storage/buckets/[name]/object";
 
 const errorOf = async (pending: Promise<ApiResult<void>>) => {
   const result = await pending;
@@ -132,7 +136,9 @@ export async function uploadObjectAction(rawBucket: string, formData: FormData):
   if (tooLarge) return tooLarge;
   const bytes = new Uint8Array(await file.arrayBuffer());
   const result = await vws.putObject(bucket, key, bytes, file.type || "application/octet-stream");
-  return result.ok ? null : result.error;
+  if (!result.ok) return result.error;
+  revalidatePath(OBJECT_PAGE, "page");
+  return null;
 }
 
 /** Looks up one object for the Objects tab. A missing key is null, and the bytes never leave the server. */
@@ -145,7 +151,9 @@ export async function getObjectAction(rawBucket: string, key: string): Promise<A
 export async function deleteObjectAction(rawBucket: string, key: string): Promise<ApiError | null> {
   const bucket = parseStoredBucketName(rawBucket);
   if (!bucket) return INVALID_BUCKET_NAME;
-  return errorOf(vws.deleteObject(bucket, key));
+  const error = await errorOf(vws.deleteObject(bucket, key));
+  if (!error) revalidatePath(OBJECT_PAGE, "page");
+  return error;
 }
 
 export async function createSnapshotAction(volumeId: string, description: string) {
