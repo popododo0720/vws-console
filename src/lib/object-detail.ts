@@ -11,7 +11,7 @@ function keyQuery(key: string): string {
   return new URLSearchParams({ prefix: key }).toString();
 }
 
-/** The key rides in `?prefix=`, as in the AWS console: keys may hold `//`, `%` and 1024 characters that a path segment would not keep. */
+/** The key rides in `?prefix=`, as in the AWS console, because a path segment would not keep `//` or `%` in a key. */
 export function objectPageHref(bucket: BucketName, key: string): string {
   return `${bucketBase(bucket)}/object?${keyQuery(key)}`;
 }
@@ -28,14 +28,12 @@ export function s3Uri(bucket: BucketName, key: string): string {
   return `s3://${bucket}/${key}`;
 }
 
-/** The extension of the last segment, or "—" when it has none. */
 export function objectType(key: string): string {
   const name = objectFileName(key);
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(dot + 1) : "—";
 }
 
-/** The last non-empty segment of the key, so a save never carries a path. */
 export function objectFileName(key: string): string {
   const last = key.split("/").filter((part) => part !== "" && part !== "." && part !== "..");
   return last.at(-1) ?? FALLBACK_FILE_NAME;
@@ -49,7 +47,7 @@ function encodeExtValue(text: string): string {
   return encodeURIComponent(text).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
-/** `attachment` with an ASCII `filename` for old clients and the full name in `filename*`. Neither form can carry a quote, CR or LF. */
+/** The ASCII `filename` is for old clients; neither form can carry a quote, CR or LF. */
 export function contentDisposition(key: string): string {
   const name = objectFileName(key).replace(LONE_SURROGATE, "\uFFFD").replace(CONTROL, "_");
   const ascii = name.replace(/[^\x20-\x7e]|["\\%]/g, "_");
