@@ -43,6 +43,7 @@ const subnet: Subnet = {
   availabilityZone: "vws-1a",
   routeTableId: "rtb-1",
   autoAssignPublicIp: null,
+  blockPublicAccess: "",
   region: "vws-1",
   tags: {},
 };
