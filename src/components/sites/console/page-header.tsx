@@ -60,7 +60,12 @@ export function PageHeader({
         <div className="flex min-w-0 items-center gap-2">
           <h1 className="text-[20px] font-bold leading-7">
             {title}
-            {count === undefined ? null : <span className="font-normal text-[#5f6b7a]"> ({count})</span>}
+            {count === undefined ? null : (
+              <>
+                {" "}
+                <span className="font-normal text-[#5f6b7a]">({count})</span>
+              </>
+            )}
           </h1>
           {info ? <InfoTip text={info} /> : null}
         </div>
