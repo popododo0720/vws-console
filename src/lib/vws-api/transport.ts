@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { recordApiCall, statusOutcome } from "@/lib/ops/metrics";
+import type { IamState } from "./mode";
+import type { ApiRoute } from "./route";
 
 /** Per-attempt deadline for a console-api call, overridable with VWS_CONSOLE_API_TIMEOUT_MS. */
 export const DEFAULT_TIMEOUT_MS = 10_000;
@@ -16,6 +18,8 @@ export type ApiFetchOptions = {
   timeoutMs?: number;
   /** Set false to send a GET only once (for example on a latency-sensitive path). Non-GET is never retried. */
   retry?: boolean;
+  /** The IAM mode the caller already resolved, for the span; mode.ts passes "unknown" while it detects. */
+  iamMode?: IamState;
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
 };
@@ -48,7 +52,13 @@ const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(r
  * POST (writes, sign-in, sign-out) is sent exactly once: a retry could repeat a change or count
  * against the sign-in lockout.
  */
-export async function apiFetch(url: string, init: RequestInit, options: ApiFetchOptions = {}): Promise<ApiReply> {
+export async function apiFetch(
+  base: string,
+  route: ApiRoute,
+  init: RequestInit,
+  options: ApiFetchOptions = {},
+): Promise<ApiReply> {
+  const url = `${base.replace(/\/+$/, "")}/api/v1${route.path}`;
   const method = (init.method ?? "GET").toUpperCase();
   const attempts = method === "GET" && options.retry !== false ? GET_ATTEMPTS : 1;
   const sleep = options.sleep ?? defaultSleep;

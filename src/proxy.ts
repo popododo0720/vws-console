@@ -3,6 +3,7 @@ import { METRICS_PATH, recordHttpRequest } from "@/lib/ops/metrics";
 import { logAuth } from "@/lib/vws-api/log";
 import { iamState } from "@/lib/vws-api/mode";
 import { CSRF_COOKIE, SESSION_COOKIE } from "@/lib/vws-api/session-cookies";
+import { route } from "@/lib/vws-api/route";
 import { apiFetch } from "@/lib/vws-api/transport";
 
 const SESSION_CHECK_TIMEOUT_MS = 3_000;
@@ -18,9 +19,10 @@ async function sessionRejected(base: string, session: string): Promise<boolean> 
   try {
     // One attempt only: this runs before /login renders, and an unconfirmed session is kept anyway.
     const reply = await apiFetch(
-      `${base.replace(/\/+$/, "")}/api/v1/auth/session`,
+      base,
+      route("/auth/session"),
       { headers: { accept: "application/json", cookie: `${SESSION_COOKIE}=${session}` } },
-      { timeoutMs: SESSION_CHECK_TIMEOUT_MS, retry: false },
+      { timeoutMs: SESSION_CHECK_TIMEOUT_MS, retry: false, iamMode: "on" },
     );
     const rejected = reply.status === 401;
     logAuth({

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { route } from "./route";
 import { apiFetch, ApiTransportError, backoffMs, DEFAULT_TIMEOUT_MS, GET_ATTEMPTS, timeoutMs } from "./transport";
 
 afterEach(() => {
@@ -28,7 +29,8 @@ describe("apiFetch", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     const error = await apiFetch(
-      "http://api.test/x",
+      "http://api.test",
+      route("/vpcs"),
       {},
       { timeoutMs: 5, sleep: async (ms) => void sleeps.push(ms), random: () => 0.5 },
     ).catch((e) => e);
@@ -42,8 +44,12 @@ describe("apiFetch", () => {
   it("sends a POST once and a GET once when retry is off", async () => {
     const fetchMock = vi.fn(async () => new Response("", { status: 503 }));
     vi.stubGlobal("fetch", fetchMock);
-    expect((await apiFetch("http://api.test/x", { method: "POST" }, { sleep: async () => {} })).status).toBe(503);
-    expect((await apiFetch("http://api.test/x", {}, { retry: false, sleep: async () => {} })).status).toBe(503);
+    expect(
+      (await apiFetch("http://api.test", route("/vpcs"), { method: "POST" }, { sleep: async () => {} })).status,
+    ).toBe(503);
+    expect(
+      (await apiFetch("http://api.test", route("/vpcs"), {}, { retry: false, sleep: async () => {} })).status,
+    ).toBe(503);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
