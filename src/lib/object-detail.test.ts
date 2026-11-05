@@ -6,6 +6,7 @@ import {
   objectDownloadHref,
   objectFileName,
   objectPageHref,
+  objectType,
   objectResponseHeaders,
   parseObjectTarget,
   s3Uri,
@@ -61,6 +62,16 @@ describe("objectFileName", () => {
     expect(objectFileName("..")).toBe("download");
     expect(objectFileName("/")).toBe("download");
     expect(objectFileName(".")).toBe("download");
+  });
+});
+
+describe("objectType", () => {
+  it("is the extension of the file name", () => {
+    expect(objectType("docs/notes.txt")).toBe("txt");
+    expect(objectType("a.tar.gz")).toBe("gz");
+    expect(objectType("README")).toBe("—");
+    expect(objectType(".env")).toBe("—");
+    expect(objectType("dir.d/file")).toBe("—");
   });
 });
 

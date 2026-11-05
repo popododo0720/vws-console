@@ -28,6 +28,13 @@ export function s3Uri(bucket: BucketName, key: string): string {
   return `s3://${bucket}/${key}`;
 }
 
+/** The extension of the last segment, or "—" when it has none. */
+export function objectType(key: string): string {
+  const name = objectFileName(key);
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot + 1) : "—";
+}
+
 /** The last non-empty segment of the key, so a save never carries a path. */
 export function objectFileName(key: string): string {
   const last = key.split("/").filter((part) => part !== "" && part !== "." && part !== "..");

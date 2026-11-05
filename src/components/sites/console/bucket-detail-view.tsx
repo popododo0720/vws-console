@@ -7,7 +7,7 @@ import { deleteObjectAction, getObjectAction } from "@/app/actions/resources";
 import type { AccountBucket, ApiError, BucketName, StoredObject } from "@/lib/vws-api/adapter";
 import { copyToClipboard } from "@/lib/clipboard";
 import { download } from "@/lib/download";
-import { objectDownloadHref, objectFileName, objectPageHref, s3Uri } from "@/lib/object-detail";
+import { objectDownloadHref, objectFileName, objectPageHref, objectType, s3Uri } from "@/lib/object-detail";
 import { formatBucketCreationDate } from "@/lib/bucket-display";
 import { storageNav } from "@/lib/console-data";
 import { ApiErrorAlert } from "@/components/sites/console/api-action";
@@ -134,12 +134,6 @@ export function BucketDetailView({
 }
 
 const DELETE_WORD = "permanently delete";
-
-function objectType(key: string): string {
-  const name = key.split("/").pop() ?? key;
-  const dot = name.lastIndexOf(".");
-  return dot > 0 ? name.slice(dot + 1) : "—";
-}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes.toFixed(1)} B`;
