@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import {
   nextPageToken,
@@ -10,6 +11,7 @@ import {
   parseKeyPairs,
   parseOperation,
   parseSubnets,
+  toObjectContent,
   parseVolumes,
   parseVpcs,
   parseAddresses,
@@ -475,5 +477,24 @@ describe("account buckets", () => {
       ownerId: "1",
       created: "2026-08-02T00:00:00Z",
     });
+  });
+});
+
+describe("object content", () => {
+  const bucket = parseStoredBucketName("logs-1")!;
+  const reply = (body: string, size: number) => ({ bucket: "logs-1", key: "a.bin", size, body });
+
+  it("decodes a body at the 4 MiB upload limit", () => {
+    const bytes = new Uint8Array(4 * 1024 * 1024).map((_, index) => index % 251);
+    const body = Buffer.from(bytes).toString("base64");
+    const decoded = toObjectContent(reply(body, bytes.length), bucket, "a.bin").bytes;
+    expect(Buffer.from(decoded).equals(Buffer.from(bytes))).toBe(true);
+  });
+
+  it("refuses base64 with bad length, inner padding or foreign characters", () => {
+    for (const body of ["QQ", "QQ=A", "QUJD=QQ==", "QUJ-", "QQ==="]) {
+      expect(() => toObjectContent(reply(body, 1), bucket, "a.bin"), body).toThrow();
+    }
+    expect(toObjectContent(reply("QQ==", 1), bucket, "a.bin").bytes).toEqual(new Uint8Array([65]));
   });
 });

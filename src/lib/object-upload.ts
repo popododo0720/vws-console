@@ -1,3 +1,5 @@
+import type { ApiError } from "@/lib/vws-api/adapter";
+
 export const MAX_OBJECT_BYTES = 4 * 1024 * 1024;
 const MULTIPART_FRAMING_BYTES = 64 * 1024;
 export const SERVER_ACTION_BODY_LIMIT_BYTES = MAX_OBJECT_BYTES + MULTIPART_FRAMING_BYTES;
@@ -14,4 +16,14 @@ export function objectKeyProblem(key: string): string | null {
     return "Object keys cannot contain . or .. segments.";
   }
   return null;
+}
+
+const OBJECT_TOO_LARGE: ApiError = {
+  code: "InvalidArgument",
+  message: "Objects larger than 4 MiB cannot be uploaded.",
+  requestId: null,
+};
+
+export function fileProblem(file: { size: number }): ApiError | null {
+  return file.size > MAX_OBJECT_BYTES ? OBJECT_TOO_LARGE : null;
 }

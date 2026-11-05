@@ -26,6 +26,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/actions/auth", () => ({ logoutAction: vi.fn() }));
 const actions = vi.hoisted(() => ({ getObjectAction: vi.fn(), deleteObjectAction: vi.fn() }));
 vi.mock("@/app/actions/resources", () => actions);
+const downloads = vi.hoisted(() => ({ download: vi.fn() }));
+vi.mock("@/lib/download", () => downloads);
 
 const notes = {
   bucket: "logs-1",
@@ -34,7 +36,6 @@ const notes = {
   contentType: "text/plain",
   lastModified: "2026-08-02T00:00:00Z",
   etag: "e1",
-  bytes: new Uint8Array([104, 105]),
 };
 
 function renderDetail() {
@@ -62,6 +63,8 @@ describe("BucketDetailView", () => {
     nav.search = "";
     actions.getObjectAction.mockReset();
     actions.deleteObjectAction.mockReset();
+    downloads.download.mockReset();
+    downloads.download.mockResolvedValue(null);
   });
 
   it("opens an API bucket and does not list session objects", () => {
@@ -127,27 +130,43 @@ describe("BucketDetailView", () => {
     expect(screen.getByText(/NoSuchBucket/)).toBeTruthy();
   });
 
-  it("downloads the selected object with its key's file name", async () => {
+  it("links the row to the object page with the key in the query", async () => {
+    actions.getObjectAction.mockResolvedValue({ ok: true, value: { ...notes, key: "docs/a b#c.txt" } });
+    renderDetail();
+    find("docs/a b#c.txt");
+    const link = await screen.findByRole("link", { name: "docs/a b#c.txt" });
+    expect(link).toHaveAttribute("href", "/storage/buckets/logs-1/object?prefix=docs%2Fa+b%23c.txt");
+  });
+
+  it("downloads the selected object through the download route with its key's file name", async () => {
     actions.getObjectAction.mockResolvedValue({ ok: true, value: notes });
-    const created: Blob[] = [];
-    const clicked: string[] = [];
-    URL.createObjectURL = vi.fn((blob: Blob) => {
-      created.push(blob);
-      return "blob:x";
-    });
-    URL.revokeObjectURL = vi.fn();
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
-      clicked.push(this.download);
-    });
     renderDetail();
     find("docs/notes.txt");
     await waitFor(() => expect(screen.getByRole("checkbox", { name: "Select docs/notes.txt" })).toBeTruthy());
     fireEvent.click(screen.getByRole("checkbox", { name: "Select docs/notes.txt" }));
     fireEvent.click(screen.getByRole("button", { name: "Download" }));
-    expect(clicked).toEqual(["notes.txt"]);
-    expect(created[0].type).toBe("text/plain");
-    expect(new Uint8Array(await created[0].arrayBuffer())).toEqual(new Uint8Array([104, 105]));
-    click.mockRestore();
+    await waitFor(() => expect(downloads.download).toHaveBeenCalledTimes(1));
+    expect(downloads.download).toHaveBeenCalledWith(
+      "/storage/buckets/logs-1/object/download?prefix=docs%2Fnotes.txt",
+      "notes.txt",
+    );
+  });
+
+  it("shows a failed download and ignores a second click while one is running", async () => {
+    actions.getObjectAction.mockResolvedValue({ ok: true, value: notes });
+    let finish!: (value: unknown) => void;
+    downloads.download.mockReturnValueOnce(new Promise((done) => (finish = done)));
+    renderDetail();
+    find("docs/notes.txt");
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "Select docs/notes.txt" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select docs/notes.txt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Download" }));
+    expect(screen.getByRole("button", { name: "Download" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Download" }));
+    finish({ code: "NoSuchKey", message: "The specified key does not exist.", requestId: "r-2" });
+    await waitFor(() => expect(screen.getByText("The specified key does not exist.")).toBeTruthy());
+    expect(downloads.download).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Download" })).toBeEnabled();
   });
 
   it("deletes the selected object after typing permanently delete", async () => {
