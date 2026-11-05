@@ -51,8 +51,16 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      # The sentinel endpoint is only seen at build time; the scan fails if it or any exporter code reaches .next/static.
       - name: Build
+        env:
+          OTEL_EXPORTER_OTLP_ENDPOINT: http://otlp-endpoint-sentinel.invalid:4318
         run: npm run build
+
+      - name: Client bundle scan
+        run: |
+          bash scripts/check-client-bundle_test.sh
+          bash scripts/check-client-bundle.sh .next/static http://otlp-endpoint-sentinel.invalid:4318
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
