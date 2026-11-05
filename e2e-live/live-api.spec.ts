@@ -132,7 +132,7 @@ test("lists a seeded instance by its Name tag and stops it", async ({ page, requ
 const consoleApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
 const apiHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
 
-test("creates a security group with an inbound rule, adds a rule and deletes it", async ({ page, request }) => {
+test("creates a security group, edits its inbound rules, copies it and deletes both", async ({ page, request }) => {
   const vpc = await (
     await request.post(`${consoleApi()}/vpcs`, {
       headers: apiHeaders("sg-seed-vpc"),
@@ -156,19 +156,77 @@ test("creates a security group with an inbound rule, adds a rule and deletes it"
   await expect(page.getByRole("cell", { name: "22", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Outbound rules (—)" }).click();
   await expect(page.getByText("The VWS API does not report outbound rules yet.")).toBeVisible();
+  await page.getByRole("button", { name: "Tags", exact: true }).click();
+  await expect(page.getByText("The VWS API does not report security group tags yet.")).toBeVisible();
 
-  await page.goto(`/network/security-groups/${groupId}/edit/inbound`);
+  await page.getByRole("button", { name: "Inbound rules (1)" }).click();
+  await page.getByRole("button", { name: "Edit inbound rules" }).click();
+  await expect(page).toHaveURL(new RegExp(`/network/security-groups/${groupId}/edit/inbound$`));
+  await expect(page.getByRole("button", { name: "Save rules" })).toBeDisabled();
+  await page.getByLabel("Rule 1 source").fill("10.88.1.9/16");
   await page.getByRole("button", { name: "Add rule", exact: true }).click();
-  await page.locator("tbody").last().locator("select").first().selectOption({ label: "HTTPS" });
-  await page.getByRole("button", { name: "Add rules" }).click();
+  await page.getByLabel("Rule 2 type").selectOption({ label: "HTTPS" });
+  await page.getByRole("button", { name: "Preview changes" }).click();
+  const preview = page.getByRole("region", { name: "Preview changes" });
+  await expect(preview).toContainText("Rules to delete (1)");
+  await expect(preview).toContainText("TCP 22 from 0.0.0.0/0");
+  await expect(preview).toContainText("Rules to add (2)");
+  await expect(preview).toContainText("TCP 22 from 10.88.0.0/16");
+
+  await page.getByRole("button", { name: "Save rules" }).click();
+  const confirm = page.getByRole("dialog", { name: "Delete inbound rules" });
+  await expect(confirm).toContainText("TCP 22 from 0.0.0.0/0");
+  await confirm.getByRole("button", { name: "Delete and save" }).click();
   await expect(page).toHaveURL(new RegExp(`/network/security-groups/${groupId}$`));
   await expect(page.getByText("Inbound rules (2)")).toBeVisible();
-  await expect(page.getByRole("cell", { name: "443", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "10.88.0.0/16" }).first()).toBeVisible();
+  await expect(page.getByRole("cell", { name: "0.0.0.0/0", exact: true })).toHaveCount(1);
 
+  const stored = await (await request.get(`${consoleApi()}/security-groups`, { headers: apiHeaders("x") })).json();
+  const rules = stored.items.find((item: { groupId: string }) => item.groupId === groupId).ipPermissions;
+  expect(rules).toEqual(
+    expect.arrayContaining([
+      { ipProtocol: "tcp", fromPort: 22, toPort: 22, cidrIp: "10.88.0.0/16" },
+      { ipProtocol: "tcp", fromPort: 443, toPort: 443, cidrIp: "0.0.0.0/0" },
+    ]),
+  );
+  expect(rules).toHaveLength(2);
+
+  await page.goto(`/network/security-groups/${groupId}/edit/inbound`);
+  await expect(page.getByRole("button", { name: "Save rules" })).toBeDisabled();
+
+  await page.goto(`/network/security-groups/${groupId}`);
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Copy to new security group" }).click();
+  await expect(page).toHaveURL(new RegExp(`/network/security-groups/create\\?copy=${groupId}$`));
+  await expect(page.getByRole("status")).toContainText(groupId);
+  await expect(page.getByLabel("Rule 1 source")).toHaveValue("10.88.0.0/16");
+  await page.locator("input.field").first().fill("e2e-web-copy");
+  await page.getByRole("button", { name: "Create security group" }).click();
+  await expect(page).toHaveURL(/\/network\/security-groups$/);
+  const copyRow = page.getByRole("row").filter({ hasText: "e2e-web-copy" });
+  await expect(copyRow).toContainText(vpcId);
+  await expect(copyRow).toContainText("2");
+  const copyId = (await copyRow.getByText(/^sg-/).first().textContent())!.trim();
+
+  await page.goto(`/network/security-groups/${groupId}`);
   await page.getByRole("button", { name: /^Actions/ }).click();
   await page.getByRole("menuitem", { name: "Delete security groups" }).click();
+  const remove = page.getByRole("dialog", { name: "Delete security groups" });
+  await expect(remove).toContainText(groupId);
+  await remove.getByRole("button", { name: "Cancel" }).click();
+  await expect(page).toHaveURL(new RegExp(`/network/security-groups/${groupId}$`));
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Delete security groups" }).click();
+  await remove.getByRole("button", { name: "Delete" }).click();
   await expect(page).toHaveURL(/\/network\/security-groups$/);
   await expect(page.getByRole("row").filter({ hasText: groupId })).toHaveCount(0);
+
+  await page.getByRole("row").filter({ hasText: copyId }).getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Delete security groups" }).click();
+  await remove.getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByRole("row").filter({ hasText: copyId })).toHaveCount(0);
 });
 
 test("allocates, associates, disassociates and releases an Elastic IP address", async ({ page, request }) => {

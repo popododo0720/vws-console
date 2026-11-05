@@ -1,6 +1,8 @@
 import { parseKeyPairId, parseKeyPairName, type KeyPairChoice, type StoredKeyPair } from "@/lib/key-pair";
+import { normalizeCidr } from "@/lib/security-group-rules";
 import type {
   ElasticIp,
+  IngressPermission,
   Instance,
   InstanceState,
   SecurityGroup,
@@ -293,7 +295,7 @@ function num(value: unknown): number | null {
 
 const protocolLabels: Record<string, string> = { "-1": "All", tcp: "TCP", udp: "UDP", icmp: "ICMP" };
 
-/** console-api reports ingress rules only, without rule IDs or descriptions. */
+/** console-api reports ingress rules only, without rule IDs or descriptions. The stored values are kept for revoke. */
 export function toIngressRule(item: Json): SecurityGroupRule {
   const protocol = str(item.ipProtocol);
   const label = protocolLabels[protocol] ?? protocol.toUpperCase();
@@ -305,7 +307,8 @@ export function toIngressRule(item: Json): SecurityGroupRule {
       : from === to || to === null
         ? String(from)
         : `${from}-${to}`;
-  return { id: "", direction: "in", protocol: label, port, source: str(item.cidrIp), description: "" };
+  const permission = { ipProtocol: protocol, fromPort: from ?? 0, toPort: to ?? from ?? 0, cidrIp: str(item.cidrIp) };
+  return { id: "", direction: "in", protocol: label, port, source: permission.cidrIp, description: "", permission };
 }
 
 export function toSecurityGroup(item: Json): SecurityGroup {
@@ -321,8 +324,6 @@ export function toSecurityGroup(item: Json): SecurityGroup {
     rules: permissions.map(toIngressRule),
   };
 }
-
-export type IngressPermission = { ipProtocol: string; fromPort: number; toPort: number; cidrIp: string };
 
 /** Maps a console rule onto one authorize-ingress body, or explains why the API cannot take it. */
 export function toIngressPermission(
@@ -340,7 +341,9 @@ export function toIngressPermission(
     fromPort = Number(match[1]);
     toPort = match[2] === undefined ? fromPort : Number(match[2]);
   }
-  return { ok: true, value: { ipProtocol: protocol, fromPort, toPort, cidrIp: rule.source } };
+  const cidrIp = normalizeCidr(rule.source);
+  if (!cidrIp) return { ok: false, error: `Source ${rule.source} is not an IPv4 CIDR block.` };
+  return { ok: true, value: { ipProtocol: protocol, fromPort, toPort, cidrIp } };
 }
 
 export function toAddress(item: Json): ElasticIp {

@@ -8,7 +8,8 @@ import type { SecurityGroup } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { downloadCsv } from "@/lib/csv";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { deleteSecurityGroupsAction } from "@/app/actions/resources";
+import { copyHref } from "@/components/sites/console/security-group-detail-view";
+import { SecurityGroupDeleteDialog } from "@/components/sites/console/security-group-delete-dialog";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
@@ -38,6 +39,7 @@ export function SecurityGroupsView({
   const [dock, setDock] = useState(220);
   const [updated, setUpdated] = useState("less than a minute ago");
   const [ruleTab, setRuleTab] = useState("in");
+  const [deleting, setDeleting] = useState(false);
   const selected = securityGroups.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
   const exportGroups = () =>
@@ -176,19 +178,19 @@ export function SecurityGroupsView({
                   onSelect: () => one && router.push(`/network/security-groups/${one.id}`),
                 },
                 {
-                  label: "Add inbound rules",
+                  label: "Edit inbound rules",
                   disabled: !one,
                   onSelect: () => one && router.push(`/network/security-groups/${one.id}/edit/inbound`),
                 },
                 {
+                  label: "Copy to new security group",
+                  disabled: !one,
+                  onSelect: () => one && router.push(copyHref(one.id)),
+                },
+                {
                   label: "Delete security groups",
-                  disabled:
-                    action.pending || selected.length === 0 || selected.some((item) => item.groupName === "default"),
-                  onSelect: () =>
-                    action.run(
-                      () => deleteSecurityGroupsAction(selected.map((item) => item.id)),
-                      () => setSelectedIds([]),
-                    ),
+                  disabled: selected.length === 0 || selected.some((item) => item.groupName === "default"),
+                  onSelect: () => setDeleting(true),
                 },
               ]}
             />
@@ -218,7 +220,12 @@ export function SecurityGroupsView({
         }
       />
       <ApiErrorAlert error={loadError} title="Security groups could not be loaded" />
-      <ApiErrorAlert error={action.error} title="The security group action failed" />
+      <SecurityGroupDeleteDialog
+        groups={selected}
+        open={deleting}
+        onClose={() => setDeleting(false)}
+        onDeleted={() => setSelectedIds([])}
+      />
       <ResourceTable
         rows={securityGroups}
         getId={(row) => row.id}

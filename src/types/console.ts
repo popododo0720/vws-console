@@ -60,6 +60,9 @@ export type Snapshot = {
   region: string;
 };
 
+/** One inbound rule as console-api stores it. console-api has no rule IDs, so equal values are the same rule. */
+export type IngressPermission = { ipProtocol: string; fromPort: number; toPort: number; cidrIp: string };
+
 export type SecurityGroupRule = {
   id: string;
   description: string;
@@ -67,6 +70,8 @@ export type SecurityGroupRule = {
   protocol: string;
   port: string;
   source: string;
+  /** The stored rule this row was read from; null for a rule the user added in this form. */
+  permission: IngressPermission | null;
 };
 
 export type SecurityGroup = {

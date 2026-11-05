@@ -8,10 +8,6 @@ function newDraftRule(direction: SecurityGroupRule["direction"]): SecurityGroupR
   return makeRule(direction, "TCP", "22", "0.0.0.0/0", `new-${newRuleId()}`);
 }
 
-export function finalizeRules(rules: SecurityGroupRule[]): SecurityGroupRule[] {
-  return rules.map((rule) => (rule.id.startsWith("new-") ? { ...rule, id: newRuleId() } : rule));
-}
-
 export function firstRuleError(rules: SecurityGroupRule[]): string | null {
   for (const [index, rule] of rules.entries()) {
     const error = validateRule(rule);
@@ -52,7 +48,7 @@ export function RuleEditor({
             const error = validateRule(rule);
             return (
               <tr key={rule.id} className="align-top">
-                <td className="py-1 pr-2 text-[#5f6b7a]">{rule.id.startsWith("new-") ? "—" : rule.id}</td>
+                <td className="py-1 pr-2 text-[#5f6b7a]">{rule.id.startsWith("sgr-") ? rule.id : "—"}</td>
                 <td className="py-1 pr-2">
                   <select
                     aria-label={`Rule ${index + 1} type`}
