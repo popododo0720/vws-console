@@ -73,7 +73,7 @@ export function CreateSnapshotView({
 }) {
   const router = useRouter();
   const action = useApiAction();
-  const keyFor = useIdempotencyKey();
+  const idempotency = useIdempotencyKey("vws:create-snapshot");
   const [volumeId, setVolumeId] = useState(volumes.some((item) => item.id === initialVolumeId) ? initialVolumeId : "");
   const [description, setDescription] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
@@ -85,10 +85,13 @@ export function CreateSnapshotView({
       return;
     }
     setProblem(null);
-    const key = keyFor(parsed);
+    const key = idempotency.keyFor(parsed);
     action.run(
       () => createSnapshotAction(parsed, key),
-      () => router.push("/storage/snapshots"),
+      () => {
+        idempotency.settle();
+        router.push("/storage/snapshots");
+      },
     );
   };
 

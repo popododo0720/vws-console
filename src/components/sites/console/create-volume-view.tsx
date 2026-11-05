@@ -42,7 +42,7 @@ export function CreateVolumeView({
 }) {
   const router = useRouter();
   const action = useApiAction();
-  const keyFor = useIdempotencyKey();
+  const idempotency = useIdempotencyKey("vws:create-volume");
   const initialSnapshot = snapshots.find((item) => item.id === initialSnapshotId) ?? null;
   const [volumeType, setVolumeType] = useState<VolumeTypeName>("gp3");
   const [size, setSize] = useState(initialSnapshot ? String(initialSnapshot.sizeGiB) : "100");
@@ -70,10 +70,13 @@ export function CreateVolumeView({
       return;
     }
     setProblem(null);
-    const key = keyFor(parsed);
+    const key = idempotency.keyFor(parsed);
     action.run(
       () => createVolumeAction(parsed, key),
-      () => router.push("/storage/volumes"),
+      () => {
+        idempotency.settle();
+        router.push("/storage/volumes");
+      },
     );
   };
 

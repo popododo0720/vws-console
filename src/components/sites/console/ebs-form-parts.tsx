@@ -135,17 +135,44 @@ export function TagsCard({ title }: { title: ReactNode }) {
   );
 }
 
+type PendingCreate = { body: string; key: string };
+
+function readPending(name: string): PendingCreate | null {
+  try {
+    const value: unknown = JSON.parse(window.sessionStorage.getItem(name) ?? "null");
+    if (typeof value !== "object" || value === null) return null;
+    const { body, key } = value as Record<string, unknown>;
+    return typeof body === "string" && typeof key === "string" ? { body, key } : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * One idempotency key per request body: resending the same body (double click, retry after a timeout) reuses the
- * key so console-api returns the first result, and a changed body gets a fresh key.
+ * One idempotency key per request body, kept in sessionStorage under `name`: resending the same body (double click,
+ * retry after a timeout, or a reload after the response was lost) reuses the key so console-api returns the first
+ * result. A changed body gets a fresh key, and `settle` forgets it after a success so the next create is new.
  */
-export function useIdempotencyKey() {
-  const last = useRef<{ body: string; key: string } | null>(null);
-  return (body: unknown) => {
+export function useIdempotencyKey(name: string) {
+  const fallback = useRef<PendingCreate | null>(null);
+  const keyFor = (body: unknown) => {
     const text = JSON.stringify(body);
-    if (last.current?.body !== text) last.current = { body: text, key: crypto.randomUUID() };
-    return last.current.key;
+    const pending = readPending(name) ?? fallback.current;
+    if (pending?.body === text) return pending.key;
+    const next = { body: text, key: crypto.randomUUID() };
+    fallback.current = next;
+    try {
+      window.sessionStorage.setItem(name, JSON.stringify(next));
+    } catch {}
+    return next.key;
   };
+  const settle = () => {
+    fallback.current = null;
+    try {
+      window.sessionStorage.removeItem(name);
+    } catch {}
+  };
+  return { keyFor, settle };
 }
 
 /** The EBS screens' buttons are pills: primary orange, secondary outlined in blue. */

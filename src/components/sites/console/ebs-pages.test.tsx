@@ -53,6 +53,7 @@ const wrap = (ui: React.ReactNode) => render(<ConsoleProvider>{ui}</ConsoleProvi
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.sessionStorage.clear();
 });
 
 describe("Create volume", () => {
@@ -114,6 +115,27 @@ describe("Create volume", () => {
     expect(keys[0]).toBe(keys[1]);
     expect(keys[2]).not.toBe(keys[0]);
     expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("keeps the idempotency key across a reload and forgets it after a success", async () => {
+    vi.mocked(createVolumeAction).mockResolvedValueOnce({ code: "RequestTimeout", message: "lost", requestId: null });
+    const first = renderCreate();
+    fireEvent.click(screen.getByRole("button", { name: "Create volume" }));
+    await screen.findByText("The volume could not be created");
+    first.unmount();
+
+    vi.mocked(createVolumeAction).mockResolvedValue(null);
+    const second = renderCreate();
+    fireEvent.click(screen.getByRole("button", { name: "Create volume" }));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/storage/volumes"));
+    second.unmount();
+
+    renderCreate();
+    fireEvent.click(screen.getByRole("button", { name: "Create volume" }));
+    await waitFor(() => expect(createVolumeAction).toHaveBeenCalledTimes(3));
+    const keys = vi.mocked(createVolumeAction).mock.calls.map((call) => call[1]);
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).not.toBe(keys[0]);
   });
 
   it("preselects a snapshot from the link and sizes the volume to it", () => {
