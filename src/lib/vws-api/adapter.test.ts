@@ -236,6 +236,7 @@ describe("console-api adapter", () => {
       ["", "in", "All", "All", "10.0.0.0/8"],
       ["", "in", "ICMP", "All", "0.0.0.0/0"],
     ]);
+    expect(group.rules[3].permission).toEqual({ ipProtocol: "icmp", fromPort: 0, toPort: 0, cidrIp: "0.0.0.0/0" });
     expect(parseSecurityGroups({ items: [{ groupId: "sg-2" }] })[0].rules).toEqual([]);
   });
 
@@ -250,6 +251,9 @@ describe("console-api adapter", () => {
     });
     expect(toIngressPermission(makeRule("in", "ICMP", "All", "0.0.0.0/0"))).toMatchObject({
       value: { ipProtocol: "icmp", fromPort: 0, toPort: 0 },
+    });
+    expect(toIngressPermission(makeRule("in", "TCP", "22", "10.1.2.3/16"))).toMatchObject({
+      value: { cidrIp: "10.1.0.0/16" },
     });
     expect(toIngressPermission(makeRule("in", "TCP", "22", "sg-0123456789abcdef"))).toEqual({
       ok: false,

@@ -10,6 +10,7 @@ import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
 import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type {
   ElasticIp,
+  IngressPermission,
   Instance,
   SecurityGroup,
   Snapshot,
@@ -27,7 +28,6 @@ import {
   toAccountBucket,
   type AccountBucket,
   type BucketName,
-  type IngressPermission,
   type ObjectContent,
   type StoredObject,
   toObjectContent,
@@ -681,6 +681,8 @@ export async function createSecurityGroup(groupName: string, vpcId: string): Pro
 
 export const authorizeIngress = (groupId: string, ipPermissions: IngressPermission) =>
   mutate(`/security-groups/${seg(groupId)}/authorize-ingress`, { ipPermissions });
+export const revokeIngress = (groupId: string, ipPermissions: IngressPermission) =>
+  mutate(`/security-groups/${seg(groupId)}/revoke-ingress`, { ipPermissions });
 export const deleteSecurityGroup = (id: string) => mutate(`/security-groups/${seg(id)}/delete`);
 
 export const listAddresses = (): Promise<ApiResult<ElasticIp[]>> => listAll("/addresses", parseAddresses);

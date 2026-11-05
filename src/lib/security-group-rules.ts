@@ -1,4 +1,4 @@
-import type { SecurityGroupRule } from "@/types/console";
+import type { IngressPermission, SecurityGroupRule } from "@/types/console";
 
 type RuleTypeId = "all" | "ssh" | "http" | "https" | "tcp" | "udp" | "icmp";
 
@@ -41,16 +41,26 @@ export function makeRule(
   id: string = newRuleId(),
   description = "",
 ): SecurityGroupRule {
-  return { id, direction, protocol, port, source, description };
+  return { id, direction, protocol, port, source, description, permission: null };
 }
 
 const CIDR = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/;
 
-function validCidr(value: string): boolean {
+/** The IPv4 network console-api stores for a CIDR, with the host bits cleared, or null when it is not one. */
+export function normalizeCidr(value: string): string | null {
   const match = CIDR.exec(value);
-  if (!match) return false;
+  if (!match) return null;
   const octets = match.slice(1, 5).map(Number);
-  return octets.every((octet) => octet <= 255) && Number(match[5]) <= 32;
+  const prefix = Number(match[5]);
+  if (octets.some((octet) => octet > 255) || prefix > 32) return null;
+  const address = octets.reduce((sum, octet) => sum * 256 + octet, 0);
+  const size = 2 ** (32 - prefix);
+  const network = address - (address % size);
+  return `${[24, 16, 8, 0].map((shift) => Math.floor(network / 2 ** shift) % 256).join(".")}/${prefix}`;
+}
+
+function validCidr(value: string): boolean {
+  return normalizeCidr(value) !== null;
 }
 
 function validPortRange(value: string): boolean {
@@ -68,4 +78,81 @@ export function validateRule(rule: SecurityGroupRule): string | null {
   if (!validCidr(rule.source) && !/^sg-[0-9a-f]{8,}$/.test(rule.source))
     return "Source must be a CIDR block such as 10.0.0.0/16 or a security group ID.";
   return null;
+}
+
+/** The most rule changes one save accepts, so a server action never loops over an unbounded list. */
+export const MAX_RULE_CHANGES = 100;
+
+const PROTOCOLS = new Set(["tcp", "udp", "icmp", "-1"]);
+
+const isPort = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 65535;
+
+/** Parses one rule from untrusted input into the values console-api stores, or null when it cannot take it. */
+export function parseIngressPermission(input: unknown): IngressPermission | null {
+  if (typeof input !== "object" || input === null) return null;
+  const { ipProtocol, fromPort, toPort, cidrIp } = input as Record<string, unknown>;
+  if (typeof ipProtocol !== "string" || !PROTOCOLS.has(ipProtocol) || typeof cidrIp !== "string") return null;
+  const cidr = normalizeCidr(cidrIp);
+  if (!cidr) return null;
+  if (ipProtocol === "-1") return { ipProtocol, fromPort: 0, toPort: 0, cidrIp: cidr };
+  if (!isPort(fromPort) || !isPort(toPort) || fromPort > toPort) return null;
+  return { ipProtocol, fromPort, toPort, cidrIp: cidr };
+}
+
+/** Rule identity: console-api has no rule IDs and revokes only a rule with equal values. */
+export function ruleKey(permission: IngressPermission): string {
+  return `${permission.ipProtocol}/${permission.fromPort}-${permission.toPort}/${permission.cidrIp}`;
+}
+
+/** The rules a save removes and adds. A changed rule is one of each, since console-api has no modify call. */
+export type RuleChanges = { remove: IngressPermission[]; add: IngressPermission[] };
+
+const uniqueByKey = (rules: IngressPermission[]) => [...new Map(rules.map((rule) => [ruleKey(rule), rule])).values()];
+
+/** What turns the rules the form loaded into the rules it shows now. Rules in both are left alone. */
+export function planRuleChanges(loaded: IngressPermission[], wanted: IngressPermission[]): RuleChanges {
+  const loadedKeys = new Set(loaded.map(ruleKey));
+  const wantedKeys = new Set(wanted.map(ruleKey));
+  return {
+    remove: uniqueByKey(loaded.filter((rule) => !wantedKeys.has(ruleKey(rule)))),
+    add: uniqueByKey(wanted.filter((rule) => !loadedKeys.has(ruleKey(rule)))),
+  };
+}
+
+export type RuleOp = { kind: "revoke" | "authorize"; permission: IngressPermission };
+
+/**
+ * The calls still needed to apply changes to the rules the group holds now. A removal already gone and an
+ * addition already present drop out, so a retry after a partial failure or a double submit sends only the rest.
+ * Revokes go first, so a save that stops halfway leaves the group allowing less, not more.
+ */
+export function planRuleOps(current: IngressPermission[], changes: RuleChanges): RuleOp[] {
+  const held = new Map(current.map((rule) => [ruleKey(rule), rule]));
+  const revokes = changes.remove.flatMap((rule): RuleOp[] => {
+    const stored = held.get(ruleKey(rule));
+    return stored ? [{ kind: "revoke", permission: stored }] : [];
+  });
+  const authorizes = changes.add
+    .filter((rule) => !held.has(ruleKey(rule)))
+    .map((permission): RuleOp => ({ kind: "authorize", permission }));
+  return [...revokes, ...authorizes];
+}
+
+/** Whether a rule op already shows in the rules the group holds. */
+export function opApplied(current: IngressPermission[], op: RuleOp): boolean {
+  const present = current.some((rule) => ruleKey(rule) === ruleKey(op.permission));
+  return op.kind === "revoke" ? !present : present;
+}
+
+/** A short label for one stored rule, such as "TCP 22 from 10.0.0.0/16". */
+export function permissionLabel(permission: IngressPermission): string {
+  if (permission.ipProtocol === "-1") return `All traffic from ${permission.cidrIp}`;
+  if (permission.ipProtocol === "icmp") return `ICMP from ${permission.cidrIp}`;
+  const protocol = permission.ipProtocol.toUpperCase();
+  const port =
+    permission.fromPort === permission.toPort
+      ? String(permission.fromPort)
+      : `${permission.fromPort}-${permission.toPort}`;
+  return `${protocol} ${port} from ${permission.cidrIp}`;
 }

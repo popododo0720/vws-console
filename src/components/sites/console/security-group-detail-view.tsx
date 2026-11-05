@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { computeNav } from "@/lib/console-data";
-import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { deleteSecurityGroupsAction } from "@/app/actions/resources";
+import { ApiErrorAlert } from "@/components/sites/console/api-action";
+import { SecurityGroupDeleteDialog } from "@/components/sites/console/security-group-delete-dialog";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import type { SecurityGroup } from "@/types/console";
 import { PageHeader } from "@/components/sites/console/page-header";
@@ -23,6 +23,17 @@ import {
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 
+type DetailTab = "in" | "out" | "sharing" | "vpcs" | "tags";
+
+const UNAVAILABLE: Record<Exclude<DetailTab, "in">, string> = {
+  out: OUTBOUND_UNAVAILABLE,
+  sharing: "The VWS API does not share security groups with other accounts yet.",
+  vpcs: "The VWS API does not report VPC associations yet. This security group belongs to its VPC only.",
+  tags: "The VWS API does not report security group tags yet.",
+};
+
+export const copyHref = (id: string) => `/network/security-groups/create?copy=${encodeURIComponent(id)}`;
+
 const crumbBase = [
   { label: "EC2", href: "/compute/instances" },
   { label: "Security Groups", href: "/network/security-groups" },
@@ -37,9 +48,9 @@ export function SecurityGroupDetailView({
   group: SecurityGroup | null;
   loadError: ApiError | null;
 }) {
-  const action = useApiAction();
   const router = useRouter();
-  const [tab, setTab] = useState("in");
+  const [tab, setTab] = useState<DetailTab>("in");
+  const [deleting, setDeleting] = useState(false);
 
   if (!group) {
     return (
@@ -59,10 +70,14 @@ export function SecurityGroupDetailView({
 
   const inCount = group.rules.length;
   const isDefault = group.groupName === "default";
-  const tabs = [
+  const tabs: { id: DetailTab; label: string }[] = [
     { id: "in", label: `Inbound rules (${inCount})` },
     { id: "out", label: "Outbound rules (—)" },
+    { id: "sharing", label: "Sharing" },
+    { id: "vpcs", label: "VPC associations" },
+    { id: "tags", label: "Tags" },
   ];
+  const editInbound = () => router.push(`/network/security-groups/${group.id}/edit/inbound`);
   return (
     <Shell tree={computeNav}>
       <PageHeader
@@ -77,9 +92,10 @@ export function SecurityGroupDetailView({
               </>
             }
             items={[
+              { label: "Edit inbound rules", onSelect: editInbound },
               {
-                label: "Add inbound rules",
-                onSelect: () => router.push(`/network/security-groups/${group.id}/edit/inbound`),
+                label: "Copy to new security group",
+                onSelect: () => router.push(copyHref(group.id)),
               },
               {
                 label: "Copy security group ID",
@@ -87,18 +103,19 @@ export function SecurityGroupDetailView({
               },
               {
                 label: "Delete security groups",
-                disabled: isDefault || action.pending,
-                onSelect: () =>
-                  action.run(
-                    () => deleteSecurityGroupsAction([group.id]),
-                    () => router.push("/network/security-groups"),
-                  ),
+                disabled: isDefault,
+                onSelect: () => setDeleting(true),
               },
             ]}
           />
         }
       />
-      <ApiErrorAlert error={action.error} title="The security group action failed" />
+      <SecurityGroupDeleteDialog
+        groups={[group]}
+        open={deleting}
+        onClose={() => setDeleting(false)}
+        onDeleted={() => router.push("/network/security-groups")}
+      />
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 text-[13px]">
         <section className="rounded-lg border border-[#d5dbdb] p-4">
           <h2 className="mb-3 text-[16px] font-semibold">Details</h2>
@@ -143,17 +160,15 @@ export function SecurityGroupDetailView({
           </div>
           <div className="p-4">
             {tab === "in" ? (
-              <div className="mb-3 flex justify-end">
-                <OutlineButton onClick={() => router.push(`/network/security-groups/${group.id}/edit/inbound`)}>
-                  Add inbound rules
-                </OutlineButton>
-              </div>
-            ) : null}
-            <RulesTable
-              rules={group.rules}
-              direction="in"
-              unavailable={tab === "out" ? OUTBOUND_UNAVAILABLE : undefined}
-            />
+              <>
+                <div className="mb-3 flex justify-end">
+                  <OutlineButton onClick={editInbound}>Edit inbound rules</OutlineButton>
+                </div>
+                <RulesTable rules={group.rules} direction="in" />
+              </>
+            ) : (
+              <RulesTable rules={[]} direction="in" unavailable={UNAVAILABLE[tab]} />
+            )}
           </div>
         </section>
       </div>

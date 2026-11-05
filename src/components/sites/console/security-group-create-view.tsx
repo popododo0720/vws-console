@@ -12,14 +12,26 @@ import { RuleEditor, firstRuleError } from "@/components/sites/console/sg-rule-e
 import { ingressPermissions } from "@/components/sites/console/sg-permissions";
 import { OUTBOUND_UNAVAILABLE } from "@/components/sites/console/sg-rules-table";
 import { FieldLabel, OrangeButton, OutlineButton } from "@/components/sites/console/ui";
-import type { SecurityGroupRule, Vpc } from "@/types/console";
+import type { SecurityGroup, SecurityGroupRule, Vpc } from "@/types/console";
 
-export function SecurityGroupCreateView({ vpcs, loadError }: { vpcs: Vpc[]; loadError: ApiError | null }) {
+export function SecurityGroupCreateView({
+  vpcs,
+  loadError,
+  source = null,
+  sourceError = null,
+}: {
+  vpcs: Vpc[];
+  loadError: ApiError | null;
+  source?: SecurityGroup | null;
+  sourceError?: ApiError | null;
+}) {
   const action = useApiAction();
   const router = useRouter();
   const [name, setName] = useState("");
-  const [vpcId, setVpcId] = useState(vpcs[0]?.id ?? "");
-  const [inbound, setInbound] = useState<SecurityGroupRule[]>([]);
+  const [vpcId, setVpcId] = useState((source && vpcs.find((vpc) => vpc.id === source.vpcId)?.id) ?? vpcs[0]?.id ?? "");
+  const [inbound, setInbound] = useState<SecurityGroupRule[]>(
+    () => source?.rules.map((rule, index) => ({ ...rule, id: `new-copy-${index}` })) ?? [],
+  );
   const [touched, setTouched] = useState(false);
 
   const nameError = !name.trim() ? "Security group name is required." : null;
@@ -39,6 +51,13 @@ export function SecurityGroupCreateView({ vpcs, loadError }: { vpcs: Vpc[]; load
         info="A security group acts as a virtual firewall for your instances. It is created through the VWS API."
       />
       <ApiErrorAlert error={loadError} title="VPCs could not be loaded" />
+      <ApiErrorAlert error={sourceError} title="The security group to copy could not be loaded" />
+      {source ? (
+        <p role="status" className="mx-4 my-2 rounded-lg border border-[#006ce0] bg-[#f2f8fd] px-3 py-2 text-[13px]">
+          Copying the inbound rules of <span className="font-mono">{source.id}</span> ({source.groupName}). Enter a new
+          name.
+        </p>
+      ) : null}
       <ApiErrorAlert error={action.error} title="The security group could not be created" />
       <div className="min-h-0 flex-1 space-y-4 overflow-auto px-4 pb-6 text-[13px]">
         <section className="rounded-lg border border-[#d5dbdb] p-4">

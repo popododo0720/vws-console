@@ -9,11 +9,19 @@ import {
   reservedBucketName,
   type ApiError,
   type ApiResult,
-  type IngressPermission,
   type LaunchRequest,
   type StoredObject,
 } from "@/lib/vws-api/adapter";
-import type { VolumeAttachment } from "@/types/console";
+import type { IngressPermission, VolumeAttachment } from "@/types/console";
+import {
+  MAX_RULE_CHANGES,
+  opApplied,
+  parseIngressPermission,
+  permissionLabel,
+  planRuleOps,
+  type RuleChanges,
+  type RuleOp,
+} from "@/lib/security-group-rules";
 import { deleteBatchError, parseKeyPairId, type CreateAttempt, type KeyPairCreateResult } from "@/lib/key-pair";
 
 async function each(ids: string[], run: (id: string) => Promise<ApiResult<void>>): Promise<ApiError | null> {
@@ -188,23 +196,111 @@ export async function detachVolumeAction(volumeId: string) {
   return errorOf(vws.detachVolume(volumeId));
 }
 
-export async function createSecurityGroupAction(groupName: string, vpcId: string, inbound: IngressPermission[]) {
-  const created = await vws.createSecurityGroup(groupName, vpcId);
-  if (!created.ok) return created.error;
-  return authorizeIngressAction(created.value, inbound);
+const invalid = (message: string): ApiError => ({ code: "InvalidParameterValue", message, requestId: null });
+
+const SECURITY_GROUP_ID = /^sg-[0-9a-f]{8,17}$/;
+
+const parseGroupId = (raw: unknown): string | null =>
+  typeof raw === "string" && SECURITY_GROUP_ID.test(raw) ? raw : null;
+
+function parseRules(raw: unknown, what: string): IngressPermission[] | ApiError {
+  if (!Array.isArray(raw)) return invalid(`The ${what} must be a list.`);
+  if (raw.length > MAX_RULE_CHANGES) return invalid(`Send at most ${MAX_RULE_CHANGES} ${what} at a time.`);
+  const rules: IngressPermission[] = [];
+  for (const [index, item] of raw.entries()) {
+    const rule = parseIngressPermission(item);
+    if (!rule) return invalid(`Rule ${index + 1} of the ${what} is not a rule the VWS API takes.`);
+    rules.push(rule);
+  }
+  return rules;
 }
 
-/** console-api takes one rule per call, so rules are added in order and the first failure stops the rest. */
-export async function authorizeIngressAction(groupId: string, inbound: IngressPermission[]) {
-  for (const permission of inbound) {
-    const result = await vws.authorizeIngress(groupId, permission);
-    if (!result.ok) return result.error;
+async function currentRules(groupId: string): Promise<ApiResult<IngressPermission[]>> {
+  const listed = await vws.listSecurityGroups();
+  if (!listed.ok) return listed;
+  const group = listed.value.find((item) => item.id === groupId);
+  if (!group) {
+    return {
+      ok: false,
+      error: {
+        code: "InvalidGroup.NotFound",
+        message: `The security group '${groupId}' does not exist`,
+        requestId: null,
+      },
+    };
+  }
+  return { ok: true, value: group.rules.flatMap((rule) => (rule.permission ? [rule.permission] : [])) };
+}
+
+const send = (groupId: string, op: RuleOp) =>
+  op.kind === "revoke" ? vws.revokeIngress(groupId, op.permission) : vws.authorizeIngress(groupId, op.permission);
+
+/**
+ * Applies rule changes against the rules the group holds now, so a double submit, a retry after a partial failure
+ * or a save from a stale page sends only what is still missing. A failed call counts as done when a fresh read
+ * shows its result, as when a parallel save made it first.
+ */
+async function applyRuleChanges(groupId: string, changes: RuleChanges): Promise<ApiError | null> {
+  const current = await currentRules(groupId);
+  if (!current.ok) return current.error;
+  for (const op of planRuleOps(current.value, changes)) {
+    const result = await send(groupId, op);
+    if (result.ok) continue;
+    const reread = await currentRules(groupId);
+    if (reread.ok && opApplied(reread.value, op)) continue;
+    const verb = op.kind === "revoke" ? "deleted" : "added";
+    return {
+      ...result.error,
+      message: `Rule ${permissionLabel(op.permission)} was not ${verb}: ${result.error.message}`,
+    };
   }
   return null;
 }
 
-export async function deleteSecurityGroupsAction(ids: string[]) {
-  return each(ids, vws.deleteSecurityGroup);
+/** Saves the inbound rules page. Every field is checked here, since a server action is a public endpoint. */
+export async function saveInboundRulesAction(rawGroupId: unknown, rawChanges: unknown): Promise<ApiError | null> {
+  const groupId = parseGroupId(rawGroupId);
+  if (!groupId) return invalid("The security group ID is not valid.");
+  const { remove, add } = (typeof rawChanges === "object" && rawChanges !== null ? rawChanges : {}) as Record<
+    string,
+    unknown
+  >;
+  const removed = parseRules(remove, "rules to delete");
+  if (!Array.isArray(removed)) return removed;
+  const added = parseRules(add, "rules to add");
+  if (!Array.isArray(added)) return added;
+  return applyRuleChanges(groupId, { remove: removed, add: added });
+}
+
+export async function createSecurityGroupAction(
+  rawName: unknown,
+  rawVpcId: unknown,
+  rawInbound: unknown,
+): Promise<ApiError | null> {
+  const groupName = typeof rawName === "string" ? rawName.trim() : "";
+  if (!groupName || new TextEncoder().encode(groupName).length > 255)
+    return invalid("Enter a security group name of 1 to 255 characters.");
+  if (typeof rawVpcId !== "string" || !/^vpc-[0-9a-f]{8,17}$/.test(rawVpcId)) return invalid("Choose a VPC.");
+  const inbound = parseRules(rawInbound, "inbound rules");
+  if (!Array.isArray(inbound)) return inbound;
+  const created = await vws.createSecurityGroup(groupName, rawVpcId);
+  if (!created.ok) return created.error;
+  const failed = await applyRuleChanges(created.value, { remove: [], add: inbound });
+  return failed && { ...failed, message: `Security group ${created.value} was created. ${failed.message}` };
+}
+
+/** Deletes groups in order. A group a fresh read no longer lists counts as deleted, so a retry finishes the rest. */
+export async function deleteSecurityGroupsAction(rawIds: unknown): Promise<ApiError | null> {
+  if (!Array.isArray(rawIds) || rawIds.length === 0 || rawIds.length > MAX_RULE_CHANGES)
+    return invalid("Choose security groups to delete.");
+  const ids = rawIds.map(parseGroupId).filter((id): id is string => id !== null);
+  if (ids.length !== rawIds.length) return invalid("A security group ID is not valid.");
+  return each(ids, async (id) => {
+    const result = await vws.deleteSecurityGroup(id);
+    if (result.ok) return result;
+    const listed = await vws.listSecurityGroups();
+    return listed.ok && !listed.value.some((group) => group.id === id) ? { ok: true, value: undefined } : result;
+  });
 }
 
 export async function allocateAddressAction() {
