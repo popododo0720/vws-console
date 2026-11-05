@@ -116,10 +116,11 @@ export function toAccountBucket(item: unknown, expected?: BucketName): AccountBu
   return { name, ownerId: typeof record.ownerId === "string" ? record.ownerId : "", created };
 }
 
-const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+/** A flat character class, not a repeated group: a grouped pattern overflows the regex stack on a 4 MiB body. */
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
 function decodeBase64(text: string): Uint8Array {
-  if (!BASE64.test(text)) throw new Error("invalid base64 body");
+  if (text.length % 4 !== 0 || !BASE64.test(text)) throw new Error("invalid base64 body");
   const binary = atob(text);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
