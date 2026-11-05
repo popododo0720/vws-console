@@ -22,6 +22,11 @@ export type AuthLogFields = {
   attempts?: number;
 };
 
+/** A console-api error code (`Unauthenticated`, `LastKnown.on`): the only free-form string a log line or span carries. */
+export function safeCode(value: unknown): string | null {
+  return typeof value === "string" && /^[A-Za-z][A-Za-z0-9.]{0,63}$/.test(value) ? value : null;
+}
+
 export function logAuth(fields: AuthLogFields): void {
   const line = {
     level: fields.outcome === "error" ? "warn" : "info",
@@ -31,7 +36,7 @@ export function logAuth(fields: AuthLogFields): void {
     status: fields.status,
     requestId: fields.requestId,
     durationMs: Math.round(fields.durationMs),
-    ...(fields.code && /^[A-Za-z][A-Za-z0-9.]{0,63}$/.test(fields.code) ? { code: fields.code } : {}),
+    ...(safeCode(fields.code) ? { code: fields.code } : {}),
     ...(fields.attempts && fields.attempts > 1 ? { attempts: fields.attempts } : {}),
   };
   // eslint-disable-next-line no-console -- the single server sink for auth logs; stdout is collected as structured JSON

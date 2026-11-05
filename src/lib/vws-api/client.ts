@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { currentSession } from "./session";
 import { logAuth } from "./log";
 import { iamMode, iamState, IamUnavailableError, noteLoginEnabled, type IamMode } from "./mode";
+import { recordOperationPoll } from "@/lib/ops/metrics";
 import { objectKeyProblem } from "@/lib/object-upload";
 import type { CreateSnapshotInput, CreateVolumeInput } from "@/lib/ebs";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
@@ -277,19 +278,24 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * operation back means the deadline passed; callers decide what that means for them.
  */
 async function pollOperation(op: Operation): Promise<ApiResult<Operation>> {
+  const started = performance.now();
   const deadline = Date.now() + POLL_TIMEOUT_MS;
-  while (op.state === "running") {
-    if (Date.now() > deadline) return { ok: true, value: op };
-    await sleep(POLL_INTERVAL_MS);
-    const polled = await request("GET", route("/operations/{id}", { id: op.id }));
-    if (!polled.ok) return { ok: false, error: polled.error };
-    try {
-      op = parseOperation(polled.value.json);
-    } catch {
-      return { ok: false, error: malformed(`/operations/${op.id}`) };
+  try {
+    while (op.state === "running") {
+      if (Date.now() > deadline) return { ok: true, value: op };
+      await sleep(POLL_INTERVAL_MS);
+      const polled = await request("GET", route("/operations/{id}", { id: op.id }));
+      if (!polled.ok) return { ok: false, error: polled.error };
+      try {
+        op = parseOperation(polled.value.json);
+      } catch {
+        return { ok: false, error: malformed(`/operations/${op.id}`) };
+      }
     }
+    return { ok: true, value: op };
+  } finally {
+    recordOperationPoll((performance.now() - started) / 1000);
   }
-  return { ok: true, value: op };
 }
 
 /** Sends a mutation. A 202 carries an operation, which is polled until it finishes. */
