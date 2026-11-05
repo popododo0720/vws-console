@@ -63,8 +63,8 @@ describe("proxy", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("never redirects or refuses the probe and metrics endpoints", async () => {
-    for (const path of ["/healthz", "/readyz", "/metrics"]) {
+  it("never redirects or refuses the probe endpoints", async () => {
+    for (const path of ["/healthz", "/readyz"]) {
       expect((await proxy(req(path))).headers.get("location")).toBeNull();
     }
     vi.stubEnv("VWS_CONSOLE_IAM", "yes");
@@ -72,10 +72,21 @@ describe("proxy", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("keeps the probe and metrics endpoints out of the matcher, but not lookalike pages", () => {
+  it("keeps the probe endpoints out of the matcher, but not metrics or lookalike pages", () => {
     const matcher = new RegExp(`^${config.matcher[0]}$`);
-    for (const path of ["/healthz", "/readyz", "/metrics"]) expect(matcher.test(path)).toBe(false);
-    for (const path of ["/metricsx", "/healthz/x", "/compute/instances"]) expect(matcher.test(path)).toBe(true);
+    for (const path of ["/healthz", "/readyz"]) expect(matcher.test(path)).toBe(false);
+    for (const path of ["/metrics", "/healthz/x", "/compute/instances"]) expect(matcher.test(path)).toBe(true);
+  });
+
+  it("answers 404 for /metrics on the app port in every sign-in mode, without calling console-api", async () => {
+    for (const iam of ["on", "off", "", "yes"]) {
+      vi.stubEnv("VWS_CONSOLE_IAM", iam);
+      const response = await proxy(req("/metrics"));
+      expect(response.status).toBe(404);
+      expect(response.headers.get("location")).toBeNull();
+      expect(await response.text()).toBe("");
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("asks for no sign-in when console-api is not configured", async () => {

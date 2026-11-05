@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { recordHttpRequest } from "@/lib/ops/metrics";
+import { METRICS_PATH, recordHttpRequest } from "@/lib/ops/metrics";
 import { logAuth } from "@/lib/vws-api/log";
 import { iamState } from "@/lib/vws-api/mode";
 import { CSRF_COOKIE, SESSION_COOKIE } from "@/lib/vws-api/session-cookies";
 import { apiFetch } from "@/lib/vws-api/transport";
 
 const SESSION_CHECK_TIMEOUT_MS = 3_000;
-/** Probe and scrape endpoints: never signed in, never refused with the console's 503 (see config). */
-export const OPS_PATHS: ReadonlySet<string> = new Set(["/healthz", "/readyz", "/metrics"]);
+/** Probe endpoints: never signed in, never refused with the console's 503 (see config). */
+export const OPS_PATHS: ReadonlySet<string> = new Set(["/healthz", "/readyz"]);
 
 /**
  * True only when console-api answers 401 for this session. Any other answer, a timeout or a network
@@ -53,6 +53,10 @@ async function sessionRejected(base: string, session: string): Promise<boolean> 
 export async function proxy(request: NextRequest) {
   // The matcher already skips these; this guard keeps a matcher edit from putting probes behind sign-in.
   if (OPS_PATHS.has(request.nextUrl.pathname)) return NextResponse.next();
+  // Metrics are served only on METRICS_PORT. A scraper pointed at the app port gets 404, not the login page.
+  if (request.nextUrl.pathname === METRICS_PATH) {
+    return new NextResponse(null, { status: 404, headers: { "cache-control": "no-store" } });
+  }
   recordHttpRequest(request.method);
   const base = process.env.VWS_CONSOLE_API_URL;
   // IAM off (the default) uses the server-side token and asks for no sign-in; without console-api
@@ -96,7 +100,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // The setup installer, the e2e error routes, static assets and the probe/metrics endpoints need no
-  // session. /login is matched only to delete an expired session's cookies.
-  matcher: ["/((?!installer|e2e/|_next/|favicon\\.ico|(?:healthz|readyz|metrics)$).*)"],
+  // The setup installer, the e2e error routes, static assets and the probe endpoints need no session.
+  // /login is matched only to delete an expired session's cookies.
+  matcher: ["/((?!installer|e2e/|_next/|favicon\\.ico|(?:healthz|readyz)$).*)"],
 };
