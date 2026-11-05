@@ -1,7 +1,7 @@
 "use server";
 
 import * as vws from "@/lib/vws-api/client";
-import { MAX_OBJECT_BYTES, objectKeyProblem } from "@/lib/object-upload";
+import { fileProblem, objectKeyProblem } from "@/lib/object-upload";
 import {
   parseBucketName,
   parseStoredBucketName,
@@ -120,12 +120,6 @@ export async function deleteBucketsAction(names: string[]): Promise<BucketDeleti
   return { deleted, error: null, failedName: null };
 }
 
-const OBJECT_TOO_LARGE: ApiError = {
-  code: "InvalidArgument",
-  message: "Objects larger than 4 MiB cannot be uploaded.",
-  requestId: null,
-};
-
 export async function uploadObjectAction(rawBucket: string, formData: FormData): Promise<ApiError | null> {
   const bucket = parseStoredBucketName(rawBucket);
   if (!bucket) return INVALID_BUCKET_NAME;
@@ -134,7 +128,8 @@ export async function uploadObjectAction(rawBucket: string, formData: FormData):
   if (keyProblem) return { code: "InvalidArgument", message: keyProblem, requestId: null };
   const file = formData.get("file");
   if (!(file instanceof File)) return { code: "InvalidArgument", message: "Choose a file to upload.", requestId: null };
-  if (file.size > MAX_OBJECT_BYTES) return OBJECT_TOO_LARGE;
+  const tooLarge = fileProblem(file);
+  if (tooLarge) return tooLarge;
   const bytes = new Uint8Array(await file.arrayBuffer());
   const result = await vws.putObject(bucket, key, bytes, file.type || "application/octet-stream");
   return result.ok ? null : result.error;
