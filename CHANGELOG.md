@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `/healthz`, `/readyz` and `/metrics` (Prometheus, `vws_console_` prefix) for Kubernetes probes and scraping (#68).
+- S3 object page at `/storage/buckets/<name>/object?prefix=<key>` with Object overview, Copy S3 URI, Download and Delete, and a download route that serves objects as attachments only (#13).
+
+### Changed
+
+- The S3 upload page shows Pending, Uploading, Succeeded or Failed per file and an `Upload: status` summary, keeps going after a failed file, resends only failed files on Retry, and no longer redirects when it finishes (#13).
+- The Objects tab no longer sends object bytes through a server action; its rows link to the object page and Download goes through the download route (#13).
 
 ### Fixed
 
