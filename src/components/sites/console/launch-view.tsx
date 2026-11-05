@@ -158,12 +158,7 @@ export function LaunchView({
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                   />
-                  <button
-                    type="button"
-                    className={blueLink}
-                    aria-expanded={tagsOpen}
-                    onClick={() => setTagsOpen((value) => !value)}
-                  >
+                  <button type="button" className={blueLink} aria-expanded={tagsOpen} onClick={() => setTagsOpen(true)}>
                     Add additional tags
                   </button>
                 </div>

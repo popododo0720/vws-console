@@ -152,7 +152,7 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
         info="Instances are virtual machines in the current region, read from the VWS API."
         actions={
           <>
-            <LastUpdated key={loads.count} />
+            {loadError ? null : <LastUpdated key={loads.count} />}
             <button
               type="button"
               aria-label="Refresh instances"

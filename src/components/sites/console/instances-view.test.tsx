@@ -106,5 +106,6 @@ describe("InstancesView parity", () => {
     expect(screen.queryByText("Operating normally")).toBeNull();
     expect(screen.queryByText("None")).toBeNull();
     expect(screen.getAllByText("Unavailable")).toHaveLength(4);
+    expect(screen.queryByText(/Last updated/)).toBeNull();
   });
 });

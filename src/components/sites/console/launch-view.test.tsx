@@ -231,4 +231,15 @@ describe("launch wizard parity", () => {
     expect(alert.textContent).toContain("req-1");
     expect(await screen.findByRole("button", { name: "Launch instance" })).toBeEnabled();
   });
+
+  it("keeps added tags visible when Add additional tags is clicked again", () => {
+    renderWizard();
+    const add = screen.getByRole("button", { name: "Add additional tags" });
+    fireEvent.click(add);
+    fireEvent.change(screen.getByRole("textbox", { name: "Tag key" }), { target: { value: "env" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Tag value" }), { target: { value: "prod" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add tag" }));
+    fireEvent.click(add);
+    expect(screen.getByText("env = prod")).toBeTruthy();
+  });
 });
