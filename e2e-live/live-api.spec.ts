@@ -372,10 +372,13 @@ test("launches an instance from the launch screen", async ({ page, request }) =>
   await page.goto("/compute/launch");
   await expect(page.getByText("Launch options could not be loaded")).toHaveCount(0);
   await page.getByPlaceholder("e.g. My Web Server").fill("launched-web");
-  await expect(page.getByLabel("Image")).toHaveValue("ami-0123456789abcdef0");
-  await page.getByLabel("Instance type").selectOption("vws.medium");
-  await page.getByLabel("Network").selectOption(vpcId);
-  await expect(page.getByLabel("Subnet")).toHaveValue(subnetId);
+  await expect(page.getByLabel("VWS Machine Image (AMI)")).toHaveValue("ami-0123456789abcdef0");
+  await page.getByLabel("Instance type", { exact: true }).selectOption("vws.medium");
+  await page.getByLabel("Key pair name").selectOption("proceed-without");
+  await page.getByRole("checkbox", { name: /I acknowledge/ }).check();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByLabel("VPC").selectOption(vpcId);
+  await expect(page.getByLabel("Subnet", { exact: true })).toHaveValue(subnetId);
   await page.getByRole("button", { name: "Launch instance" }).click();
 
   await expect(page).toHaveURL(/\/compute\/instances$/, { timeout: 60_000 });
