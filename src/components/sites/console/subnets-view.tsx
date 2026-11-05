@@ -120,6 +120,7 @@ export function SubnetsView({
       live={{
         vpcs,
         onRefresh: action.refresh,
+        failed: loadError !== null,
         banner: (
           <>
             <ApiErrorAlert error={loadError} title="Subnets could not be loaded" />

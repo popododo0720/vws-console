@@ -16,12 +16,12 @@ import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
 import { Shell } from "@/components/sites/console/shell";
 import { FieldLabel, OrangeButton, OutlineButton, PanelDialog, dash } from "@/components/sites/console/ui";
-import { VpcFilter } from "@/components/sites/console/vpc-filter";
+import { VpcFilter, useVpcFilter } from "@/components/sites/console/vpc-filter";
 
 export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: Subnet[]; loadError: ApiError | null }) {
   const action = useApiAction();
   const params = useSearchParams();
-  const [vpcFilter, setVpcFilter] = useState(params.get("vpc") ?? "all");
+  const [vpcFilter, setVpcFilter] = useVpcFilter(vpcs, params.get("vpc") ?? "all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(200);
   const [createOpen, setCreateOpen] = useState(params.get("create") === "1");
@@ -102,7 +102,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
       <PageHeader
         mark="N"
         crumbs={[{ label: "VPC", href: "/network/vpcs" }, { label: "Your VPCs" }]}
-        count={rows.length}
+        count={loadError ? undefined : rows.length}
         lead={
           <div className="border-b border-[#e6e8eb] px-4 pt-3">
             <p className="text-[20px] font-bold leading-7">Your VPCs</p>
@@ -115,7 +115,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
         info="A VPC is an isolated network in the current region, read from the VWS API."
         actions={
           <ListActions
-            showLastUpdated
+            showLastUpdated={!loadError}
             onRefresh={action.refresh}
             items={[
               {
@@ -142,7 +142,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
         selectedIds={selected.map((item) => item.id)}
         onSelectedIds={setSelectedIds}
         emptyTitle=""
-        emptyMessage="No VPCs found"
+        emptyMessage={loadError ? "" : "No VPCs found"}
         filterPlaceholder="Filter VPCs by attribute or tag"
         variant="aws-list"
       />

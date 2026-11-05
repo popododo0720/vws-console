@@ -13,7 +13,7 @@ import { primaryPill, secondaryPill } from "@/components/sites/console/ebs-form-
 import { BreadcrumbBar } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
 import { orangeLinkClass } from "@/components/sites/console/ui";
-import { VpcFilter } from "@/components/sites/console/vpc-filter";
+import { VpcFilter, useVpcFilter } from "@/components/sites/console/vpc-filter";
 
 export type DashboardLoadError = { label: string; error: ApiError };
 
@@ -126,7 +126,7 @@ export function VpcDashboardView({
 }: Pick<DashboardInput, "vpcs" | "subnets" | "securityGroups" | "addresses"> & { loadErrors: DashboardLoadError[] }) {
   const api = useConsole();
   const router = useRouter();
-  const [vpcFilter, setVpcFilter] = useState("all");
+  const [vpcFilter, setVpcFilter] = useVpcFilter(vpcs ?? []);
   const input: DashboardInput = {
     vpcs,
     subnets,

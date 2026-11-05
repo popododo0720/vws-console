@@ -1,6 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import type { Vpc } from "@/types/console";
+
+/** The chosen VPC, or "all" once that VPC is no longer in the list, so the counts never filter by a VPC the select cannot show. */
+export function useVpcFilter(vpcs: readonly Pick<Vpc, "id">[], initial = "all") {
+  const [chosen, setChosen] = useState(initial);
+  const active = chosen !== "all" && vpcs.some((vpc) => vpc.id === chosen) ? chosen : "all";
+  return [active, setChosen] as const;
+}
 
 export function VpcFilter({
   vpcs,

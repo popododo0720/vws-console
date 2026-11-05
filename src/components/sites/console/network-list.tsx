@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, ResourceTable } from "@/components/sites/console/resource-table";
 import { Shell } from "@/components/sites/console/shell";
 import { SampleBadge, type MenuEntry } from "@/components/sites/console/ui";
-import { VpcFilter } from "@/components/sites/console/vpc-filter";
+import { VpcFilter, useVpcFilter } from "@/components/sites/console/vpc-filter";
 
 type ListAction<T> = {
   label: string;
@@ -22,7 +22,7 @@ type ListAction<T> = {
 type Tab = { id: string; label: string };
 
 /** Set when rows come from the VWS API instead of the local data set. */
-type Live = { vpcs: Vpc[]; banner: ReactNode; onRefresh: () => void };
+type Live = { vpcs: Vpc[]; banner: ReactNode; onRefresh: () => void; failed: boolean };
 
 export function NetworkList<T>({
   title,
@@ -67,8 +67,7 @@ export function NetworkList<T>({
   children?: ReactNode;
 }) {
   const api = useConsole();
-  const initialVpc = useSearchParams().get("vpc") ?? "all";
-  const [vpcFilter, setVpcFilter] = useState(initialVpc);
+  const [vpcFilter, setVpcFilter] = useVpcFilter(live ? live.vpcs : api.vpcs, useSearchParams().get("vpc") ?? "all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(240);
   const [tab, setTab] = useState(detailTabs?.[0]?.id ?? "details");
@@ -94,13 +93,13 @@ export function NetworkList<T>({
       <PageHeader
         mark="N"
         crumbs={[{ label: "VPC", href: "/network/vpcs" }, { label: title }]}
-        count={hideCount ? undefined : visible.length}
+        count={hideCount || live?.failed ? undefined : visible.length}
         info={info}
         actions={
           <>
             {!live && api.mode === "sample" ? <SampleBadge /> : null}
             <ListActions
-              showLastUpdated={showLastUpdated}
+              showLastUpdated={showLastUpdated && !live?.failed}
               onRefresh={live ? live.onRefresh : () => undefined}
               items={items}
               createLabel={createLabel}
@@ -117,7 +116,7 @@ export function NetworkList<T>({
         selectedIds={selected.map(getId)}
         onSelectedIds={setSelectedIds}
         emptyTitle=""
-        emptyMessage={emptyLine}
+        emptyMessage={live?.failed ? "" : emptyLine}
         filterPlaceholder={filterPlaceholder}
         variant="aws-list"
       />

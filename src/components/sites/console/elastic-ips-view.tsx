@@ -91,6 +91,7 @@ export function ElasticIpsView({
       live={{
         vpcs: [],
         onRefresh: action.refresh,
+        failed: loadError !== null,
         banner: (
           <>
             <ApiErrorAlert error={loadError} title="Elastic IP addresses could not be loaded" />

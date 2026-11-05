@@ -114,6 +114,15 @@ describe("VPC list chrome", () => {
     expect(screen.getByRole("textbox", { name: "Find subnets by attribute or tag" })).toBeInTheDocument();
   });
 
+  it("Subnets: a failed load shows the error without a count, Last updated or the empty line", () => {
+    const failure = { code: "InternalError", message: "Upstream is down.", requestId: "req-7" };
+    renderWith(<SubnetsView subnets={[]} vpcs={vpcs} loadError={failure} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Subnets could not be loaded");
+    expect(screen.getByRole("heading", { name: "Subnets" })).toBeInTheDocument();
+    expect(screen.queryByText(/Last updated/)).not.toBeInTheDocument();
+    expect(screen.queryByText("No subnets found")).not.toBeInTheDocument();
+  });
+
   it("Route tables: AWS columns without Routes, owner from the account, and the empty line", () => {
     renderWith(<RouteTablesView />);
     expect(screen.getByText("No route tables found")).toBeInTheDocument();

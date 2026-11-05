@@ -100,6 +100,35 @@ describe("VpcDashboardView", () => {
     expect(card("Security Groups").getByText("0")).toBeInTheDocument();
   });
 
+  it("drops the VPC filter once the chosen VPC is gone, so the counts match the select", () => {
+    const { rerender } = render(
+      <ConsoleProvider>
+        <VpcDashboardView
+          vpcs={vpcs}
+          subnets={subnets}
+          securityGroups={securityGroups}
+          addresses={[]}
+          loadErrors={[]}
+        />
+      </ConsoleProvider>,
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by VPC" }), { target: { value: vpcs[1].id } });
+    const remaining = vpcs.filter((item) => item.id !== vpcs[1].id);
+    rerender(
+      <ConsoleProvider>
+        <VpcDashboardView
+          vpcs={remaining}
+          subnets={subnets.filter((item) => item.vpcId !== vpcs[1].id)}
+          securityGroups={securityGroups}
+          addresses={[]}
+          loadErrors={[]}
+        />
+      </ConsoleProvider>,
+    );
+    expect(screen.getByRole("combobox", { name: "Filter by VPC" })).toHaveValue("all");
+    expect(card("VPCs").getByRole("link", { name: String(remaining.length) })).toBeInTheDocument();
+  });
+
   it("expands See all regions into one line per region", () => {
     renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: "use sample data" }));

@@ -51,7 +51,7 @@ export const DASHBOARD_CARDS: readonly DashboardCard[] = [
     key: "nat-gateways",
     label: "NAT Gateways",
     href: "/network/nat-gateways",
-    count: fromBrowser((input) => input.natGateways),
+    count: fromBrowser((input) => input.natGateways.filter((gateway) => gateway.state !== "deleted")),
   },
   {
     key: "route-tables",

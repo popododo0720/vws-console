@@ -108,6 +108,14 @@ describe("DASHBOARD_CARDS", () => {
     expect(card("nat-gateways").count(failed, HOME, null)).toBe(sample.natGateways.length);
   });
 
+  it("does not count deleted NAT gateways, which are no longer in use", () => {
+    const gateways = sample.natGateways.map((item, index) =>
+      index === 0 ? { ...item, state: "deleted" as const } : item,
+    );
+    const live = gateways.filter((item) => item.region === HOME && item.state !== "deleted").length;
+    expect(card("nat-gateways").count({ ...input, natGateways: gateways }, HOME, null)).toBe(live);
+  });
+
   it("returns 0 for resource types VWS does not model, with or without a VPC filter", () => {
     const unmodeled = DASHBOARD_CARDS.filter((item) =>
       [
