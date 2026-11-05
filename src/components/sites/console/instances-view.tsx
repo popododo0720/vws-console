@@ -1,9 +1,9 @@
 "use client";
 
 import { copyToClipboard } from "@/lib/clipboard";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { CircleCheck, ExternalLink, Info, RefreshCw } from "lucide-react";
+import { CircleCheck, ExternalLink, RefreshCw } from "lucide-react";
 import type { Instance } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
@@ -94,14 +94,7 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
       sortValue: (row) => row.availabilityZone,
       cell: (row) => row.availabilityZone,
     },
-    { key: "vpc", header: "VPC ID", minWidth: 190, sortValue: (row) => row.vpcId, cell: (row) => dash(row.vpcId) },
-    {
-      key: "launch",
-      header: "Launch time",
-      minWidth: 200,
-      sortValue: (row) => row.launchedAt,
-      cell: (row) => dash(row.launchedAt),
-    },
+
     {
       key: "dns",
       header: "Public IPv4 DNS",
@@ -123,6 +116,23 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
       sortValue: (row) => row.elasticIp,
       cell: (row) => dash(row.elasticIp),
     },
+
+    { key: "ipv6", header: "IPv6 IPs", minWidth: 120, sortValue: (row) => row.ipv6, cell: (row) => dash(row.ipv6) },
+    {
+      key: "keyName",
+      header: "Key name",
+      minWidth: 140,
+      sortValue: (row) => row.keyPair,
+      cell: (row) => dash(row.keyPair),
+    },
+    {
+      key: "launch",
+      header: "Launch time",
+      minWidth: 200,
+      sortValue: (row) => row.launchedAt,
+      cell: (row) => dash(row.launchedAt),
+    },
+    { key: "vpc", header: "VPC ID", minWidth: 190, sortValue: (row) => row.vpcId, cell: (row) => dash(row.vpcId) },
     {
       key: "eipalloc",
       header: "Elastic IP allocation ID",
@@ -130,7 +140,6 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
       sortValue: (row) => row.publicIpAllocationId,
       cell: (row) => dash(row.publicIpAllocationId),
     },
-    { key: "ipv6", header: "IPv6 IPs", minWidth: 120, sortValue: (row) => row.ipv6, cell: (row) => dash(row.ipv6) },
   ];
 
   return (
@@ -141,6 +150,11 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
         info="Instances are virtual machines in the current region, read from the VWS API."
         actions={
           <>
+            <span className="text-right text-[12px] leading-4 text-[#5f6b7a]">
+              Last updated
+              <br />
+              less than a minute ago
+            </span>
             <button
               type="button"
               aria-label="Refresh instances"
@@ -245,7 +259,7 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
         emptyTitle="No instances"
         emptyMessage="You do not have any instances in this region"
         emptyAction={{ label: "Launch instances", href: "/compute/launch" }}
-        filterPlaceholder="Filter instances by attribute or tag (case-sensitive)"
+        filterPlaceholder="Filter Instance by attribute or tag (case-sensitive)"
         presets={[
           { id: "running", label: "Running", match: (row) => row.state === "running" },
           { id: "stopped", label: "Stopped", match: (row) => row.state === "stopped" },
@@ -261,7 +275,6 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
               ? `${selected.length} instances`
               : "All instances"
         }
-        info="Alarm, health, and event summaries for the current region."
         tabs={one ? instanceTabs : undefined}
         tab={panel}
         onTab={setPanel}
@@ -273,14 +286,21 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
         ) : selected.length > 1 ? (
           <p className="text-[13px] text-[#5f6b7a]">Select a single instance to see its details.</p>
         ) : (
-          <div className="grid gap-3 lg:grid-cols-3">
-            <StatusCard title="Instance alarm states" body="No alarms for this region." link="View metrics" />
-            <StatusCard
-              title="Service health"
-              body="All listed services are operating normally."
-              link="View service status"
-            />
-            <StatusCard title="Health events affecting instances" body="No health events." link="View health events" />
+          <div className="grid gap-5 lg:grid-cols-3">
+            <StatusCard title="Instance alarm states" link="View in CloudWatch">
+              <StatusFact label="In alarm" value="None" />
+            </StatusCard>
+            <StatusCard title="Service health" link="View Service Health Dashboard">
+              <StatusFact label="EC2 service status" value="Operating normally" />
+            </StatusCard>
+            <StatusCard title="Health events affecting EC2 instances" link="View VWS Health Dashboard">
+              <div className="grid grid-cols-2 divide-x divide-[#e6e8eb]">
+                <StatusFact label="Open events" value="None" />
+                <div className="pl-5">
+                  <StatusFact label="Upcoming events" value="None" />
+                </div>
+              </div>
+            </StatusCard>
           </div>
         )}
       </DetailDock>
@@ -300,31 +320,28 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
   );
 }
 
-function StatusCard({ title, body, link }: { title: string; body: string; link: string }) {
-  const [open, setOpen] = useState(false);
+function StatusCard({ title, link, children }: { title: string; link: string; children: ReactNode }) {
   return (
-    <article className="flex min-h-36 flex-col rounded-lg border border-[#e6e8eb]">
-      <div className="flex-1 p-3">
-        <h3 className="flex items-center gap-1 text-[14px] font-semibold">
-          {title}
-          <button
-            type="button"
-            aria-label={`About ${title}`}
-            className="text-[#006ce0]"
-            onClick={() => setOpen((value) => !value)}
-          >
-            <Info className="size-3.5" />
-          </button>
-        </h3>
-        <p className="mt-2 text-[13px] text-[#5f6b7a]">{open ? `${body} Metrics stay inside this preview.` : body}</p>
+    <article className="flex flex-col rounded-2xl border border-[#c6c9ce]">
+      <div className="flex-1 px-5 pb-4 pt-5">
+        <h3 className="mb-4 text-[18px] font-bold">{title}</h3>
+        {children}
       </div>
-      <button
-        type="button"
-        className="border-t border-[#e6e8eb] px-3 py-2 text-left text-[13px] text-[#006ce0] hover:underline"
-        onClick={() => setOpen((value) => !value)}
-      >
-        {link}
-      </button>
+      <span className="flex items-center gap-1 border-t border-[#e6e8eb] px-5 py-4 text-[13px] text-[#8d9aa8]">
+        {link} <ExternalLink className="size-3" />
+      </span>
     </article>
+  );
+}
+
+function StatusFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="text-[13px]">
+      <p className="font-semibold">{label}</p>
+      <p className="flex items-center gap-1 text-[#037f0c]">
+        <CircleCheck className="size-3.5" />
+        {value}
+      </p>
+    </div>
   );
 }
