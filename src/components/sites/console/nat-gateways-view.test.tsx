@@ -45,7 +45,7 @@ describe("NatGatewaysView", () => {
     expect(screen.getByRole("heading", { name: "NAT gateways (0)" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Find NAT gateways by attribute or tag" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Select a NAT gateway" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Create NAT gateway" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create NAT gateway" })).toBeInTheDocument();
   });
 
   it("lists the columns in the AWS order", () => {
