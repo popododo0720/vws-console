@@ -1,4 +1,4 @@
-import { context, metrics, propagation, trace } from "@opentelemetry/api";
+import { context, metrics, propagation, trace, type TextMapPropagator } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
@@ -60,6 +60,19 @@ export function telemetryConfigFromEnv(
   };
 }
 
+/**
+ * Injects W3C traceparent toward console-api but never extracts one. Next extracts the global propagator's
+ * context from every browser request, and a browser-sent traceparent would otherwise pick the console's trace
+ * id and, with flags 00, switch off sampling for every console span of that request.
+ */
+function injectOnly(inner: TextMapPropagator): TextMapPropagator {
+  return {
+    inject: (ctx, carrier, setter) => inner.inject(ctx, carrier, setter),
+    extract: (ctx) => ctx,
+    fields: () => inner.fields(),
+  };
+}
+
 /** Forwards only the console's own spans, before they are buffered. */
 function consoleSpansOnly(next: SpanProcessor): SpanProcessor {
   const ours = (span: { instrumentationScope: { name: string } }) => span.instrumentationScope.name === TELEMETRY_SCOPE;
@@ -116,7 +129,7 @@ function install(config: TelemetryConfig, sinks: TelemetrySinks | undefined): Te
     : null;
   // Spans get ids even with no exporter, so traceparent reaches console-api and auth logs carry trace_id.
   context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
-  propagation.setGlobalPropagator(new W3CTraceContextPropagator());
+  propagation.setGlobalPropagator(injectOnly(new W3CTraceContextPropagator()));
   trace.setGlobalTracerProvider(tracerProvider);
   if (meterProvider) metrics.setGlobalMeterProvider(meterProvider);
 

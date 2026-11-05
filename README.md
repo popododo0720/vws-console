@@ -86,6 +86,8 @@ An invalid `METRICS_PORT`, or a port that is already in use, logs `metrics.liste
 
 The console server exports traces and metrics over OTLP/HTTP (JSON encoding) when an endpoint is set. Unset, it exports nothing and opens no connection for telemetry. Spans still get ids, so console-api calls carry `traceparent` and the auth log lines carry `trace_id` and `span_id`. Only the server is instrumented; no OpenTelemetry code ships to the browser (`scripts/check-client-bundle.sh` checks every build in CI).
 
+A `traceparent` sent by the browser is ignored: every request starts its own trace, so a client cannot pick the trace id in the logs or switch off sampling. The console sends `traceparent` to console-api only.
+
 | Variable                                                                    | Default       | Meaning                                                                                                                        |
 | --------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`                                               | unset (off)   | Collector base URL, such as `http://otel-collector:4318`. Traces go to `/v1/traces` and metrics to `/v1/metrics`.              |
