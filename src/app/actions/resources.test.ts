@@ -163,10 +163,9 @@ describe("bucket actions", () => {
       respond(200, { bucket: "logs-1", key: "notes.txt", size: 2, body: "aGk=", contentType: "text/plain" }),
       respond(404, { error: { code: "NotFound", kind: "object", message: "missing" } }),
     );
-    expect(await getObjectAction("logs-1", "notes.txt")).toMatchObject({
-      ok: true,
-      value: { key: "notes.txt", size: 2, bytes: new Uint8Array([104, 105]) },
-    });
+    const found = await getObjectAction("logs-1", "notes.txt");
+    expect(found).toMatchObject({ ok: true, value: { key: "notes.txt", size: 2 } });
+    expect(found.ok && found.value && "bytes" in found.value).toBe(false);
     expect(await getObjectAction("logs-1", "gone.txt")).toEqual({ ok: true, value: null });
     expect(calls.map((call) => [call.init.method, call.url])).toEqual([
       ["GET", "http://api.test/api/v1/buckets/logs-1/objects/notes.txt"],

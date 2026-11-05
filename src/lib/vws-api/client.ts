@@ -29,6 +29,7 @@ import {
   type BucketName,
   type IngressPermission,
   type ObjectContent,
+  type StoredObject,
   toObjectContent,
   nextPageToken,
   parseApiError,
@@ -451,6 +452,19 @@ export async function getObject(bucket: BucketName, key: string): Promise<ApiRes
   } catch {
     return { ok: false, error: malformed(path) };
   }
+}
+
+/**
+ * One object without its bytes, for a page that needs only metadata. A missing key is null, like getBucket.
+ * console-api has no HEAD, so this still costs one GET, but the bytes stop here.
+ */
+export async function getObjectMeta(bucket: BucketName, key: string): Promise<ApiResult<StoredObject | null>> {
+  const result = await getObject(bucket, key);
+  if (!result.ok) {
+    return result.error.code === "NoSuchKey" ? { ok: true, value: null } : result;
+  }
+  const { size, contentType, lastModified, etag } = result.value;
+  return { ok: true, value: { bucket, key, size, contentType, lastModified, etag } };
 }
 
 /** Deletes one object. A missing key is already deleted, as S3 DeleteObject answers 204 for it. */

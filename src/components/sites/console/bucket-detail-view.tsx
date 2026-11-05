@@ -4,8 +4,10 @@ import { useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { deleteObjectAction, getObjectAction } from "@/app/actions/resources";
-import type { AccountBucket, ApiError, BucketName, ObjectContent } from "@/lib/vws-api/adapter";
+import type { AccountBucket, ApiError, BucketName, StoredObject } from "@/lib/vws-api/adapter";
 import { copyToClipboard } from "@/lib/clipboard";
+import { download } from "@/lib/download";
+import { objectDownloadHref, objectFileName, objectPageHref, s3Uri } from "@/lib/object-detail";
 import { formatBucketCreationDate } from "@/lib/bucket-display";
 import { storageNav } from "@/lib/console-data";
 import { ApiErrorAlert } from "@/components/sites/console/api-action";
@@ -151,20 +153,9 @@ function formatSize(bytes: number): string {
   return `${value.toFixed(1)} ${units[unit]}`;
 }
 
-function saveFile(object: ObjectContent) {
-  const copy = new Uint8Array(object.bytes.byteLength);
-  copy.set(object.bytes);
-  const url = URL.createObjectURL(new Blob([copy], { type: object.contentType || "application/octet-stream" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = object.key.split("/").pop() || object.key;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 function ObjectsPanel({ bucket, uploadHref }: { bucket: BucketName; uploadHref: string }) {
   const [query, setQuery] = useState("");
-  const [object, setObject] = useState<ObjectContent | null>(null);
+  const [object, setObject] = useState<StoredObject | null>(null);
   const [searched, setSearched] = useState<string | null>(null);
   const [selected, setSelected] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -172,6 +163,7 @@ function ObjectsPanel({ bucket, uploadHref }: { bucket: BucketName; uploadHref: 
   const [dialog, setDialog] = useState(false);
   const [confirm, setConfirm] = useState("");
   const [pending, startTransition] = useTransition();
+  const [downloading, setDownloading] = useState(false);
 
   const find = (event: FormEvent) => {
     event.preventDefault();
@@ -191,6 +183,13 @@ function ObjectsPanel({ bucket, uploadHref }: { bucket: BucketName; uploadHref: 
       setObject(result.value);
       setSearched(key);
     });
+  };
+
+  const save = async (target: StoredObject) => {
+    setDownloading(true);
+    const failure = await download(objectDownloadHref(bucket, target.key), objectFileName(target.key));
+    setDownloading(false);
+    setError(failure);
   };
 
   const remove = () => {
@@ -228,11 +227,11 @@ function ObjectsPanel({ bucket, uploadHref }: { bucket: BucketName; uploadHref: 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <OutlineButton
           disabled={!selected || !object}
-          onClick={() => object && void copyToClipboard(`s3://${bucket}/${object.key}`, "bucket-objects")}
+          onClick={() => object && void copyToClipboard(s3Uri(bucket, object.key), "bucket-objects")}
         >
           Copy S3 URI
         </OutlineButton>
-        <OutlineButton disabled={!selected || !object} onClick={() => object && saveFile(object)}>
+        <OutlineButton disabled={!selected || !object || downloading} onClick={() => object && void save(object)}>
           Download
         </OutlineButton>
         <OutlineButton
@@ -283,7 +282,11 @@ function ObjectsPanel({ bucket, uploadHref }: { bucket: BucketName; uploadHref: 
                   onChange={(event) => setSelected(event.target.checked)}
                 />
               </td>
-              <td className="py-2 text-[#006ce0]">{row.key}</td>
+              <td className="py-2 break-all">
+                <Link href={objectPageHref(bucket, row.key)} className="text-[#006ce0] hover:underline">
+                  {row.key}
+                </Link>
+              </td>
               <td className="py-2">{objectType(row.key)}</td>
               <td className="py-2">{row.lastModified ? formatBucketCreationDate(row.lastModified) : "—"}</td>
               <td className="py-2">{formatSize(row.size)}</td>

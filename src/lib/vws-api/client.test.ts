@@ -33,6 +33,7 @@ import {
   deleteObject,
   getBucket,
   getObject,
+  getObjectMeta,
   getVolume,
   getVpc,
   instanceBatch,
@@ -871,6 +872,57 @@ describe("console-api client", () => {
           error: { code: "MalformedResponse" },
         });
       }
+    });
+
+    it("reads object metadata without exposing the bytes", async () => {
+      serve(respond(200, { ...stored, extra: "ignored" }));
+      const result = await getObjectMeta(mustName("logs-1"), "a/b.txt");
+      expect(result).toEqual({
+        ok: true,
+        value: {
+          bucket: "logs-1",
+          key: "a/b.txt",
+          size: 5,
+          etag: "e1",
+          contentType: "text/plain",
+          lastModified: "2026-08-02T00:00:00Z",
+        },
+      });
+      expect(result.ok && Object.keys(result.value ?? {}).sort()).toEqual([
+        "bucket",
+        "contentType",
+        "etag",
+        "key",
+        "lastModified",
+        "size",
+      ]);
+      expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1/objects/a/b.txt");
+    });
+
+    it("reads a missing key as null but keeps a missing bucket and other failures as errors", async () => {
+      serve(
+        respond(404, { error: { code: "NotFound", kind: "object", message: "missing" }, requestId: "r-5" }),
+        respond(404, { error: { code: "NotFound", kind: "bucket", message: "missing" }, requestId: "r-6" }),
+        respond(200, { ...stored, body: "not base64!" }),
+      );
+      expect(await getObjectMeta(mustName("logs-1"), "a/b.txt")).toEqual({ ok: true, value: null });
+      expect(await getObjectMeta(mustName("logs-1"), "a/b.txt")).toEqual({
+        ok: false,
+        error: { code: "NoSuchBucket", message: "The specified bucket does not exist.", requestId: "r-6" },
+      });
+      expect(await getObjectMeta(mustName("logs-1"), "a/b.txt")).toMatchObject({
+        ok: false,
+        error: { code: "MalformedResponse" },
+      });
+    });
+
+    it("refuses a key that walks out of the bucket before sending", async () => {
+      serve(respond(200, stored));
+      expect(await getObjectMeta(mustName("logs-1"), "a/../b")).toMatchObject({
+        ok: false,
+        error: { code: "InvalidArgument" },
+      });
+      expect(calls).toEqual([]);
     });
 
     it("does not send a GET or DELETE for a key that walks out of the bucket", async () => {
