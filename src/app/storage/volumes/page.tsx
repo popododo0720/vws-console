@@ -14,6 +14,7 @@ export default async function Page() {
       loadError={volumes.ok ? null : volumes.error}
       instances={instances.ok ? instances.value : []}
       instanceLoadError={instances.ok ? null : instances.error}
+      loadedAt={new Date().toISOString()}
     />
   );
 }

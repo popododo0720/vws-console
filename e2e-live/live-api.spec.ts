@@ -25,12 +25,17 @@ test("creates and deletes a VPC, subnet and volume through the fake console-api"
   await expect(subnetRow).toContainText(vpcId);
 
   await page.goto("/storage/volumes");
-  await page.getByRole("button", { name: "Create volume" }).first().click();
-  await page.getByRole("dialog").locator('input[type="number"]').fill("13");
-  await dialogButton(page, "Create volume");
+  await page.getByRole("link", { name: "Create volume" }).click();
+  await expect(page).toHaveURL(/\/storage\/volumes\/create$/);
+  await page.getByLabel("Size (GiB)").fill("13");
+  await page.getByLabel("IOPS").fill("4000");
+  await page.getByRole("button", { name: "Create volume" }).dblclick();
+  await expect(page).toHaveURL(/\/storage\/volumes$/);
   const volumeRow = page.getByRole("row").filter({ hasText: "13 GiB" });
   await expect(volumeRow).toHaveCount(1);
   await expect(volumeRow).toContainText("gp3");
+  await expect(volumeRow).toContainText("4000");
+  await expect(volumeRow).toContainText("125");
 
   await page.reload();
   await expect(volumeRow).toHaveCount(1);
@@ -38,6 +43,7 @@ test("creates and deletes a VPC, subnet and volume through the fake console-api"
   await volumeRow.getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
   await page.getByRole("menuitem", { name: "Delete volume" }).click();
+  await dialogButton(page, "Delete");
   await expect(volumeRow).toHaveCount(0);
 
   await page.goto("/network/subnets");
@@ -320,14 +326,18 @@ test("creates a snapshot from a volume and deletes it", async ({ page, request }
     )
     .toBe("available");
 
-  await page.goto("/storage/snapshots");
+  await page.goto("/storage/volumes");
+  await page.getByRole("row").filter({ hasText: volumeId }).getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Create snapshot", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/storage/snapshots/create\\?volumeId=${volumeId}$`));
+  await expect(page.getByLabel("Volume ID")).toHaveValue(volumeId);
+  await page.getByLabel("Description").fill("e2e backup");
+  await page.getByRole("button", { name: "Create snapshot" }).dblclick();
+  await expect(page).toHaveURL(/\/storage\/snapshots$/);
   await expect(page.getByText("Snapshots could not be loaded")).toHaveCount(0);
-  await page.getByRole("button", { name: "Create snapshot" }).first().click();
-  const dialog = page.getByRole("dialog");
-  await dialog.locator("select").selectOption(volumeId);
-  await dialog.locator("input.field").fill("e2e backup");
-  await dialog.getByRole("button", { name: "Create snapshot" }).click();
   const row = page.getByRole("row").filter({ hasText: "e2e backup" });
+  await expect(row).toHaveCount(1);
   await expect(row).toContainText(volumeId);
   await expect(row).toContainText("7 GiB");
   await expect
@@ -340,9 +350,24 @@ test("creates a snapshot from a volume and deletes it", async ({ page, request }
     )
     .toContain("Completed");
 
+  const snapshotId = (await row.getByRole("link", { name: /^snap-/ }).textContent())!.trim();
+  await row.getByRole("link", { name: snapshotId }).click();
+  await expect(page).toHaveURL(new RegExp(`/storage/snapshots/${snapshotId}$`));
+  await expect(page.getByText("Available (100%)")).toBeVisible();
+  await page.goto("/storage/snapshots");
+
+  await row.getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Create volume from snapshot" }).click();
+  await expect(page).toHaveURL(new RegExp(`/storage/volumes/create\\?snapshotId=${snapshotId}$`));
+  await expect(page.getByLabel(/Snapshot ID/)).toHaveValue(snapshotId);
+  await expect(page.getByLabel("Size (GiB)")).toHaveValue("7");
+  await page.goto("/storage/snapshots");
+
   await row.getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
   await page.getByRole("menuitem", { name: "Delete snapshot" }).click();
+  await dialogButton(page, "Delete");
   await expect(row).toHaveCount(0);
 });
 

@@ -14,6 +14,8 @@ import type {
 } from "@/types/console";
 
 export const REGION = "vws-1";
+/** console-api has one Availability Zone and refuses any other (vws-console-api internal/resource/text.go ZoneName). */
+export const ZONES = ["vws-1a"] as const;
 
 export type ApiError = { code: string; message: string; requestId: string | null };
 
@@ -224,8 +226,8 @@ export function toVolume(item: Json): Volume {
     state: str(item.state),
     volumeType: str(item.volumeType),
     sizeGiB: typeof item.size === "number" ? item.size : 0,
-    iops: null,
-    throughput: "",
+    iops: num(item.iops),
+    throughput: num(item.throughput) === null ? "" : String(item.throughput),
     owner: str(item.ownerId),
     snapshotId: str(item.snapshotId),
     sourceVolumeId: "",

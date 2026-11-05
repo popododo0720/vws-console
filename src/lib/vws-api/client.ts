@@ -6,6 +6,7 @@ import { currentSession } from "./session";
 import { logAuth } from "./log";
 import { iamMode, iamState, IamUnavailableError, noteLoginEnabled, type IamMode } from "./mode";
 import { objectKeyProblem } from "@/lib/object-upload";
+import type { CreateSnapshotInput, CreateVolumeInput } from "@/lib/ebs";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
 import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type {
@@ -58,6 +59,7 @@ import {
   privateKeyFileName,
   readAttempt,
   type CreateAttempt,
+  type IdempotencyKey,
   type IssuedKeyPair,
   type KeyPairCreateResult,
   type KeyPairDraft,
@@ -271,14 +273,18 @@ async function listAll<T>(path: string, parse: (page: unknown) => T[], pageSize?
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Sends a mutation. A 202 carries an operation, which is polled until it finishes. */
-async function mutate(path: string, body?: unknown): Promise<ApiResult<void>> {
-  const result = await mutateReturning(path, body);
+async function mutate(path: string, body?: unknown, idempotencyKey?: IdempotencyKey): Promise<ApiResult<void>> {
+  const result = await mutateReturning(path, body, idempotencyKey);
   return result.ok ? { ok: true, value: undefined } : result;
 }
 
 /** Like mutate, but returns the body of the accepted request, which names the new resource. */
-async function mutateReturning(path: string, body?: unknown): Promise<ApiResult<unknown>> {
-  const sent = await request("POST", path, body);
+async function mutateReturning(
+  path: string,
+  body?: unknown,
+  idempotencyKey?: IdempotencyKey,
+): Promise<ApiResult<unknown>> {
+  const sent = await request("POST", path, body, { idempotencyKey });
   if (!sent.ok) return { ok: false, error: sent.error };
   if (sent.value.status !== 202) return { ok: true, value: sent.value.json };
   let op;
@@ -626,10 +632,23 @@ export async function instanceBatch(action: "start" | "stop" | "terminate", ids:
 /** Adds or overwrites tags on one instance; tags not named stay. */
 export const createInstanceTags = (id: string, tags: Record<string, string>) =>
   mutate(`/instances/${seg(id)}/tags`, { tags });
-export const createVolume = (size: number, volumeType: string) => mutate("/volumes", { size, volumeType });
+/** The key makes a resent create (double submit, retry) return the first volume instead of making a second. */
+export const createVolume = (input: CreateVolumeInput, idempotencyKey: IdempotencyKey) =>
+  mutate(
+    "/volumes",
+    {
+      volumeType: input.volumeType,
+      availabilityZone: input.availabilityZone,
+      ...(input.size === null ? {} : { size: input.size }),
+      ...(input.iops === null ? {} : { iops: input.iops }),
+      ...(input.throughput === null ? {} : { throughput: input.throughput }),
+      ...(input.snapshotId === null ? {} : { snapshotId: input.snapshotId }),
+    },
+    idempotencyKey,
+  );
 export const deleteVolume = (id: string) => mutate(`/volumes/${seg(id)}/delete`);
-export const createSnapshot = (volumeId: string, description: string) =>
-  mutate("/snapshots", description ? { volumeId, description } : { volumeId });
+export const createSnapshot = ({ volumeId, description }: CreateSnapshotInput, idempotencyKey: IdempotencyKey) =>
+  mutate("/snapshots", description ? { volumeId, description } : { volumeId }, idempotencyKey);
 const withTags = <T extends object>(body: T, tags: Record<string, string>) =>
   Object.keys(tags).length > 0 ? { ...body, tags } : body;
 

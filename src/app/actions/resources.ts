@@ -22,7 +22,14 @@ import {
   type RuleChanges,
   type RuleOp,
 } from "@/lib/security-group-rules";
-import { deleteBatchError, parseKeyPairId, type CreateAttempt, type KeyPairCreateResult } from "@/lib/key-pair";
+import {
+  deleteBatchError,
+  parseIdempotencyKey,
+  parseKeyPairId,
+  type CreateAttempt,
+  type KeyPairCreateResult,
+} from "@/lib/key-pair";
+import { isSnapshotId, isVolumeId, parseCreateSnapshot, parseCreateVolume } from "@/lib/ebs";
 
 async function each(ids: string[], run: (id: string) => Promise<ApiResult<void>>): Promise<ApiError | null> {
   for (const id of ids) {
@@ -87,12 +94,32 @@ export async function renameSubnetAction(id: string, name: string): Promise<ApiE
   return rename(vws.createSubnetTags, id, name);
 }
 
-export async function createVolumeAction(sizeGiB: number, volumeType: string) {
-  return errorOf(vws.createVolume(sizeGiB, volumeType));
+const INVALID_IDEMPOTENCY_KEY: ApiError = {
+  code: "InvalidArgument",
+  message: "The idempotency key is not valid.",
+  requestId: null,
+};
+
+/** Retrying with the same key returns the first volume; console-api refuses the key with a different body. */
+export async function createVolumeAction(raw: unknown, rawKey: unknown): Promise<ApiError | null> {
+  const input = parseCreateVolume(raw);
+  if ("code" in input) return input;
+  const key = typeof rawKey === "string" ? parseIdempotencyKey(rawKey) : null;
+  if (!key) return INVALID_IDEMPOTENCY_KEY;
+  return errorOf(vws.createVolume(input, key));
 }
 
-export async function deleteVolumesAction(ids: string[]) {
-  return each(ids, vws.deleteVolume);
+/** A resource that is already gone counts as deleted, so Delete after a partial failure finishes the rest. */
+const deleteOrGone =
+  (remove: (id: string) => Promise<ApiResult<void>>) =>
+  async (id: string): Promise<ApiResult<void>> => {
+    const result = await remove(id);
+    return !result.ok && result.error.code === "NotFound" ? { ok: true, value: undefined } : result;
+  };
+
+export async function deleteVolumesAction(ids: unknown): Promise<ApiError | null> {
+  if (!Array.isArray(ids) || !ids.every(isVolumeId)) return invalid("A volume ID is not valid.");
+  return each(ids, deleteOrGone(vws.deleteVolume));
 }
 
 const INVALID_BUCKET_NAME: ApiError = {
@@ -164,8 +191,12 @@ export async function deleteObjectAction(rawBucket: string, key: string): Promis
   return error;
 }
 
-export async function createSnapshotAction(volumeId: string, description: string) {
-  return errorOf(vws.createSnapshot(volumeId, description));
+export async function createSnapshotAction(raw: unknown, rawKey: unknown): Promise<ApiError | null> {
+  const input = parseCreateSnapshot(raw);
+  if ("code" in input) return input;
+  const key = typeof rawKey === "string" ? parseIdempotencyKey(rawKey) : null;
+  if (!key) return INVALID_IDEMPOTENCY_KEY;
+  return errorOf(vws.createSnapshot(input, key));
 }
 
 export async function createVpcAction(cidr: string, name = "") {
@@ -323,8 +354,9 @@ export async function releaseAddressesAction(ids: string[]) {
   return each(ids, vws.releaseAddress);
 }
 
-export async function deleteSnapshotsAction(ids: string[]) {
-  return each(ids, vws.deleteSnapshot);
+export async function deleteSnapshotsAction(ids: unknown): Promise<ApiError | null> {
+  if (!Array.isArray(ids) || !ids.every(isSnapshotId)) return invalid("A snapshot ID is not valid.");
+  return each(ids, deleteOrGone(vws.deleteSnapshot));
 }
 
 export async function createKeyPairAction(attempt: CreateAttempt): Promise<KeyPairCreateResult> {
