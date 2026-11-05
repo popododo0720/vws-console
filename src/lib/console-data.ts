@@ -24,6 +24,7 @@ export const computeNav: NavTree = {
   title: "EC2",
   sections: [
     { id: "dashboard", label: "Dashboard" },
+    { id: "global-view", label: "VWS Global View" },
     { id: "events", label: "Events" },
     {
       id: "instances-group",
@@ -51,7 +52,7 @@ export const computeNav: NavTree = {
     },
     {
       id: "block",
-      label: "EBS",
+      label: "Elastic Block Store",
       children: [
         { id: "volumes", label: "Volumes", href: "/storage/volumes" },
         { id: "snapshots", label: "Snapshots", href: "/storage/snapshots" },
@@ -75,6 +76,7 @@ export const computeNav: NavTree = {
       children: [
         { id: "balancers", label: "Load Balancers" },
         { id: "targets", label: "Target Groups" },
+        { id: "trust-stores", label: "Trust Stores" },
       ],
     },
     {

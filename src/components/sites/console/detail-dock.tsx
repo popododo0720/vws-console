@@ -53,7 +53,7 @@ export function DetailDock({
       />
       <div className="flex h-full flex-col pt-1.5">
         <div className="flex items-center px-3">
-          <div className="flex flex-1 items-center justify-center gap-1 text-[13px] font-semibold">
+          <h2 className="flex flex-1 items-center gap-1 px-1 py-1 text-[18px] font-bold">
             {title}
             {info ? (
               <button
@@ -65,7 +65,7 @@ export function DetailDock({
                 <Info className="size-3.5" />
               </button>
             ) : null}
-          </div>
+          </h2>
           <button
             type="button"
             aria-label="Reset detail height"
