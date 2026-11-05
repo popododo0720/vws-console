@@ -502,3 +502,16 @@ describe("object content", () => {
     expect(toObjectContent(reply("QQ==", 1), bucket, "a.bin").bytes).toEqual(new Uint8Array([65]));
   });
 });
+
+describe("parseVolumes", () => {
+  it("reads IOPS and throughput, and leaves them empty when console-api omits them", () => {
+    const [gp3, gp2] = parseVolumes({
+      items: [
+        { volumeId: "vol-0123456789abcdef0", size: 8, volumeType: "gp3", iops: 3000, throughput: 125 },
+        { volumeId: "vol-0123456789abcdef1", size: 8, volumeType: "gp2" },
+      ],
+    });
+    expect(gp3).toMatchObject({ iops: 3000, throughput: "125" });
+    expect(gp2).toMatchObject({ iops: null, throughput: "" });
+  });
+});
