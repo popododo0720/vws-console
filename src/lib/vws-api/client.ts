@@ -272,6 +272,26 @@ async function listAll<T>(path: ApiRoute, parse: (page: unknown) => T[], pageSiz
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Reads GET /operations/{id} every 500 ms until the operation leaves "running" or 60 s pass. A "running"
+ * operation back means the deadline passed; callers decide what that means for them.
+ */
+async function pollOperation(op: Operation): Promise<ApiResult<Operation>> {
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  while (op.state === "running") {
+    if (Date.now() > deadline) return { ok: true, value: op };
+    await sleep(POLL_INTERVAL_MS);
+    const polled = await request("GET", route("/operations/{id}", { id: op.id }));
+    if (!polled.ok) return { ok: false, error: polled.error };
+    try {
+      op = parseOperation(polled.value.json);
+    } catch {
+      return { ok: false, error: malformed(`/operations/${op.id}`) };
+    }
+  }
+  return { ok: true, value: op };
+}
+
 /** Sends a mutation. A 202 carries an operation, which is polled until it finishes. */
 async function mutate(path: ApiRoute, body?: unknown, idempotencyKey?: IdempotencyKey): Promise<ApiResult<void>> {
   const result = await mutateReturning(path, body, idempotencyKey);
@@ -287,28 +307,20 @@ async function mutateReturning(
   const sent = await request("POST", path, body, { idempotencyKey });
   if (!sent.ok) return { ok: false, error: sent.error };
   if (sent.value.status !== 202) return { ok: true, value: sent.value.json };
-  let op;
+  let accepted;
   try {
-    op = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
+    accepted = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
   } catch {
     return { ok: false, error: malformed(path.path) };
   }
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
-  while (op.state === "running") {
-    if (Date.now() > deadline) {
-      return {
-        ok: false,
-        error: { code: "OperationTimeout", message: `Operation ${op.id} is still running.`, requestId: null },
-      };
-    }
-    await sleep(POLL_INTERVAL_MS);
-    const polled = await request("GET", route("/operations/{id}", { id: op.id }));
-    if (!polled.ok) return { ok: false, error: polled.error };
-    try {
-      op = parseOperation(polled.value.json);
-    } catch {
-      return { ok: false, error: malformed(`/operations/${op.id}`) };
-    }
+  const polled = await pollOperation(accepted);
+  if (!polled.ok) return polled;
+  const op = polled.value;
+  if (op.state === "running") {
+    return {
+      ok: false,
+      error: { code: "OperationTimeout", message: `Operation ${op.id} is still running.`, requestId: null },
+    };
   }
   if (op.state === "failed") {
     return {
@@ -578,24 +590,16 @@ export async function createKeyPair(attempt: CreateAttempt): Promise<KeyPairCrea
     settlement: "succeeded",
   };
   if (sent.value.status !== 202) return { status: "ready", issued };
-  let op: Operation;
+  let accepted: Operation;
   try {
-    op = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
+    accepted = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
   } catch {
     return failedCreate(malformed("/key-pairs"), issued);
   }
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
-  while (op.state === "running") {
-    if (Date.now() > deadline) return { status: "ready", issued: { ...issued, settlement: "still-running" } };
-    await sleep(POLL_INTERVAL_MS);
-    const polled = await request("GET", route("/operations/{id}", { id: op.id }));
-    if (!polled.ok) return failedCreate(polled.error, issued);
-    try {
-      op = parseOperation(polled.value.json);
-    } catch {
-      return failedCreate(malformed(`/operations/${op.id}`), issued);
-    }
-  }
+  const polled = await pollOperation(accepted);
+  if (!polled.ok) return failedCreate(polled.error, issued);
+  const op = polled.value;
+  if (op.state === "running") return { status: "ready", issued: { ...issued, settlement: "still-running" } };
   if (op.state === "failed") {
     return failedCreate(
       op.error ?? { code: "OperationFailed", message: `Operation ${op.id} failed.`, requestId: null },
