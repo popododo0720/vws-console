@@ -4,8 +4,11 @@ import Link from "next/link";
 import type { Volume } from "@/types/console";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { computeNav } from "@/lib/console-data";
+import { attachedResource, formatEc2Time } from "@/lib/ebs";
 import { ResourceDetail } from "@/components/sites/console/resource-detail";
 import { CopyText, dash } from "@/components/sites/console/ui";
+
+const capitalize = (value: string) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : "—");
 
 export function VolumeDetailView({
   id,
@@ -34,27 +37,39 @@ export function VolumeDetailView({
               ["Volume ID", <CopyText key="id" value={volume.id} />],
               ["Size", `${volume.sizeGiB} GiB`],
               ["Type", dash(volume.volumeType)],
-              ["Volume state", volume.state ? volume.state.charAt(0).toUpperCase() + volume.state.slice(1) : "—"],
+              ["Volume state", capitalize(volume.state)],
+              ["IOPS", volume.iops === null ? "—" : String(volume.iops)],
+              ["Throughput", dash(volume.throughput)],
               ["Availability Zone", dash(volume.availabilityZone)],
-              ["Created", dash(volume.created)],
+              ["Created", dash(formatEc2Time(volume.created))],
               [
-                "Attached instance",
+                "Attached resources",
                 volume.attachment ? (
                   <Link
                     key="att"
                     href={`/compute/instances/${volume.attachment.instanceId}`}
                     className="text-[#006ce0] hover:underline"
                   >
-                    {volume.attachment.instanceId}
+                    {attachedResource(volume.attachment)}
                   </Link>
                 ) : (
                   "—"
                 ),
               ],
-              ["Device name", dash(volume.attachment?.device ?? "")],
-              ["Snapshot ID", dash(volume.snapshotId)],
-              ["IOPS", volume.iops === null ? "—" : String(volume.iops)],
-              ["Throughput", dash(volume.throughput)],
+              [
+                "Snapshot",
+                volume.snapshotId ? (
+                  <Link
+                    key="snap"
+                    href={`/storage/snapshots/${volume.snapshotId}`}
+                    className="text-[#006ce0] hover:underline"
+                  >
+                    {volume.snapshotId}
+                  </Link>
+                ) : (
+                  "—"
+                ),
+              ],
               ["Owner ID", dash(volume.owner)],
             ]
           : []

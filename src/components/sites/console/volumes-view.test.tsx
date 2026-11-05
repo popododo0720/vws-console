@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { attachVolumeAction, detachVolumeAction } from "@/app/actions/resources";
+import { attachVolumeAction, deleteVolumesAction, detachVolumeAction } from "@/app/actions/resources";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { VolumesView } from "@/components/sites/console/volumes-view";
 import type { ApiError } from "@/lib/vws-api/adapter";
@@ -50,7 +50,13 @@ function volume(id: string, state: string, attachment: Volume["attachment"]): Vo
 function renderVolumes(rows: Volume[], rowsInstances = instances) {
   render(
     <ConsoleProvider>
-      <VolumesView volumes={rows} loadError={null} instances={rowsInstances} instanceLoadError={null} />
+      <VolumesView
+        volumes={rows}
+        loadError={null}
+        instances={rowsInstances}
+        instanceLoadError={null}
+        loadedAt="2026-11-05T08:26:38.000Z"
+      />
     </ConsoleProvider>,
   );
 }
@@ -269,5 +275,49 @@ describe("VolumesView attach and detach", () => {
     fireEvent.click(screen.getByRole("button", { name: "Detach" }));
     expect(detachVolumeAction).toHaveBeenCalledWith("vol-1");
     expect(detachVolumeAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("matches the AWS column order and empty state", () => {
+    renderVolumes([]);
+    const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent?.trim());
+    expect(headers.slice(1)).toEqual([
+      "Name",
+      "Volume ID",
+      "Type",
+      "Size",
+      "IOPS",
+      "Throughput",
+      "Owner ID",
+      "Snapshot ID",
+      "Source volume ID",
+      "Created",
+      "Availability Zone",
+      "Volume state",
+      "Attached resources",
+    ]);
+    expect(screen.getByText("You currently have no volumes in this region")).toBeInTheDocument();
+    expect(screen.getByText("Fault tolerance for all volumes in this Region")).toBeInTheDocument();
+    expect(screen.getByText(/Last updated on Thu, Nov 5, 2026, 8:26:38 AM \(GMT\+00:00\)/)).toBeInTheDocument();
+  });
+
+  it("asks before deleting a volume", () => {
+    renderVolumes([volume("vol-1", "available", null)]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete volume" }));
+    expect(deleteVolumesAction).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "Delete volume" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(deleteVolumesAction).toHaveBeenCalledWith(["vol-1"]);
+  });
+
+  it("opens Create snapshot with the selected volume", () => {
+    renderVolumes([volume("vol-1", "available", null)]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    expect(screen.getByRole("menuitem", { name: "Create snapshot" })).toHaveAttribute(
+      "href",
+      "/storage/snapshots/create?volumeId=vol-1",
+    );
   });
 });

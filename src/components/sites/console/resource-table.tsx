@@ -31,6 +31,8 @@ export function ResourceTable<T>({
   emptyMessage,
   emptyAction,
   presets = [],
+  presetLabel,
+  presetPlaceholder = "Choose filter set",
   filterPlaceholder,
   initialSort = null,
   onRefresh,
@@ -47,6 +49,9 @@ export function ResourceTable<T>({
   emptyMessage: string;
   emptyAction?: { label: string; href?: string; onClick?: () => void };
   presets?: Preset<T>[];
+  /** Shows the preset select even with no presets, as a fixed scope such as "Owned by me". */
+  presetLabel?: string;
+  presetPlaceholder?: string;
   filterPlaceholder: string;
   initialSort?: { key: string; dir: "asc" | "desc" } | null;
   onRefresh?: () => void;
@@ -103,10 +108,10 @@ export function ResourceTable<T>({
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col px-4 pb-2", className)}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        {presets.length > 0 ? (
+        {presets.length > 0 || presetLabel ? (
           <label className="relative">
             <span className="absolute -top-2 left-2 z-[1] bg-white px-1 text-[10.5px] font-semibold leading-none text-[#5f6b7a]">
-              Saved filter sets
+              {presetLabel ?? "Saved filter sets"}
             </span>
             <select
               className="field fit appearance-none pr-8"
@@ -116,7 +121,7 @@ export function ResourceTable<T>({
                 setPage(0);
               }}
             >
-              <option value="">Choose filter set</option>
+              <option value="">{presetPlaceholder}</option>
               {presets.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.label}

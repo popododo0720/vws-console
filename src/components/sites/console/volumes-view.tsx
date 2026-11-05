@@ -1,15 +1,16 @@
 "use client";
 
-import { DetailLink } from "@/components/sites/console/resource-detail";
 import { useState } from "react";
-import { RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import type { Instance, Volume } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
+import { attachedResource, formatEc2Time, formatSummaryTime } from "@/lib/ebs";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { RefreshIconButton, primaryPill, secondaryPill } from "@/components/sites/console/ebs-form-parts";
+import { DetailLink } from "@/components/sites/console/resource-detail";
 import {
   attachVolumeAction,
-  createSnapshotAction,
-  createVolumeAction,
   deleteVolumesAction,
   detachVolumeAction,
   modifyVolumeAction,
@@ -20,18 +21,17 @@ import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
 import { Shell } from "@/components/sites/console/shell";
 import {
+  DetailGrid,
   FieldLabel,
-  InfoTip,
   MenuButton,
-  MenuChevron,
   OrangeButton,
   OutlineButton,
   PanelDialog,
   dash,
   menuTriggerClass,
+  orangeLinkClass,
 } from "@/components/sites/console/ui";
 
-const VOLUME_TYPES = ["gp3", "gp2", "standard"];
 const CUSTOM_DEVICE = "custom";
 const DEFAULT_DATA_DEVICE = "/dev/sdf";
 const ROOT_DEVICE_NAMES = ["/dev/sda1", "/dev/xvda"] as const;
@@ -49,20 +49,21 @@ export function VolumesView({
   loadError,
   instances,
   instanceLoadError,
+  loadedAt,
 }: {
   volumes: Volume[];
   loadError: ApiError | null;
   instances: Pick<Instance, "id" | "name" | "state" | "availabilityZone">[];
   instanceLoadError: ApiError | null;
+  /** When the server read the volumes, as ISO 8601. */
+  loadedAt: string;
 }) {
   const action = useApiAction();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(240);
   const [updated, setUpdated] = useState("less than a minute ago");
-  const [createOpen, setCreateOpen] = useState(false);
   const [recycleOpen, setRecycleOpen] = useState(false);
-  const [snapOpen, setSnapOpen] = useState(false);
-  const [snapDescription, setSnapDescription] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [modifySize, setModifySize] = useState(0);
   const [attachOpen, setAttachOpen] = useState(false);
@@ -70,14 +71,12 @@ export function VolumesView({
   const [attachInstanceId, setAttachInstanceId] = useState("");
   const [attachDevice, setAttachDevice] = useState(DEFAULT_DATA_DEVICE);
   const [customDevice, setCustomDevice] = useState("");
-  const [form, setForm] = useState({ volumeType: VOLUME_TYPES[0], sizeGiB: 8 });
   const selected = volumes.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
   const eligibleInstances = instances.filter(
     (item) => (item.state === "running" || item.state === "stopped") && item.availabilityZone === one?.availabilityZone,
   );
   const deviceName = (attachDevice === CUSTOM_DEVICE ? customDevice : attachDevice).trim();
-  const backedUp = volumes.filter((item) => item.snapshotId).length;
   const refresh = () => {
     setUpdated("less than a minute ago");
     action.refresh();
@@ -98,6 +97,58 @@ export function VolumesView({
       sortValue: (row) => row.id,
       cell: (row) => <DetailLink href={`/storage/volumes/${row.id}`} id={row.id} />,
     },
+    { key: "type", header: "Type", minWidth: 100, sortValue: (row) => row.volumeType, cell: (row) => row.volumeType },
+    {
+      key: "size",
+      header: "Size",
+      minWidth: 100,
+      sortValue: (row) => String(row.sizeGiB).padStart(6, "0"),
+      cell: (row) => `${row.sizeGiB} GiB`,
+    },
+    {
+      key: "iops",
+      header: "IOPS",
+      minWidth: 100,
+      sortValue: (row) => String(row.iops ?? "").padStart(7, "0"),
+      cell: (row) => (row.iops === null ? "—" : row.iops),
+    },
+    {
+      key: "throughput",
+      header: "Throughput",
+      minWidth: 120,
+      sortValue: (row) => row.throughput.padStart(5, "0"),
+      cell: (row) => dash(row.throughput),
+    },
+    { key: "owner", header: "Owner ID", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => dash(row.owner) },
+    {
+      key: "snapshot",
+      header: "Snapshot ID",
+      minWidth: 140,
+      sortValue: (row) => row.snapshotId,
+      cell: (row) =>
+        row.snapshotId ? <DetailLink href={`/storage/snapshots/${row.snapshotId}`} id={row.snapshotId} /> : "—",
+    },
+    {
+      key: "source",
+      header: "Source volume ID",
+      minWidth: 160,
+      sortValue: (row) => row.sourceVolumeId,
+      cell: (row) => dash(row.sourceVolumeId),
+    },
+    {
+      key: "created",
+      header: "Created",
+      minWidth: 200,
+      sortValue: (row) => row.created,
+      cell: (row) => dash(formatEc2Time(row.created)),
+    },
+    {
+      key: "az",
+      header: "Availability Zone",
+      minWidth: 150,
+      sortValue: (row) => row.availabilityZone,
+      cell: (row) => row.availabilityZone,
+    },
     {
       key: "state",
       header: "Volume state",
@@ -105,56 +156,12 @@ export function VolumesView({
       sortValue: (row) => volumeState(row),
       cell: (row) => volumeState(row),
     },
-    { key: "type", header: "Type", minWidth: 130, sortValue: (row) => row.volumeType, cell: (row) => row.volumeType },
     {
-      key: "size",
-      header: "Size",
-      minWidth: 80,
-      sortValue: (row) => String(row.sizeGiB),
-      cell: (row) => `${row.sizeGiB} GiB`,
-    },
-    {
-      key: "iops",
-      header: "IOPS",
-      minWidth: 80,
-      sortValue: (row) => String(row.iops ?? ""),
-      cell: (row) => (row.iops === null ? "—" : row.iops),
-    },
-    {
-      key: "throughput",
-      header: "Throughput",
-      minWidth: 110,
-      sortValue: (row) => row.throughput,
-      cell: (row) => dash(row.throughput),
-    },
-    { key: "owner", header: "Owner ID", minWidth: 140, sortValue: (row) => row.owner, cell: (row) => dash(row.owner) },
-    {
-      key: "snapshot",
-      header: "Snapshot ID",
-      minWidth: 120,
-      sortValue: (row) => row.snapshotId,
-      cell: (row) => dash(row.snapshotId),
-    },
-    {
-      key: "source",
-      header: "Source volume ID",
-      minWidth: 150,
-      sortValue: (row) => row.sourceVolumeId,
-      cell: (row) => dash(row.sourceVolumeId),
-    },
-    {
-      key: "created",
-      header: "Created",
-      minWidth: 120,
-      sortValue: (row) => row.created,
-      cell: (row) => dash(row.created),
-    },
-    {
-      key: "az",
-      header: "Availability",
-      minWidth: 120,
-      sortValue: (row) => row.availabilityZone,
-      cell: (row) => row.availabilityZone,
+      key: "attached",
+      header: "Attached resources",
+      minWidth: 220,
+      sortValue: (row) => attachedResource(row.attachment),
+      cell: (row) => dash(attachedResource(row.attachment)),
     },
   ];
 
@@ -171,16 +178,46 @@ export function VolumesView({
               <br />
               {updated}
             </span>
-            <RefreshButton onClick={refresh} />
-            <OutlineButton onClick={() => setRecycleOpen(true)}>Recycle bin</OutlineButton>
+            <RefreshIconButton label="Refresh" onClick={refresh} />
+            <OutlineButton className={secondaryPill} onClick={() => setRecycleOpen(true)}>
+              <ExternalLink className="size-3.5" />
+              Recycle Bin
+            </OutlineButton>
             <MenuButton
-              className={menuTriggerClass()}
+              className={`${menuTriggerClass()} ${secondaryPill} gap-1.5`}
               label={
                 <>
-                  Actions <MenuChevron />
+                  Actions{" "}
+                  <span aria-hidden className="text-[9px]">
+                    ▼
+                  </span>
                 </>
               }
               items={[
+                {
+                  label: "Modify volume",
+                  disabled: !one,
+                  onSelect: () => {
+                    if (!one) return;
+                    action.clear();
+                    setModifySize(one.sizeGiB + 1);
+                    setModifyOpen(true);
+                  },
+                },
+                {
+                  label: "Create snapshot",
+                  disabled: !one,
+                  href: one ? `/storage/snapshots/create?volumeId=${one.id}` : undefined,
+                },
+                { label: "Create snapshot lifecycle policy", disabled: true },
+                {
+                  label: "Delete volume",
+                  disabled: action.pending || selected.length === 0,
+                  onSelect: () => {
+                    action.clear();
+                    setDeleteOpen(true);
+                  },
+                },
                 {
                   label: "Attach volume",
                   disabled: action.pending || !one || one.state !== "available",
@@ -200,42 +237,14 @@ export function VolumesView({
                     setDetachOpen(true);
                   },
                 },
-                {
-                  label: "Create snapshot",
-                  disabled: !one,
-                  onSelect: () => {
-                    setSnapDescription("");
-                    setSnapOpen(true);
-                  },
-                },
-                {
-                  label: "Modify volume",
-                  disabled: !one,
-                  onSelect: () => {
-                    if (!one) return;
-                    setModifySize(one.sizeGiB + 1);
-                    setModifyOpen(true);
-                  },
-                },
-                {
-                  label: "Delete volume",
-                  disabled: action.pending || selected.length === 0,
-                  onSelect: () =>
-                    action.run(
-                      () => deleteVolumesAction(selected.map((item) => item.id)),
-                      () => setSelectedIds([]),
-                    ),
-                },
+                { label: "Force detach volume", disabled: true },
+                { label: "Manage auto-enabled I/O", disabled: true },
+                { label: "Manage tags", disabled: true },
               ]}
             />
-            <OrangeButton
-              onClick={() => {
-                action.clear();
-                setCreateOpen(true);
-              }}
-            >
+            <Link href="/storage/volumes/create" className={`${orangeLinkClass} ${primaryPill}`}>
               Create volume
-            </OrangeButton>
+            </Link>
           </>
         }
       />
@@ -248,7 +257,7 @@ export function VolumesView({
         columns={columns}
         selectedIds={selected.map((item) => item.id)}
         onSelectedIds={setSelectedIds}
-        emptyTitle="No volumes"
+        emptyTitle=""
         emptyMessage="You currently have no volumes in this region"
         filterPlaceholder="Search"
         presets={[
@@ -263,8 +272,8 @@ export function VolumesView({
         onHeight={setDock}
       >
         {one ? (
-          <dl className="grid gap-x-8 gap-y-3 text-[13px] sm:grid-cols-3">
-            {[
+          <DetailGrid
+            items={[
               ["Volume ID", one.id],
               ["Size", `${one.sizeGiB} GiB`],
               ["Type", one.volumeType],
@@ -272,57 +281,48 @@ export function VolumesView({
               ["IOPS", one.iops === null ? "—" : String(one.iops)],
               ["Throughput", dash(one.throughput)],
               ["Availability Zone", one.availabilityZone],
-              ["Created", dash(one.created)],
-              ["Attached instance", dash(one.attachment?.instanceId ?? "")],
-              ["Device name", dash(one.attachment?.device ?? "")],
+              ["Created", dash(formatEc2Time(one.created))],
+              ["Attached resources", dash(attachedResource(one.attachment))],
               ["Snapshot ID", dash(one.snapshotId)],
               ["Source volume ID", dash(one.sourceVolumeId)],
               ["Owner ID", dash(one.owner)],
-            ].map(([k, v]) => (
-              <div key={k}>
-                <dt className="font-semibold text-[#5f6b7a]">{k}</dt>
-                <dd className="break-all">{v}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : null}
-        {!one ? (
-          <article className="rounded-lg border border-[#e6e8eb] p-4">
+            ]}
+          />
+        ) : (
+          <article className="rounded-2xl border border-[#c6c6cd] px-5 py-4 text-[14px]">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <h3 className="text-[16px] font-bold">Snapshot summary</h3>
-              <span className="flex items-center gap-2 text-[12px] text-[#5f6b7a]">
-                Last updated {updated}
-                <RefreshButton onClick={refresh} />
+              <h3 className="text-[18px] font-bold">Snapshot summary</h3>
+              <span className="flex items-center gap-2">
+                Last updated on {formatSummaryTime(loadedAt)}
+                <RefreshIconButton label="Refresh snapshot summary" onClick={refresh} />
               </span>
             </div>
-            <p className="mt-1 max-w-3xl text-[13px] text-[#5f6b7a]">
-              Snapshots back up a volume on demand, or on a schedule you attach to a lifecycle policy or a backup plan.
+            <p className="mt-1">
+              Snapshots to back up volumes can be manually created, or created through automation such as VWS Data
+              Lifecycle Manager, VWS Backup, custom scripts, or third-party tools.
             </p>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-[13px] font-semibold">Volumes with a snapshot / Total # volumes</p>
-                <p className="mt-1 text-[13px]">
-                  {backedUp} / {volumes.length}
+                <p className="font-bold">Volumes backed up in the last 24 hours / Total # volumes</p>
+                <p className="mt-1" title="console-api does not report when a snapshot started.">
+                  — / {volumes.length}
                 </p>
               </div>
-              <div className="sm:border-l sm:border-[#e6e8eb] sm:pl-4">
-                <p className="flex items-center gap-1 text-[13px] font-semibold">
-                  Default snapshot policy status
-                  <InfoTip text="Lifecycle manager would schedule snapshots. This preview only counts volumes that already have a snapshot id." />
-                </p>
-                <p className="mt-1 text-[13px] text-[#5f6b7a]">No default policy set up</p>
+              <div className="sm:border-l sm:border-[#c6c6cd] sm:pl-5">
+                <p className="font-bold">Data Lifecycle Manager default policy for EBS Snapshots status</p>
+                <p className="mt-1">No default policy set up</p>
               </div>
             </div>
           </article>
-        ) : null}
+        )}
       </DetailDock>
       <PanelDialog
         open={recycleOpen}
-        title="Recycle bin"
+        title="Recycle Bin"
         onClose={() => setRecycleOpen(false)}
         footer={<OutlineButton onClick={() => setRecycleOpen(false)}>Close</OutlineButton>}
       >
-        <p>The recycle bin is empty. Deleted volumes are removed immediately.</p>
+        <p>The Recycle Bin is empty. Deleted volumes are removed immediately.</p>
       </PanelDialog>
       <PanelDialog
         open={modifyOpen}
@@ -501,102 +501,38 @@ export function VolumesView({
         )}
       </PanelDialog>
       <PanelDialog
-        open={snapOpen}
-        title="Create snapshot"
-        onClose={() => setSnapOpen(false)}
+        open={deleteOpen}
+        title={selected.length > 1 ? "Delete volumes" : "Delete volume"}
+        onClose={() => setDeleteOpen(false)}
         footer={
           <>
-            <OutlineButton onClick={() => setSnapOpen(false)}>Cancel</OutlineButton>
+            <OutlineButton onClick={() => setDeleteOpen(false)}>Cancel</OutlineButton>
             <OrangeButton
-              disabled={action.pending}
-              onClick={() => {
-                if (one)
-                  action.run(
-                    () => createSnapshotAction(one.id, snapDescription),
-                    () => setSnapOpen(false),
-                  );
-              }}
-            >
-              Create snapshot
-            </OrangeButton>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Volume ID</FieldLabel>
-            <p className="text-[13px]">{one?.id ?? "—"}</p>
-          </div>
-          <div>
-            <FieldLabel>Description</FieldLabel>
-            <input
-              className="field"
-              value={snapDescription}
-              onChange={(event) => setSnapDescription(event.target.value)}
-            />
-          </div>
-        </div>
-      </PanelDialog>
-      <PanelDialog
-        open={createOpen}
-        title="Create volume"
-        onClose={() => setCreateOpen(false)}
-        footer={
-          <>
-            <OutlineButton onClick={() => setCreateOpen(false)}>Cancel</OutlineButton>
-            <OrangeButton
-              disabled={action.pending}
+              disabled={action.pending || selected.length === 0}
               onClick={() =>
                 action.run(
-                  () => createVolumeAction(Number(form.sizeGiB) || 1, form.volumeType),
-                  () => setCreateOpen(false),
+                  () => deleteVolumesAction(selected.map((item) => item.id)),
+                  () => {
+                    setSelectedIds([]);
+                    setDeleteOpen(false);
+                  },
                 )
               }
             >
-              Create volume
+              Delete
             </OrangeButton>
           </>
         }
       >
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Type</FieldLabel>
-            <select
-              className="field"
-              value={form.volumeType}
-              onChange={(event) => setForm({ ...form, volumeType: event.target.value })}
-            >
-              {VOLUME_TYPES.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <FieldLabel>Size (GiB)</FieldLabel>
-            <input
-              className="field"
-              type="number"
-              min={1}
-              value={form.sizeGiB}
-              onChange={(event) => setForm({ ...form, sizeGiB: Number(event.target.value) })}
-            />
-          </div>
-          <ApiErrorAlert error={action.error} title="The volume could not be created" />
-        </div>
+        <ApiErrorAlert error={action.error} title="The volume could not be deleted" />
+        <p>Are you sure you want to delete the following {selected.length > 1 ? "volumes" : "volume"}?</p>
+        <ul className="mt-2 list-disc pl-5 font-mono text-[12px]">
+          {selected.map((item) => (
+            <li key={item.id}>{item.id}</li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[#5f6b7a]">Deleted volumes cannot be recovered.</p>
       </PanelDialog>
     </Shell>
-  );
-}
-
-function RefreshButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label="Refresh"
-      className="grid size-8 place-items-center rounded-full border-2 border-[#006ce0] text-[#006ce0] hover:bg-[#f2f8fd]"
-      onClick={onClick}
-    >
-      <RefreshCw className="size-3.5" />
-    </button>
   );
 }
