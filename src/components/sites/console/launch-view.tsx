@@ -217,8 +217,7 @@ export function LaunchView({
                 <div className="relative mt-3">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6b7a]" />
                   <input
-                    className="field"
-                    style={{ paddingLeft: 32 }}
+                    className="field !pl-8"
                     aria-label="Search images"
                     placeholder="Search our full catalog of application and OS images"
                     value={imageQuery}
