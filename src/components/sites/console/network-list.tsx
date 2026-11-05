@@ -6,17 +6,12 @@ import { networkNav } from "@/lib/console-data";
 import type { Vpc } from "@/types/console";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { DetailDock } from "@/components/sites/console/detail-dock";
+import { ListActions } from "@/components/sites/console/list-actions";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, ResourceTable } from "@/components/sites/console/resource-table";
 import { Shell } from "@/components/sites/console/shell";
-import {
-  MenuButton,
-  MenuChevron,
-  OrangeButton,
-  SampleBadge,
-  menuTriggerClass,
-  type MenuEntry,
-} from "@/components/sites/console/ui";
+import { SampleBadge, type MenuEntry } from "@/components/sites/console/ui";
+import { VpcFilter } from "@/components/sites/console/vpc-filter";
 
 type ListAction<T> = {
   label: string;
@@ -38,9 +33,11 @@ export function NetworkList<T>({
   actions,
   createLabel,
   onCreate,
-  emptyTitle,
-  emptyMessage,
+  emptyLine,
   filterPlaceholder,
+  showLastUpdated = false,
+  hideCount = false,
+  selectTitle,
   detailTitle,
   detailTabs,
   renderDetail,
@@ -56,9 +53,12 @@ export function NetworkList<T>({
   actions: ListAction<T>[];
   createLabel: string;
   onCreate: () => void;
-  emptyTitle: string;
-  emptyMessage: string;
+  emptyLine: string;
   filterPlaceholder: string;
+  showLastUpdated?: boolean;
+  hideCount?: boolean;
+  /** The dock title while no row is selected. */
+  selectTitle: string;
   detailTitle: (row: T) => string;
   detailTabs?: Tab[];
   renderDetail: (row: T, tab: string) => ReactNode;
@@ -72,7 +72,6 @@ export function NetworkList<T>({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(240);
   const [tab, setTab] = useState(detailTabs?.[0]?.id ?? "details");
-  const [updated, setUpdated] = useState("Last updated less than a minute ago");
   const visible = vpcOf && vpcFilter !== "all" ? rows.filter((row) => vpcOf(row) === vpcFilter) : rows;
   const selected = visible.filter((row) => selectedIds.includes(getId(row)));
   const one = selected.length === 1 ? selected[0] : null;
@@ -89,43 +88,24 @@ export function NetworkList<T>({
     <Shell
       tree={networkNav}
       navHeader={
-        vpcOf ? (
-          <label className="block text-[12px]">
-            Filter by VPC
-            <select className="field mt-1" value={vpcFilter} onChange={(event) => setVpcFilter(event.target.value)}>
-              <option value="all">Choose a VPC</option>
-              {(live ? live.vpcs : api.vpcs).map((vpc) => (
-                <option key={vpc.id} value={vpc.id}>
-                  {vpc.name || vpc.id}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : undefined
+        vpcOf ? <VpcFilter vpcs={live ? live.vpcs : api.vpcs} value={vpcFilter} onChange={setVpcFilter} /> : undefined
       }
     >
       <PageHeader
         mark="N"
-        crumbs={[{ label: "VPC", href: "/network/vpcs" }, { label: `${title} (${visible.length})` }]}
+        crumbs={[{ label: "VPC", href: "/network/vpcs" }, { label: title }]}
+        count={hideCount ? undefined : visible.length}
         info={info}
-        meta={
-          <span className="inline-flex items-center gap-2">
-            {!live && api.mode === "sample" ? <SampleBadge /> : null}
-            {live ? null : updated}
-          </span>
-        }
         actions={
           <>
-            <MenuButton
-              className={menuTriggerClass()}
-              label={
-                <>
-                  Actions <MenuChevron />
-                </>
-              }
+            {!live && api.mode === "sample" ? <SampleBadge /> : null}
+            <ListActions
+              showLastUpdated={showLastUpdated}
+              onRefresh={live ? live.onRefresh : () => undefined}
               items={items}
+              createLabel={createLabel}
+              onCreate={onCreate}
             />
-            <OrangeButton onClick={onCreate}>{createLabel}</OrangeButton>
           </>
         }
       />
@@ -136,25 +116,20 @@ export function NetworkList<T>({
         columns={columns}
         selectedIds={selected.map(getId)}
         onSelectedIds={setSelectedIds}
-        emptyTitle={emptyTitle}
-        emptyMessage={emptyMessage}
-        emptyAction={{ label: createLabel, onClick: onCreate }}
+        emptyTitle=""
+        emptyMessage={emptyLine}
         filterPlaceholder={filterPlaceholder}
-        onRefresh={live ? live.onRefresh : () => setUpdated("Last updated less than a minute ago")}
+        variant="aws-list"
       />
       <DetailDock
-        title={one ? detailTitle(one) : "Select a resource"}
+        title={one ? detailTitle(one) : selectTitle}
         tabs={one ? detailTabs : undefined}
         tab={tab}
         onTab={setTab}
         height={dock}
         onHeight={setDock}
       >
-        {one ? (
-          renderDetail(one, tab)
-        ) : (
-          <p className="py-6 text-center text-[13px] text-[#5f6b7a]">Select a resource above to see its details.</p>
-        )}
+        {one ? renderDetail(one, tab) : null}
       </DetailDock>
       {children}
     </Shell>

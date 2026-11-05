@@ -4,38 +4,27 @@ import { DetailLink } from "@/components/sites/console/resource-detail";
 import { useState } from "react";
 import { TagsTable } from "@/components/sites/console/tags-table";
 import { useSearchParams } from "next/navigation";
-import { CircleCheck } from "lucide-react";
 import type { Subnet, Vpc } from "@/types/console";
 import { networkNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
 import { createVpcAction, deleteVpcsAction, renameVpcAction } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
+import { ListActions } from "@/components/sites/console/list-actions";
+import { BlockPublicAccessCell, SuccessBadge } from "@/components/sites/console/network-cells";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
 import { Shell } from "@/components/sites/console/shell";
-import {
-  FieldLabel,
-  MenuButton,
-  MenuChevron,
-  OrangeButton,
-  OutlineButton,
-  PanelDialog,
-  dash,
-  menuTriggerClass,
-} from "@/components/sites/console/ui";
-
-function blockPublicAccess(value: Vpc["blockPublicAccess"]) {
-  return value === "" ? "—" : value === "off" ? "Off" : "On";
-}
+import { FieldLabel, OrangeButton, OutlineButton, PanelDialog, dash } from "@/components/sites/console/ui";
+import { VpcFilter } from "@/components/sites/console/vpc-filter";
 
 export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: Subnet[]; loadError: ApiError | null }) {
   const action = useApiAction();
-  const initial = useSearchParams().get("vpc") ?? "all";
-  const [vpcFilter, setVpcFilter] = useState(initial);
+  const params = useSearchParams();
+  const [vpcFilter, setVpcFilter] = useState(params.get("vpc") ?? "all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(200);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(params.get("create") === "1");
   const [vpcTab, setVpcTab] = useState("details");
   const [cidr, setCidr] = useState("10.1.0.0/16");
   const [newName, setNewName] = useState("");
@@ -72,10 +61,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
       sortValue: (row) => row.state,
       cell: (row) =>
         row.state === "available" ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#e7f6e9] px-2 py-0.5 text-[12px] font-medium text-[#037f0c]">
-            <CircleCheck className="size-3.5" />
-            Available
-          </span>
+          <SuccessBadge>Available</SuccessBadge>
         ) : (
           <span className="text-[#006ce0]">Pending</span>
         ),
@@ -96,10 +82,10 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
     },
     {
       key: "block",
-      header: "Block public access",
+      header: "Block Public Access",
       minWidth: 150,
       sortValue: (row) => row.blockPublicAccess,
-      cell: (row) => blockPublicAccess(row.blockPublicAccess),
+      cell: (row) => <BlockPublicAccessCell value={row.blockPublicAccess} />,
     },
     { key: "cidr", header: "IPv4 CIDR", minWidth: 130, sortValue: (row) => row.ipv4Cidr, cell: (row) => row.ipv4Cidr },
     {
@@ -112,26 +98,11 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
   ];
 
   return (
-    <Shell
-      tree={networkNav}
-      navHeader={
-        <label className="block text-[12px]">
-          Filter by VPC
-          <select className="field mt-1" value={vpcFilter} onChange={(event) => setVpcFilter(event.target.value)}>
-            <option value="all">Choose a VPC</option>
-            {vpcs.map((vpc) => (
-              <option key={vpc.id} value={vpc.id}>
-                {vpc.name || vpc.id}
-              </option>
-            ))}
-          </select>
-        </label>
-      }
-    >
+    <Shell tree={networkNav} navHeader={<VpcFilter vpcs={vpcs} value={vpcFilter} onChange={setVpcFilter} />}>
       <PageHeader
         mark="N"
         crumbs={[{ label: "VPC", href: "/network/vpcs" }, { label: "Your VPCs" }]}
-        title={`Your VPCs (${rows.length})`}
+        count={rows.length}
         lead={
           <div className="border-b border-[#e6e8eb] px-4 pt-3">
             <p className="text-[20px] font-bold leading-7">Your VPCs</p>
@@ -143,28 +114,23 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
         }
         info="A VPC is an isolated network in the current region, read from the VWS API."
         actions={
-          <>
-            <MenuButton
-              className={menuTriggerClass()}
-              label={
-                <>
-                  Actions <MenuChevron />
-                </>
-              }
-              items={[
-                {
-                  label: "Delete",
-                  disabled: action.pending || selected.length === 0,
-                  onSelect: () =>
-                    action.run(
-                      () => deleteVpcsAction(selected.map((item) => item.id)),
-                      () => setSelectedIds([]),
-                    ),
-                },
-              ]}
-            />
-            <OrangeButton onClick={() => setCreateOpen(true)}>Create VPC</OrangeButton>
-          </>
+          <ListActions
+            showLastUpdated
+            onRefresh={action.refresh}
+            items={[
+              {
+                label: "Delete",
+                disabled: action.pending || selected.length === 0,
+                onSelect: () =>
+                  action.run(
+                    () => deleteVpcsAction(selected.map((item) => item.id)),
+                    () => setSelectedIds([]),
+                  ),
+              },
+            ]}
+            createLabel="Create VPC"
+            onCreate={() => setCreateOpen(true)}
+          />
         }
       />
       <ApiErrorAlert error={loadError} title="VPCs could not be loaded" />
@@ -175,11 +141,10 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
         columns={columns}
         selectedIds={selected.map((item) => item.id)}
         onSelectedIds={setSelectedIds}
-        emptyTitle="No VPCs"
-        emptyMessage="You do not have any VPCs in this region"
+        emptyTitle=""
+        emptyMessage="No VPCs found"
         filterPlaceholder="Filter VPCs by attribute or tag"
-        presets={[{ id: "default", label: "Default VPC", match: (row) => row.isDefault === true }]}
-        onRefresh={action.refresh}
+        variant="aws-list"
       />
       <DetailDock
         title={one ? one.name || one.id : "Select a VPC above"}

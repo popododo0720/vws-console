@@ -37,6 +37,7 @@ export function ResourceTable<T>({
   initialSort = null,
   onRefresh,
   hideRefresh = false,
+  variant = "default",
   className,
   bodyClassName,
 }: {
@@ -56,10 +57,13 @@ export function ResourceTable<T>({
   initialSort?: { key: string; dir: "asc" | "desc" } | null;
   onRefresh?: () => void;
   hideRefresh?: boolean;
+  /** "aws-list" is the VPC list layout: a 650px filter, pager and gear on the right, no refresh button, a one-line empty state. */
+  variant?: "default" | "aws-list";
   className?: string;
   bodyClassName?: string;
 }) {
   const { density } = useConsole();
+  const awsList = variant === "aws-list";
   const [query, setQuery] = useState("");
   const [preset, setPreset] = useState("");
   const [sort, setSort] = useState(initialSort);
@@ -131,7 +135,7 @@ export function ResourceTable<T>({
             <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6b7a]" />
           </label>
         ) : null}
-        <div className="relative min-w-48 flex-1">
+        <div className={cn("relative min-w-48 flex-1", awsList && "max-w-[650px]")}>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6b7a]" />
           <input
             className="field w-full"
@@ -145,7 +149,7 @@ export function ResourceTable<T>({
             }}
           />
         </div>
-        {hideRefresh ? null : (
+        {hideRefresh || awsList ? null : (
           <button
             type="button"
             aria-label="Refresh"
@@ -161,7 +165,7 @@ export function ResourceTable<T>({
             <RefreshCw className="size-3.5" />
           </button>
         )}
-        <div className="flex items-center gap-1 text-[13px]">
+        <div className={cn("flex items-center gap-1 text-[13px]", awsList && "ml-auto")}>
           <button
             type="button"
             aria-label="Previous page"
@@ -280,7 +284,9 @@ export function ResourceTable<T>({
             </tbody>
           </table>
         </div>
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && awsList && rows.length === 0 ? (
+          <p className="py-3 text-center text-[13px] text-[#5f6b7a]">{emptyMessage}</p>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-4 text-center">
             <p className="font-semibold">{rows.length === 0 ? emptyTitle : "No matches"}</p>
             <p className="mt-1 max-w-md text-[13px] text-[#5f6b7a]">

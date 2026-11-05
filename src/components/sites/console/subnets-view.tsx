@@ -6,6 +6,7 @@ import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-acti
 import { createSubnetAction, deleteSubnetsAction, renameSubnetAction } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { NetworkList } from "@/components/sites/console/network-list";
+import { BlockPublicAccessCell, SuccessBadge, blockPublicAccessLabel } from "@/components/sites/console/network-cells";
 import { Column, NameCell } from "@/components/sites/console/resource-table";
 import { TagsTable } from "@/components/sites/console/tags-table";
 import {
@@ -62,7 +63,7 @@ export function SubnetsView({
       header: "State",
       minWidth: 100,
       sortValue: (row) => row.state,
-      cell: (row) => (row.state === "available" ? "Available" : "Pending"),
+      cell: (row) => (row.state === "available" ? <SuccessBadge>Available</SuccessBadge> : "Pending"),
     },
     {
       key: "vpc",
@@ -71,6 +72,14 @@ export function SubnetsView({
       sortValue: (row) => row.vpcId,
       cell: (row) => <CopyText value={row.vpcId} />,
     },
+    {
+      key: "block",
+      header: "Block Public Access",
+      minWidth: 170,
+      sortValue: (row) => row.blockPublicAccess,
+      cell: (row) => <BlockPublicAccessCell value={row.blockPublicAccess} />,
+    },
+    { key: "ipv6", header: "IPv6 CIDR", minWidth: 120, sortValue: () => "", cell: () => "—" },
     { key: "cidr", header: "IPv4 CIDR", minWidth: 130, sortValue: (row) => row.ipv4Cidr, cell: (row) => row.ipv4Cidr },
     {
       key: "ips",
@@ -127,9 +136,10 @@ export function SubnetsView({
       ]}
       createLabel="Create subnet"
       onCreate={openCreate}
-      emptyTitle="No subnets found"
-      emptyMessage="You do not have any subnets in this region"
+      emptyLine="No subnets found"
       filterPlaceholder="Find subnets by attribute or tag"
+      showLastUpdated
+      selectTitle="Select a subnet"
       detailTitle={(row) => `${row.id}${row.name ? ` / ${row.name}` : ""}`}
       detailTabs={[
         { id: "details", label: "Details" },
@@ -147,6 +157,7 @@ export function SubnetsView({
               ["Available IPv4 addresses", optional(row.availableIps, String)],
               ["Availability Zone", dash(row.availabilityZone)],
               ["Route table", dash(row.routeTableId)],
+              ["Block Public Access", blockPublicAccessLabel(row.blockPublicAccess)],
               ["Auto-assign public IPv4 address", optional(row.autoAssignPublicIp, (value) => (value ? "Yes" : "No"))],
               ["IPv6 CIDR", "—"],
             ]}

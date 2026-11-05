@@ -25,7 +25,7 @@ export const computeNav: NavTree = {
   title: "EC2",
   sections: [
     { id: "dashboard", label: "Dashboard" },
-    { id: "global-view", label: "VWS Global View" },
+    { id: "global-view", label: "VWS Global View", external: true },
     { id: "events", label: "Events" },
     {
       id: "instances-group",
@@ -91,8 +91,9 @@ export const computeNav: NavTree = {
 export const networkNav: NavTree = {
   id: "network",
   title: "VPC dashboard",
+  href: "/network",
   sections: [
-    { id: "global", label: "Global view" },
+    { id: "global", label: "VWS Global View", external: true },
     {
       id: "vpc-group",
       label: "Virtual private cloud",
@@ -102,11 +103,10 @@ export const networkNav: NavTree = {
         { id: "routes", label: "Route tables", href: "/network/route-tables" },
         { id: "igw", label: "Internet gateways", href: "/network/internet-gateways" },
         { id: "eigw", label: "Egress-only internet gateways" },
-        { id: "carrier", label: "Carrier gateways" },
         { id: "dhcp", label: "DHCP option sets" },
         { id: "addresses", label: "Elastic IPs", href: "/network/elastic-ips" },
         { id: "prefix", label: "Managed prefix lists" },
-        { id: "nat", label: "NAT gateways" },
+        { id: "nat", label: "NAT gateways", href: "/network/nat-gateways" },
         { id: "peer", label: "Peering connections" },
         { id: "route-servers", label: "Route servers" },
       ],

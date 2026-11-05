@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { InternetGateway } from "@/types/console";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { NetworkList } from "@/components/sites/console/network-list";
+import { SuccessBadge } from "@/components/sites/console/network-cells";
 import { Column } from "@/components/sites/console/resource-table";
 import {
   CopyText,
@@ -38,7 +39,7 @@ export function GatewaysView() {
       header: "State",
       minWidth: 110,
       sortValue: (row) => row.state,
-      cell: (row) => (row.state === "attached" ? "Attached" : "Detached"),
+      cell: (row) => (row.state === "attached" ? <SuccessBadge>Attached</SuccessBadge> : "Detached"),
     },
     {
       key: "vpc",
@@ -86,9 +87,9 @@ export function GatewaysView() {
       ]}
       createLabel="Create internet gateway"
       onCreate={() => open({ kind: "create" })}
-      emptyTitle="No internet gateways found"
-      emptyMessage="You do not have any internet gateways in this region"
-      filterPlaceholder="Filter internet gateways"
+      emptyLine="No internet gateways found"
+      filterPlaceholder="Find internet gateways by attribute or tag"
+      selectTitle="Select an internet gateway above"
       detailTitle={(row) => `${row.id}${row.name ? ` / ${row.name}` : ""}`}
       renderDetail={(row) => (
         <DetailGrid

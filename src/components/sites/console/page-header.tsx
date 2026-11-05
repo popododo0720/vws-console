@@ -39,16 +39,17 @@ export function PageHeader({
   title: heading,
   lead,
   info,
+  count,
   actions,
-  meta,
 }: {
   mark?: string;
   crumbs: { label: string; href?: string }[];
   title?: string;
   lead?: ReactNode;
   info?: string;
+  /** Shown in grey after the title, as "(3)". */
+  count?: number;
   actions?: ReactNode;
-  meta?: ReactNode;
 }) {
   const title = heading ?? crumbs[crumbs.length - 1]?.label ?? "";
   return (
@@ -57,13 +58,13 @@ export function PageHeader({
       {lead}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-2 pt-3">
         <div className="flex min-w-0 items-center gap-2">
-          <h1 className="text-[20px] font-bold leading-7">{title}</h1>
+          <h1 className="text-[20px] font-bold leading-7">
+            {title}
+            {count === undefined ? null : <span className="font-normal text-[#5f6b7a]"> ({count})</span>}
+          </h1>
           {info ? <InfoTip text={info} /> : null}
         </div>
-        <div className="ml-auto flex flex-col items-end gap-1">
-          {meta ? <div className="text-[12px] text-[#5f6b7a]">{meta}</div> : null}
-          {actions ? <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div> : null}
-        </div>
+        {actions ? <div className="ml-auto flex flex-wrap items-center justify-end gap-2">{actions}</div> : null}
       </div>
     </>
   );
