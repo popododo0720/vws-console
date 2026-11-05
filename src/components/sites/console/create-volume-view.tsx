@@ -27,7 +27,8 @@ const NO_SNAPSHOT = "";
 /** gp2 IOPS are not set: 3 per GiB, at least 100, bursting to 3,000. */
 const gp2Iops = (size: number) => `${Math.min(16000, Math.max(100, 3 * size))} / 3000`;
 
-const toNumber = (value: string) => (value.trim() === "" ? null : Number(value));
+/** Only plain digits are a number; `0x10`, `1e2` and `12.0` stay invalid instead of passing through Number(). */
+const toNumber = (value: string) => (value === "" ? null : /^\d+$/.test(value) ? Number(value) : NaN);
 
 export function CreateVolumeView({
   snapshots,

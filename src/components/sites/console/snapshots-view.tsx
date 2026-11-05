@@ -199,7 +199,11 @@ export function SnapshotsView({ snapshots, loadError }: { snapshots: Snapshot[];
               disabled={action.pending || selected.length === 0}
               onClick={() =>
                 action.run(
-                  () => deleteSnapshotsAction(selected.map((item) => item.id)),
+                  async () => {
+                    const failure = await deleteSnapshotsAction(selected.map((item) => item.id));
+                    if (failure) action.refresh();
+                    return failure;
+                  },
                   () => {
                     setSelectedIds([]);
                     setDeleteOpen(false);

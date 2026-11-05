@@ -511,7 +511,11 @@ export function VolumesView({
               disabled={action.pending || selected.length === 0}
               onClick={() =>
                 action.run(
-                  () => deleteVolumesAction(selected.map((item) => item.id)),
+                  async () => {
+                    const failure = await deleteVolumesAction(selected.map((item) => item.id));
+                    if (failure) action.refresh();
+                    return failure;
+                  },
                   () => {
                     setSelectedIds([]);
                     setDeleteOpen(false);

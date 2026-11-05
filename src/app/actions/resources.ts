@@ -109,9 +109,17 @@ export async function createVolumeAction(raw: unknown, rawKey: unknown): Promise
   return errorOf(vws.createVolume(input, key));
 }
 
+/** A resource that is already gone counts as deleted, so Delete after a partial failure finishes the rest. */
+const deleteOrGone =
+  (remove: (id: string) => Promise<ApiResult<void>>) =>
+  async (id: string): Promise<ApiResult<void>> => {
+    const result = await remove(id);
+    return !result.ok && result.error.code === "NotFound" ? { ok: true, value: undefined } : result;
+  };
+
 export async function deleteVolumesAction(ids: unknown): Promise<ApiError | null> {
   if (!Array.isArray(ids) || !ids.every(isVolumeId)) return invalid("A volume ID is not valid.");
-  return each(ids, vws.deleteVolume);
+  return each(ids, deleteOrGone(vws.deleteVolume));
 }
 
 const INVALID_BUCKET_NAME: ApiError = {
@@ -348,7 +356,7 @@ export async function releaseAddressesAction(ids: string[]) {
 
 export async function deleteSnapshotsAction(ids: unknown): Promise<ApiError | null> {
   if (!Array.isArray(ids) || !ids.every(isSnapshotId)) return invalid("A snapshot ID is not valid.");
-  return each(ids, vws.deleteSnapshot);
+  return each(ids, deleteOrGone(vws.deleteSnapshot));
 }
 
 export async function createKeyPairAction(attempt: CreateAttempt): Promise<KeyPairCreateResult> {

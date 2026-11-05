@@ -98,6 +98,14 @@ describe("Create volume", () => {
     expect(createVolumeAction).not.toHaveBeenCalled();
   });
 
+  it.each(["0x10", "1e2", "0b11", " 12", "12.0"])("refuses size %j as not a whole number", (value) => {
+    renderCreate();
+    fireEvent.change(screen.getByLabelText("Size (GiB)"), { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: "Create volume" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Size must be a whole number.");
+    expect(createVolumeAction).not.toHaveBeenCalled();
+  });
+
   it("reuses the idempotency key on a retry and mints a new one when the form changes", async () => {
     vi.mocked(createVolumeAction).mockResolvedValue({ code: "RequestTimeout", message: "timed out", requestId: "r1" });
     renderCreate();
@@ -204,6 +212,7 @@ describe("Snapshots list", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     await within(dialog).findByText("The snapshot could not be deleted");
     expect(deleteSnapshotsAction).toHaveBeenCalledWith([snapshot.id]);
+    expect(router.refresh).toHaveBeenCalled();
   });
 
   it("links Create volume from snapshot to the create page", () => {

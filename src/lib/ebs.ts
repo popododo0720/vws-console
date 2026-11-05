@@ -106,13 +106,14 @@ export function parseCreateVolume(raw: unknown): CreateVolumeInput | ApiError {
   return { volumeType: spec.type, size, iops, throughput, availabilityZone: body.availabilityZone, snapshotId };
 }
 
+/** console-api counts the description in UTF-8 bytes, so a Korean character uses three of the 255. */
 export function parseCreateSnapshot(raw: unknown): CreateSnapshotInput | ApiError {
   if (typeof raw !== "object" || raw === null) return invalid("The request is not valid.");
   const body = raw as Record<string, unknown>;
   if (!isVolumeId(body.volumeId)) return invalid("Choose a volume.");
   const description = body.description ?? "";
   if (typeof description !== "string") return invalid("The description is not valid.");
-  if (description.length > SNAPSHOT_DESCRIPTION_MAX)
+  if (new TextEncoder().encode(description).length > SNAPSHOT_DESCRIPTION_MAX)
     return invalid(`The description can have at most ${SNAPSHOT_DESCRIPTION_MAX} characters.`);
   return { volumeId: body.volumeId, description };
 }

@@ -79,6 +79,10 @@ describe("parseCreateSnapshot", () => {
       "The description can have at most 255 characters.",
     ],
     [{ volumeId: "vol-0123456789abcdef0", description: 7 }, "The description is not valid."],
+    [
+      { volumeId: "vol-0123456789abcdef0", description: "가".repeat(100) },
+      "The description can have at most 255 characters.",
+    ],
   ])("refuses %j", (input, message) => {
     expect(parseCreateSnapshot(input)).toMatchObject({ code: "InvalidParameterValue", message });
   });

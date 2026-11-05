@@ -94,4 +94,13 @@ describe("delete actions", () => {
     expect(await deleteVolumesAction(ids)).toMatchObject({ code: "VolumeInUse" });
     expect(api.deleteVolume).toHaveBeenCalledTimes(2);
   });
+
+  it("counts a volume or snapshot that is already gone as deleted, so a second Delete succeeds", async () => {
+    const gone = { ok: false, error: { code: "NotFound", message: "does not exist", requestId: "r" } };
+    api.deleteVolume.mockResolvedValueOnce(gone).mockResolvedValueOnce({ ok: true, value: undefined });
+    expect(await deleteVolumesAction(["vol-0123456789abcdef0", "vol-0123456789abcdef1"])).toBeNull();
+    expect(api.deleteVolume).toHaveBeenCalledTimes(2);
+    api.deleteSnapshot.mockResolvedValueOnce(gone);
+    expect(await deleteSnapshotsAction(["snap-0123456789abcdef0"])).toBeNull();
+  });
 });
