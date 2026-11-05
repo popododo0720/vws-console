@@ -106,7 +106,7 @@ export function parseCreateVolume(raw: unknown): CreateVolumeInput | ApiError {
   return { volumeType: spec.type, size, iops, throughput, availabilityZone: body.availabilityZone, snapshotId };
 }
 
-/** console-api counts the description in UTF-8 bytes, so a Korean character uses three of the 255. */
+/** console-api counts the description in UTF-8 bytes, so a non-ASCII character uses two to four of the 255. */
 export function parseCreateSnapshot(raw: unknown): CreateSnapshotInput | ApiError {
   if (typeof raw !== "object" || raw === null) return invalid("The request is not valid.");
   const body = raw as Record<string, unknown>;

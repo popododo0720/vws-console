@@ -80,7 +80,7 @@ describe("parseCreateSnapshot", () => {
     ],
     [{ volumeId: "vol-0123456789abcdef0", description: 7 }, "The description is not valid."],
     [
-      { volumeId: "vol-0123456789abcdef0", description: "가".repeat(100) },
+      { volumeId: "vol-0123456789abcdef0", description: "é".repeat(128) },
       "The description can have at most 255 characters.",
     ],
   ])("refuses %j", (input, message) => {
