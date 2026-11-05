@@ -3,6 +3,9 @@ import { Counter, Histogram, Registry, collectDefaultMetrics } from "prom-client
 /** Every metric the console exports starts with this, so dashboards can tell it from other VWS services. */
 export const METRIC_PREFIX = "vws_console_";
 
+/** Served only by the METRICS_PORT listener (metrics-server.ts); the app port answers 404 here. */
+export const METRICS_PATH = "/metrics";
+
 /** Labels stay low-cardinality: a fixed method set and a status class, never a path, ID or user. */
 const KNOWN_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 

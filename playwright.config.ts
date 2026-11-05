@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const port = Number(process.env.E2E_PORT ?? 43124);
+export const metricsPort = Number(process.env.E2E_METRICS_PORT ?? 43129);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -9,7 +10,7 @@ export default defineConfig({
   webServer: {
     command: `npm run start -- -p ${port} -H 127.0.0.1`,
     url: `http://127.0.0.1:${port}`,
-    env: { VWS_E2E: "1" },
+    env: { VWS_E2E: "1", METRICS_PORT: String(metricsPort) },
     reuseExistingServer: false,
   },
 });
