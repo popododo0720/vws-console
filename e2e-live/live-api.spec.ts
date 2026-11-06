@@ -828,3 +828,92 @@ test("creates, imports and deletes key pairs from the Key pairs pages", async ({
   const after = await listItems<{ keyName: string }>(request, "/key-pairs");
   expect(after.some((item) => item.keyName === created || item.keyName === imported)).toBe(false);
 });
+
+test("attaches a volume from its attach page and detaches it from the volume detail page", async ({
+  page,
+  request,
+}) => {
+  const vpc = await (
+    await request.post(`${liveApi()}/vpcs`, { headers: liveHeaders("attach-vpc"), data: { cidrBlock: "10.55.0.0/16" } })
+  ).json();
+  const vpcId = vpc.items[0].vpcId;
+  await expect
+    .poll(
+      async () => (await (await request.get(`${liveApi()}/vpcs/${vpcId}`, { headers: liveHeaders("x") })).json()).state,
+    )
+    .toBe("available");
+  const subnet = await (
+    await request.post(`${liveApi()}/subnets`, {
+      headers: liveHeaders("attach-subnet"),
+      data: { vpcId, cidrBlock: "10.55.1.0/24" },
+    })
+  ).json();
+  const run = await (
+    await request.post(`${liveApi()}/instances`, {
+      headers: liveHeaders("attach-run"),
+      data: {
+        imageId: "ami-0123456789abcdef0",
+        instanceType: "vws.small",
+        subnetId: subnet.items[0].subnetId,
+        count: 1,
+        tags: { Name: "attach-web" },
+      },
+    })
+  ).json();
+  const instanceId: string = run.items[0].instanceId;
+  const created = await (
+    await request.post(`${liveApi()}/volumes`, { headers: liveHeaders("attach-vol"), data: { size: 6 } })
+  ).json();
+  const volumeId: string = created.items[0].volumeId;
+  await expect
+    .poll(async () => {
+      const [volumeState, instanceState] = await Promise.all([
+        request.get(`${liveApi()}/volumes/${volumeId}`, { headers: liveHeaders("x") }).then((reply) => reply.json()),
+        request
+          .get(`${liveApi()}/instances/${instanceId}`, { headers: liveHeaders("x") })
+          .then((reply) => reply.json()),
+      ]);
+      return [volumeState.state, instanceState.state];
+    })
+    .toEqual(["available", "running"]);
+
+  await page.goto("/storage/volumes");
+  const row = await listRow(page, volumeId);
+  await row.getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Attach volume" }).click();
+  await expect(page).toHaveURL(new RegExp(`/storage/volumes/${volumeId}/attach$`));
+  await expect(page.getByRole("heading", { name: "Attach volume", level: 1 })).toBeVisible();
+  await expect(page.getByLabel("Volume ID")).toHaveValue(volumeId);
+  await page.getByLabel("Instance").selectOption(instanceId);
+  await page.getByRole("button", { name: "Attach volume" }).dblclick();
+  await expect(page).toHaveURL(/\/storage\/volumes$/);
+
+  await listRow(page, volumeId);
+  await expect(row).toContainText("In-use");
+  await expect(row).toContainText(`${instanceId}: /dev/sdf`);
+
+  await page.goto(`/storage/volumes/${volumeId}`);
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await expect(page.getByRole("menuitem", { name: "Attach volume" })).toBeDisabled();
+  await page.getByRole("menuitem", { name: "Detach volume" }).click();
+  const dialog = page.getByRole("dialog", { name: "Detach volume" });
+  await expect(dialog).toContainText(`from instance ${instanceId} (/dev/sdf)`);
+  await dialog.getByRole("button", { name: "Detach" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect
+    .poll(
+      async () => {
+        await page.reload();
+        return (
+          (await page
+            .locator("dt", { hasText: /^Volume state$/ })
+            .locator("..")
+            .textContent()) ?? ""
+        );
+      },
+      { timeout: 30_000 },
+    )
+    .toContain("Available");
+  await expect(page.locator("dt", { hasText: /^Attached resources$/ }).locator("..")).toContainText("—");
+});

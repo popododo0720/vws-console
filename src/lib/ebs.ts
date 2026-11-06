@@ -35,6 +35,8 @@ const VOLUME_ID = /^vol-[0-9a-f]{8,17}$/;
 const SNAPSHOT_ID = /^snap-[0-9a-f]{8,17}$/;
 const ZONE = /^[a-z0-9-]{1,64}$/;
 export const SNAPSHOT_DESCRIPTION_MAX = 255;
+/** A block device name console-api accepts: an absolute /dev path of lowercase letters and digits. */
+export const DEVICE_NAME = /^\/dev\/[a-z0-9]+$/;
 
 export const isVolumeId = (value: unknown): value is string => typeof value === "string" && VOLUME_ID.test(value);
 export const isSnapshotId = (value: unknown): value is string => typeof value === "string" && SNAPSHOT_ID.test(value);

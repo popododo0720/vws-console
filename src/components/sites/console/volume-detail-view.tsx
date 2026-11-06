@@ -1,12 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { Volume } from "@/types/console";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { computeNav } from "@/lib/console-data";
 import { attachedResource, formatEc2Time } from "@/lib/ebs";
+import { DetachVolumeDialog } from "@/components/sites/console/detach-volume-dialog";
 import { ResourceDetail } from "@/components/sites/console/resource-detail";
-import { CopyText, dash } from "@/components/sites/console/ui";
+import { CopyText, MenuButton, dash, menuTriggerClass } from "@/components/sites/console/ui";
 
 const capitalize = (value: string) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : "—");
 
@@ -19,6 +21,7 @@ export function VolumeDetailView({
   volume: Volume | null;
   loadError: ApiError | null;
 }) {
+  const [detachOpen, setDetachOpen] = useState(false);
   return (
     <ResourceDetail
       tree={computeNav}
@@ -31,6 +34,34 @@ export function VolumeDetailView({
       backHref="/storage/volumes"
       found={Boolean(volume)}
       loadError={loadError}
+      actions={
+        volume ? (
+          <MenuButton
+            className={menuTriggerClass()}
+            align="right"
+            label={
+              <>
+                Actions{" "}
+                <span aria-hidden className="text-[9px]">
+                  ▼
+                </span>
+              </>
+            }
+            items={[
+              {
+                label: "Attach volume",
+                disabled: volume.state !== "available",
+                href: `/storage/volumes/${volume.id}/attach`,
+              },
+              {
+                label: "Detach volume",
+                disabled: volume.state !== "in-use",
+                onSelect: () => setDetachOpen(true),
+              },
+            ]}
+          />
+        ) : null
+      }
       items={
         volume
           ? [
@@ -74,6 +105,8 @@ export function VolumeDetailView({
             ]
           : []
       }
-    />
+    >
+      {detachOpen && volume ? <DetachVolumeDialog volume={volume} onClose={() => setDetachOpen(false)} /> : null}
+    </ResourceDetail>
   );
 }

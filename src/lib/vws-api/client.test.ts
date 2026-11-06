@@ -356,6 +356,21 @@ describe("console-api client", () => {
     expect(calls).toEqual([]);
   });
 
+  it.each(["sdf", "/dev/", "/dev/sd f", "/dev/../etc/passwd", "/dev/sdf?x=1", "/tmp/sdf", "/dev/SDF"])(
+    "rejects the device name %j without calling the API",
+    async (device) => {
+      expect(await attachVolume("vol-1", { instanceId: "i-1", device })).toEqual({
+        ok: false,
+        error: {
+          code: "InvalidAttachment",
+          message: "The device name must be a path like /dev/sdf.",
+          requestId: null,
+        },
+      });
+      expect(calls).toEqual([]);
+    },
+  );
+
   it("posts an empty body to the detach endpoint", async () => {
     serve(respond(202, { operation: { id: "op-detach", state: "succeeded" }, items: [] }));
     expect(await detachVolume("vol-1")).toEqual({ ok: true, value: undefined });

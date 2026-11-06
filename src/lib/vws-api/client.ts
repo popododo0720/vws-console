@@ -8,7 +8,7 @@ import { iamMode, iamState, IamUnavailableError, noteLoginEnabled, type IamMode 
 import { recordOperationPoll } from "@/lib/ops/metrics";
 import { withSpan } from "@/lib/ops/span";
 import { objectKeyProblem } from "@/lib/object-upload";
-import type { CreateSnapshotInput, CreateVolumeInput } from "@/lib/ebs";
+import { DEVICE_NAME, type CreateSnapshotInput, type CreateVolumeInput } from "@/lib/ebs";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
 import { keyPath, route, withQuery, type ApiRoute } from "./route";
 import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
@@ -686,6 +686,16 @@ export async function attachVolume(volumeId: string, input: VolumeAttachment): P
       error: {
         code: "InvalidAttachment",
         message: "Choose an instance and a device name.",
+        requestId: null,
+      },
+    };
+  }
+  if (!DEVICE_NAME.test(device)) {
+    return {
+      ok: false,
+      error: {
+        code: "InvalidAttachment",
+        message: "The device name must be a path like /dev/sdf.",
         requestId: null,
       },
     };

@@ -27,6 +27,7 @@ export function ResourceDetail({
   found,
   loadError,
   items,
+  actions,
   children,
 }: {
   tree: NavTree;
@@ -37,6 +38,7 @@ export function ResourceDetail({
   found: boolean;
   loadError: ApiError | null;
   items: [string, ReactNode][];
+  actions?: ReactNode;
   children?: ReactNode;
 }) {
   return (
@@ -44,6 +46,7 @@ export function ResourceDetail({
       <PageHeader
         crumbs={[...crumbs, { label: id }]}
         info={`A single ${kind} in the current region, read from the VWS API.`}
+        actions={found ? actions : undefined}
       />
       <ApiErrorAlert error={loadError} title={`The ${kind} could not be loaded`} />
       {!loadError && !found ? (
