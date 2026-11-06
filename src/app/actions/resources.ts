@@ -16,11 +16,12 @@ import {
 import type { IngressPermission, VolumeAttachment } from "@/types/console";
 import {
   MAX_RULE_CHANGES,
-  opApplied,
   opRules,
   parseIngressPermission,
   permissionLabel,
+  pendingPart,
   planRuleOps,
+  ruleKey,
   type RuleChanges,
   type RuleOp,
 } from "@/lib/security-group-rules";
@@ -314,27 +315,45 @@ async function currentRules(groupId: string): Promise<ApiResult<IngressPermissio
 const send = (groupId: string, op: RuleOp) =>
   op.kind === "revoke" ? vws.revokeIngress(groupId, op.permission) : vws.authorizeIngress(groupId, op.permissions);
 
+const ruleCount = (op: RuleOp) => opRules(op).length;
+
+/**
+ * Sends one rule op. After a failure a fresh read decides: the op is done when the group already shows it, as when a
+ * parallel save made it first. When that save made only part of an authorize, the rest is sent once more, since
+ * console-api adds a list all or none and refuses it whole for one rule already there.
+ */
+async function applyOp(groupId: string, planned: RuleOp): Promise<{ op: RuleOp; error: ApiError } | null> {
+  let op = planned;
+  for (let attempt = 1; ; attempt++) {
+    const result = await send(groupId, op);
+    if (result.ok) return null;
+    const reread = await currentRules(groupId);
+    const rest = reread.ok ? pendingPart(reread.value, op) : op;
+    if (!rest) return null;
+    if (attempt === 2 || ruleCount(rest) === ruleCount(op)) return { op: rest, error: result.error };
+    op = rest;
+  }
+}
+
 /**
  * Applies rule changes against the rules the group holds now, so a double submit, a retry after a partial failure
- * or a save from a stale page sends only what is still missing. A failed call counts as done when a fresh read
- * shows its result, as when a parallel save made it first.
+ * or a save from a stale page sends only what is still missing.
  */
 async function applyRuleChanges(groupId: string, changes: RuleChanges): Promise<ApiError | null> {
   const current = await currentRules(groupId);
   if (!current.ok) return current.error;
   const done: string[] = [];
   const verb = (op: RuleOp) => (op.kind === "revoke" ? "deleted" : "added");
-  for (const op of planRuleOps(current.value, changes)) {
-    const result = await send(groupId, op);
-    const reread = result.ok ? null : await currentRules(groupId);
-    const labels = opRules(op).map(permissionLabel);
-    if (result.ok || (reread?.ok && opApplied(reread.value, op))) {
-      done.push(...labels.map((label) => `${verb(op)} ${label}`));
-      continue;
-    }
+  for (const planned of planRuleOps(current.value, changes)) {
+    const failed = await applyOp(groupId, planned);
+    const left = new Set(failed ? opRules(failed.op).map(ruleKey) : []);
+    for (const rule of opRules(planned))
+      if (!left.has(ruleKey(rule))) done.push(`${verb(planned)} ${permissionLabel(rule)}`);
+    if (!failed) continue;
+    const labels = opRules(failed.op).map(permissionLabel);
     const saved = done.length > 0 ? ` Already saved: ${done.join("; ")}.` : "";
     const rules = labels.length === 1 ? `Rule ${labels[0]} was` : `Rules ${labels.join("; ")} were`;
-    return { ...result.error, message: `${rules} not ${verb(op)}: ${result.error.message}${saved}` };
+    return { ...failed.error, message: `${rules} not ${verb(planned)}: ${failed.error.message}${saved}` };
   }
   return null;
 }

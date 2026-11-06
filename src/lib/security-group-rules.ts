@@ -148,10 +148,12 @@ export function planRuleOps(current: IngressPermission[], changes: RuleChanges):
   return [...revokes, ...authorizes];
 }
 
-/** Whether a rule op already shows in the rules the group holds. */
-export function opApplied(current: IngressPermission[], op: RuleOp): boolean {
+/** The part of a rule op the group does not show yet, or null when it shows all of it. */
+export function pendingPart(current: IngressPermission[], op: RuleOp): RuleOp | null {
   const keys = new Set(current.map(ruleKey));
-  return opRules(op).every((rule) => keys.has(ruleKey(rule)) === (op.kind === "authorize"));
+  const rest = opRules(op).filter((rule) => keys.has(ruleKey(rule)) !== (op.kind === "authorize"));
+  if (rest.length === 0) return null;
+  return op.kind === "revoke" ? op : { kind: "authorize", permissions: rest };
 }
 
 /** A short label for one stored rule, such as "TCP 22 from 10.0.0.0/16". */

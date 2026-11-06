@@ -4,7 +4,7 @@ import {
   normalizeCidr,
   opRules,
   permissionLabel,
-  opApplied,
+  pendingPart,
   parseIngressPermission,
   planRuleChanges,
   planRuleOps,
@@ -117,11 +117,17 @@ describe("planRuleOps", () => {
     ]);
   });
 
-  it("knows when an op already shows in the group", () => {
-    expect(opApplied([tcp(22)], { kind: "revoke", permission: tcp(80) })).toBe(true);
-    expect(opApplied([tcp(22)], { kind: "authorize", permissions: [tcp(22)] })).toBe(true);
-    expect(opApplied([tcp(22)], { kind: "revoke", permission: tcp(22) })).toBe(false);
-    expect(opApplied([tcp(22)], { kind: "authorize", permissions: [tcp(22), tcp(443)] })).toBe(false);
+  it("keeps only the part of an op the group does not show yet", () => {
+    expect(pendingPart([tcp(22)], { kind: "revoke", permission: tcp(80) })).toBeNull();
+    expect(pendingPart([tcp(22)], { kind: "authorize", permissions: [tcp(22)] })).toBeNull();
+    expect(pendingPart([tcp(22)], { kind: "revoke", permission: tcp(22) })).toEqual({
+      kind: "revoke",
+      permission: tcp(22),
+    });
+    expect(pendingPart([tcp(22)], { kind: "authorize", permissions: [tcp(22), tcp(443)] })).toEqual({
+      kind: "authorize",
+      permissions: [tcp(443)],
+    });
   });
 });
 
