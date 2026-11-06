@@ -677,9 +677,13 @@ export const listInstanceTypes = (): Promise<ApiResult<InstanceType[]>> =>
 /** console-api only grows a volume; it refuses a smaller size. */
 export const modifyVolume = (id: string, size: number) => mutate(route("/volumes/{id}/modify", { id }), { size });
 
+const trimmedText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+/** `input` comes from a server action, so a caller can send any JSON in its place. */
 export async function attachVolume(volumeId: string, input: VolumeAttachment): Promise<ApiResult<void>> {
-  const instanceId = input.instanceId.trim();
-  const device = input.device.trim();
+  const fields: Partial<Record<keyof VolumeAttachment, unknown>> = input ?? {};
+  const instanceId = trimmedText(fields.instanceId);
+  const device = trimmedText(fields.device);
   if (!instanceId || !device) {
     return {
       ok: false,

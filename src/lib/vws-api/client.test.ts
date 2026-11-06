@@ -1,3 +1,4 @@
+import type { VolumeAttachment } from "@/types/console";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const nav = vi.hoisted(() => ({
   session: { session: "sess-1", csrf: "csrf-1" } as { session: string; csrf: string } | null,
@@ -353,6 +354,10 @@ describe("console-api client", () => {
     };
     expect(await attachVolume("vol-1", { instanceId: "  ", device: "/dev/sdf" })).toEqual(invalid);
     expect(await attachVolume("vol-1", { instanceId: "i-1", device: "" })).toEqual(invalid);
+    const crafted = [{ instanceId: "i-1", device: 5 }, { instanceId: ["i-1"], device: "/dev/sdf" }, null];
+    for (const input of crafted) {
+      expect(await attachVolume("vol-1", input as unknown as VolumeAttachment)).toEqual(invalid);
+    }
     expect(calls).toEqual([]);
   });
 
