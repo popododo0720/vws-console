@@ -4,13 +4,19 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ApiError } from "@/lib/vws-api/adapter";
 
+const UNREACHABLE: ApiError = {
+  code: "Unavailable",
+  message: "The request did not reach the server. Check your connection and try again.",
+  requestId: null,
+};
+
 export function useApiAction() {
   const router = useRouter();
   const [error, setError] = useState<ApiError | null>(null);
   const [pending, startTransition] = useTransition();
   const run = (action: () => Promise<ApiError | null>, onDone?: () => void) =>
     startTransition(async () => {
-      const failure = await action();
+      const failure = await action().catch(() => UNREACHABLE);
       setError(failure);
       if (!failure) {
         onDone?.();
