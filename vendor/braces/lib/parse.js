@@ -54,7 +54,14 @@ const parse = (input, options = {}) => {
    * Helpers
    */
 
+  const maxDepth = typeof opts.maxDepth === 'number' ? Math.min(MAX_DEPTH, opts.maxDepth) : MAX_DEPTH;
+
   const advance = () => input[index++];
+  const checkDepth = () => {
+    if (stack.length > maxDepth) {
+      throw new SyntaxError(`Input nesting depth (${stack.length}), exceeds max depth (${maxDepth})`);
+    }
+  };
   const push = node => {
     if (node.type === 'text' && prev.type === 'dot') {
       prev.type = 'text';
@@ -144,6 +151,7 @@ const parse = (input, options = {}) => {
      */
 
     if (value === CHAR_LEFT_PARENTHESES) {
+      checkDepth();
       block = push({ type: 'paren', nodes: [] });
       stack.push(block);
       push({ type: 'text', value });
@@ -196,12 +204,8 @@ const parse = (input, options = {}) => {
      */
 
     if (value === CHAR_LEFT_CURLY_BRACE) {
+      checkDepth();
       depth++;
-
-      const maxDepth = typeof opts.maxDepth === 'number' ? Math.min(MAX_DEPTH, opts.maxDepth) : MAX_DEPTH;
-      if (depth > maxDepth) {
-        throw new SyntaxError(`Input nesting depth (${depth}), exceeds max depth (${maxDepth})`);
-      }
 
       const dollar = prev.value && prev.value.slice(-1) === '$' || block.dollar === true;
       const brace = {
