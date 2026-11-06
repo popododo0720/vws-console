@@ -3,18 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
-import type { Instance, Volume } from "@/types/console";
+import type { Volume } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
 import { attachedResource, formatEc2Time, formatSummaryTime } from "@/lib/ebs";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
 import { RefreshIconButton, primaryPill, secondaryPill } from "@/components/sites/console/ebs-form-parts";
 import { DetailLink } from "@/components/sites/console/resource-detail";
-import {
-  attachVolumeAction,
-  deleteVolumesAction,
-  detachVolumeAction,
-  modifyVolumeAction,
-} from "@/app/actions/resources";
+import { deleteVolumesAction, modifyVolumeAction } from "@/app/actions/resources";
+import { DetachVolumeDialog } from "@/components/sites/console/detach-volume-dialog";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
@@ -32,14 +28,6 @@ import {
   orangeLinkClass,
 } from "@/components/sites/console/ui";
 
-const CUSTOM_DEVICE = "custom";
-const DEFAULT_DATA_DEVICE = "/dev/sdf";
-const ROOT_DEVICE_NAMES = ["/dev/sda1", "/dev/xvda"] as const;
-const DATA_DEVICE_NAMES = Array.from(
-  { length: 25 },
-  (_, index) => `/dev/sd${String.fromCharCode("b".charCodeAt(0) + index)}`,
-);
-
 function volumeState(row: Volume) {
   return row.state ? row.state.charAt(0).toUpperCase() + row.state.slice(1) : "—";
 }
@@ -47,14 +35,10 @@ function volumeState(row: Volume) {
 export function VolumesView({
   volumes,
   loadError,
-  instances,
-  instanceLoadError,
   loadedAt,
 }: {
   volumes: Volume[];
   loadError: ApiError | null;
-  instances: Pick<Instance, "id" | "name" | "state" | "availabilityZone">[];
-  instanceLoadError: ApiError | null;
   /** When the server read the volumes, as ISO 8601. */
   loadedAt: string;
 }) {
@@ -66,17 +50,9 @@ export function VolumesView({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [modifySize, setModifySize] = useState(0);
-  const [attachOpen, setAttachOpen] = useState(false);
   const [detachOpen, setDetachOpen] = useState(false);
-  const [attachInstanceId, setAttachInstanceId] = useState("");
-  const [attachDevice, setAttachDevice] = useState(DEFAULT_DATA_DEVICE);
-  const [customDevice, setCustomDevice] = useState("");
   const selected = volumes.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
-  const eligibleInstances = instances.filter(
-    (item) => (item.state === "running" || item.state === "stopped") && item.availabilityZone === one?.availabilityZone,
-  );
-  const deviceName = (attachDevice === CUSTOM_DEVICE ? customDevice : attachDevice).trim();
   const refresh = () => {
     setUpdated("less than a minute ago");
     action.refresh();
@@ -220,22 +196,13 @@ export function VolumesView({
                 },
                 {
                   label: "Attach volume",
-                  disabled: action.pending || !one || one.state !== "available",
-                  onSelect: () => {
-                    action.clear();
-                    setAttachInstanceId(eligibleInstances[0]?.id ?? "");
-                    setAttachDevice(DEFAULT_DATA_DEVICE);
-                    setCustomDevice("");
-                    setAttachOpen(true);
-                  },
+                  disabled: !one || one.state !== "available",
+                  href: one ? `/storage/volumes/${one.id}/attach` : undefined,
                 },
                 {
                   label: "Detach volume",
                   disabled: action.pending || !one || one.state !== "in-use",
-                  onSelect: () => {
-                    action.clear();
-                    setDetachOpen(true);
-                  },
+                  onSelect: () => setDetachOpen(true),
                 },
                 { label: "Force detach volume", disabled: true },
                 { label: "Manage auto-enabled I/O", disabled: true },
@@ -249,7 +216,6 @@ export function VolumesView({
         }
       />
       <ApiErrorAlert error={loadError} title="Volumes could not be loaded" />
-      <ApiErrorAlert error={instanceLoadError} title="Instances could not be loaded" />
       <ApiErrorAlert error={action.error} title="The volume action failed" />
       <ResourceTable
         rows={volumes}
@@ -368,138 +334,7 @@ export function VolumesView({
           </div>
         </div>
       </PanelDialog>
-      <PanelDialog
-        open={attachOpen}
-        title="Attach volume"
-        onClose={() => setAttachOpen(false)}
-        footer={
-          <>
-            <OutlineButton onClick={() => setAttachOpen(false)}>Cancel</OutlineButton>
-            <OrangeButton
-              disabled={
-                action.pending ||
-                !attachInstanceId.trim() ||
-                !deviceName ||
-                instanceLoadError !== null ||
-                eligibleInstances.length === 0
-              }
-              onClick={() => {
-                if (!one) return;
-                action.run(
-                  () =>
-                    attachVolumeAction(one.id, {
-                      instanceId: attachInstanceId.trim(),
-                      device: deviceName,
-                    }),
-                  () => setAttachOpen(false),
-                );
-              }}
-            >
-              Attach volume
-            </OrangeButton>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <ApiErrorAlert error={action.error} title="The volume action failed" />
-          <div>
-            <FieldLabel>Volume ID</FieldLabel>
-            <p className="text-[13px]">{one?.id ?? "—"}</p>
-          </div>
-          <div>
-            <FieldLabel>Instance</FieldLabel>
-            {instanceLoadError ? (
-              <ApiErrorAlert error={instanceLoadError} title="Instances could not be loaded" />
-            ) : eligibleInstances.length === 0 ? (
-              <p>There are no running or stopped instances in this Availability Zone.</p>
-            ) : (
-              <select
-                className="field"
-                aria-label="Instance"
-                value={attachInstanceId}
-                onChange={(event) => setAttachInstanceId(event.target.value)}
-              >
-                {eligibleInstances.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name ? `${item.name} (${item.id})` : item.id}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-          <div>
-            <FieldLabel>Device name</FieldLabel>
-            <select
-              className="field"
-              aria-label="Device name"
-              value={attachDevice}
-              onChange={(event) => setAttachDevice(event.target.value)}
-            >
-              <optgroup label="Reserved for root volume">
-                {ROOT_DEVICE_NAMES.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Recommended for data volumes">
-                {DATA_DEVICE_NAMES.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </optgroup>
-              <option value={CUSTOM_DEVICE}>Specify a custom device name</option>
-            </select>
-            {attachDevice === CUSTOM_DEVICE ? (
-              <input
-                className="field mt-2"
-                aria-label="Custom device name"
-                value={customDevice}
-                onChange={(event) => setCustomDevice(event.target.value)}
-              />
-            ) : null}
-            <p className="mt-1 text-[12px] text-[#5f6b7a]">
-              The device name you specify is used by EC2. The block device driver can mount the device with a device
-              name that is different from the one you specify.
-            </p>
-          </div>
-        </div>
-      </PanelDialog>
-      <PanelDialog
-        open={detachOpen}
-        title="Detach volume"
-        onClose={() => setDetachOpen(false)}
-        footer={
-          <>
-            <OutlineButton onClick={() => setDetachOpen(false)}>Cancel</OutlineButton>
-            <OrangeButton
-              disabled={action.pending}
-              onClick={() => {
-                if (!one) return;
-                action.run(
-                  () => detachVolumeAction(one.id),
-                  () => setDetachOpen(false),
-                );
-              }}
-            >
-              Detach
-            </OrangeButton>
-          </>
-        }
-      >
-        <ApiErrorAlert error={action.error} title="The volume action failed" />
-        {one?.attachment ? (
-          <div className="space-y-2">
-            <p>
-              Detach {one.id} from {one.attachment.instanceId}?
-            </p>
-            {one.attachment.device ? <p>Device {one.attachment.device}.</p> : null}
-          </div>
-        ) : (
-          <p>Detach {one?.id}?</p>
-        )}
-      </PanelDialog>
+      {detachOpen && one ? <DetachVolumeDialog volume={one} onClose={() => setDetachOpen(false)} /> : null}
       <PanelDialog
         open={deleteOpen}
         title={selected.length > 1 ? "Delete volumes" : "Delete volume"}
