@@ -97,7 +97,7 @@ describe("VPC list chrome", () => {
     expect(replace).toHaveBeenCalledWith("/network/vpcs?vpc=all");
   });
 
-  it("Subnets: Block Public Access and IPv6 CIDR follow VPC, and a subnet with unknown access shows a dash", () => {
+  it("Subnets: Block Public Access, IPv4 CIDR and IPv6 CIDR follow VPC in the AWS order, and a subnet with unknown access shows a dash", () => {
     const unknown: Subnet = { ...subnets[0], id: "subnet-unknown", blockPublicAccess: "" };
     renderWith(<SubnetsView subnets={[subnets[0], unknown]} vpcs={vpcs} loadError={null} />);
     expect(headers().slice(0, 7)).toEqual([
@@ -106,8 +106,8 @@ describe("VPC list chrome", () => {
       "State",
       "VPC",
       "Block Public Access",
-      "IPv6 CIDR",
       "IPv4 CIDR",
+      "IPv6 CIDR",
     ]);
     const known = within(screen.getByRole("row", { name: new RegExp(subnets[0].id) })).getAllByRole("cell");
     const missing = within(screen.getByRole("row", { name: /subnet-unknown/ })).getAllByRole("cell");

@@ -79,8 +79,8 @@ export function SubnetsView({
       sortValue: (row) => row.blockPublicAccess,
       cell: (row) => <BlockPublicAccessCell value={row.blockPublicAccess} />,
     },
-    { key: "ipv6", header: "IPv6 CIDR", minWidth: 120, sortValue: () => "", cell: () => "—" },
     { key: "cidr", header: "IPv4 CIDR", minWidth: 130, sortValue: (row) => row.ipv4Cidr, cell: (row) => row.ipv4Cidr },
+    { key: "ipv6", header: "IPv6 CIDR", minWidth: 120, sortValue: () => "", cell: () => "—" },
     {
       key: "ips",
       header: "Available IPv4 addresses",

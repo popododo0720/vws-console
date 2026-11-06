@@ -142,6 +142,23 @@ describe("VpcDashboardView", () => {
     expect(lines).toEqual(["Europe (North)1", "Europe (Central)0", "US East0", "US West0"]);
   });
 
+  it("links only the current region's count under See all regions, since the lists show the current region", () => {
+    renderDashboard();
+    fireEvent.click(screen.getByRole("button", { name: "use sample data" }));
+    const gateways = card("NAT Gateways");
+    fireEvent.click(gateways.getByRole("button", { name: /See all regions/ }));
+    const [home, ...others] = gateways.getAllByRole("listitem");
+    expect(within(home).getByRole("link")).toHaveAttribute("href", "/network/nat-gateways");
+    for (const line of others) expect(within(line).queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("styles the count of a type with no VWS list like the AWS count link, without a link", () => {
+    renderDashboard();
+    const count = card("Network ACLs").getByText("0");
+    expect(count.tagName).toBe("SPAN");
+    expect(count).toHaveClass("underline");
+  });
+
   it("offers Create VPC and Launch EC2 Instances, refreshes on request, and has no Q banner", () => {
     renderDashboard();
     expect(screen.getByRole("link", { name: "Create VPC" })).toHaveAttribute("href", "/network/vpcs?create=1");

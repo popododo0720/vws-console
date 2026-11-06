@@ -53,14 +53,16 @@ function PanelLinks({ items }: { items: { label: string; external?: boolean }[] 
   );
 }
 
-function Count({ card, value }: { card: DashboardCard; value: number | null }) {
+/** Only the current region's count links: the list screens show the current region, not the one counted. */
+function Count({ card, value, current }: { card: DashboardCard; value: number | null; current: boolean }) {
   if (value === null) return <span title="This count could not be loaded.">—</span>;
+  if (!current) return <span>{value}</span>;
   return card.href ? (
     <Link href={card.href} className={linkClass}>
       {value}
     </Link>
   ) : (
-    <span>{value}</span>
+    <span className={linkClass}>{value}</span>
   );
 }
 
@@ -89,7 +91,7 @@ function ResourceCard({
           <span className="font-bold text-[#006ce0] underline">{card.label}</span>
         )}
         <span>
-          {region} <Count card={card} value={card.count(input, region, vpcId)} />
+          {region} <Count card={card} value={card.count(input, region, vpcId)} current />
         </span>
       </div>
       <button
@@ -108,7 +110,7 @@ function ResourceCard({
           {regions.map((name) => (
             <li key={name} className="flex justify-between gap-3">
               <span>{name}</span>
-              <Count card={card} value={card.count(input, name, vpcId)} />
+              <Count card={card} value={card.count(input, name, vpcId)} current={name === region} />
             </li>
           ))}
         </ul>
