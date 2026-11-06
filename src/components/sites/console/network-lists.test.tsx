@@ -24,8 +24,10 @@ vi.mock("@/app/actions/resources", () => ({
   disassociateAddressesAction: vi.fn(),
   releaseAddressesAction: vi.fn(),
 }));
+const replace = vi.fn();
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace }),
   usePathname: () => "/network/vpcs",
   useSearchParams: () => new URLSearchParams(search),
 }));
@@ -85,6 +87,14 @@ describe("VPC list chrome", () => {
     search = "create=1";
     renderWith(<VpcsView vpcs={vpcs} subnets={subnets} loadError={null} />);
     expect(screen.getByRole("dialog", { name: "Create VPC" })).toBeInTheDocument();
+  });
+
+  it("Your VPCs: drops ?create=1 from the URL when the dialog closes, so a reload does not reopen it", () => {
+    search = "create=1&vpc=all";
+    replace.mockReset();
+    renderWith(<VpcsView vpcs={vpcs} subnets={subnets} loadError={null} />);
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Create VPC" })).getByRole("button", { name: "Cancel" }));
+    expect(replace).toHaveBeenCalledWith("/network/vpcs?vpc=all");
   });
 
   it("Subnets: Block Public Access and IPv6 CIDR follow VPC, and a subnet with unknown access shows a dash", () => {

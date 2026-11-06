@@ -37,6 +37,7 @@ export function NetworkList<T>({
   filterPlaceholder,
   showLastUpdated = false,
   hideCount = false,
+  selection = "multi",
   selectTitle,
   detailTitle,
   detailTabs,
@@ -57,6 +58,7 @@ export function NetworkList<T>({
   filterPlaceholder: string;
   showLastUpdated?: boolean;
   hideCount?: boolean;
+  selection?: "multi" | "single";
   /** The dock title while no row is selected. */
   selectTitle: string;
   detailTitle: (row: T) => string;
@@ -119,6 +121,7 @@ export function NetworkList<T>({
         emptyMessage={live?.failed ? "" : emptyLine}
         filterPlaceholder={filterPlaceholder}
         variant="aws-list"
+        selection={selection}
       />
       <DetailDock
         title={one ? detailTitle(one) : selectTitle}

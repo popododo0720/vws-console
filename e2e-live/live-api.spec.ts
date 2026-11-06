@@ -738,7 +738,7 @@ test("counts a VPC created through the API on the VPC dashboard", async ({ page,
 
 test("shows the empty NAT gateways list", async ({ page }) => {
   await page.goto("/network/nat-gateways");
-  await expect(page.getByRole("heading", { name: "NAT gateways (0)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "NAT gateways", exact: true })).toBeVisible();
   await expect(page.getByText("No NAT gateways found")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Select a NAT gateway" })).toBeVisible();
 });

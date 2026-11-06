@@ -42,10 +42,21 @@ describe("NatGatewaysView", () => {
   it("shows the one-line empty state with the AWS chrome and no rows", () => {
     renderView();
     expect(screen.getByText("No NAT gateways found")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "NAT gateways (0)" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "NAT gateways" })).toHaveTextContent(/^NAT gateways$/);
     expect(screen.getByRole("textbox", { name: "Find NAT gateways by attribute or tag" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Select a NAT gateway" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create NAT gateway" })).toBeInTheDocument();
+  });
+
+  it("selects one gateway at a time, with no select-all box, as the AWS table does", () => {
+    renderView();
+    fireEvent.click(screen.getByRole("button", { name: "use sample data" }));
+    expect(screen.queryByRole("checkbox", { name: "Select all on this page" })).not.toBeInTheDocument();
+    const [first, second] = screen.getAllByRole("radio");
+    fireEvent.click(first);
+    fireEvent.click(second);
+    expect(first).not.toBeChecked();
+    expect(second).toBeChecked();
   });
 
   it("lists the columns in the AWS order", () => {
@@ -88,7 +99,7 @@ describe("NatGatewaysView", () => {
     renderView();
     showSample();
     expect(choose("Delete NAT gateway")).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select nat-0a1b2c3d4e5f6071" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Select nat-0a1b2c3d4e5f6071" }));
     expect(choose("Manage tags")).toBeDisabled();
     expect(choose("Delete NAT gateway")).toBeEnabled();
   });
@@ -96,7 +107,7 @@ describe("NatGatewaysView", () => {
   it("deletes only after the user types delete, and keeps the gateway listed as deleted", () => {
     renderView();
     showSample();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select nat-0a1b2c3d4e5f6071" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Select nat-0a1b2c3d4e5f6071" }));
     fireEvent.click(choose("Delete NAT gateway"));
     const dialog = screen.getByRole("dialog", { name: "Delete NAT gateway" });
     const confirmButton = within(dialog).getByRole("button", { name: "Delete" });
@@ -112,7 +123,7 @@ describe("NatGatewaysView", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     const row = screen.getByRole("row", { name: /nat-0a1b2c3d4e5f6071/ });
     expect(within(row).getByText("Deleted", { selector: "td" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select nat-0a1b2c3d4e5f6071" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Select nat-0a1b2c3d4e5f6071" }));
     expect(choose("Delete NAT gateway")).toBeDisabled();
   });
 
@@ -130,7 +141,7 @@ describe("NatGatewaysView", () => {
     fireEvent.click(within(dialog).getByRole("radio", { name: "Private" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Create NAT gateway" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "NAT gateways (3)" })).toBeInTheDocument();
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
     expect(screen.getByText("edge-nat")).toBeInTheDocument();
   });
 });

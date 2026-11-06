@@ -3,7 +3,7 @@
 import { DetailLink } from "@/components/sites/console/resource-detail";
 import { useState } from "react";
 import { TagsTable } from "@/components/sites/console/tags-table";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Subnet, Vpc } from "@/types/console";
 import { networkNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
@@ -25,6 +25,15 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(200);
   const [createOpen, setCreateOpen] = useState(params.get("create") === "1");
+  const router = useRouter();
+  const pathname = usePathname();
+  const closeCreate = () => {
+    setCreateOpen(false);
+    if (!params.has("create")) return;
+    const rest = new URLSearchParams(params);
+    rest.delete("create");
+    router.replace(rest.size ? `${pathname}?${rest}` : pathname);
+  };
   const [vpcTab, setVpcTab] = useState("details");
   const [cidr, setCidr] = useState("10.1.0.0/16");
   const [newName, setNewName] = useState("");
@@ -207,18 +216,13 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
       <PanelDialog
         open={createOpen}
         title="Create VPC"
-        onClose={() => setCreateOpen(false)}
+        onClose={closeCreate}
         footer={
           <>
-            <OutlineButton onClick={() => setCreateOpen(false)}>Cancel</OutlineButton>
+            <OutlineButton onClick={closeCreate}>Cancel</OutlineButton>
             <OrangeButton
               disabled={action.pending}
-              onClick={() =>
-                action.run(
-                  () => createVpcAction(cidr, newName),
-                  () => setCreateOpen(false),
-                )
-              }
+              onClick={() => action.run(() => createVpcAction(cidr, newName), closeCreate)}
             >
               Create VPC
             </OrangeButton>

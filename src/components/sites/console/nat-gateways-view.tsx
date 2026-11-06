@@ -146,6 +146,8 @@ export function NatGatewaysView() {
   return (
     <NetworkList
       title="NAT gateways"
+      hideCount
+      selection="single"
       info="A NAT gateway lets instances in a private subnet reach other networks without accepting inbound connections."
       rows={api.natGateways}
       getId={(row) => row.id}

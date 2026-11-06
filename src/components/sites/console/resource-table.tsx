@@ -38,6 +38,7 @@ export function ResourceTable<T>({
   onRefresh,
   hideRefresh = false,
   variant = "default",
+  selection = "multi",
   className,
   bodyClassName,
 }: {
@@ -59,6 +60,8 @@ export function ResourceTable<T>({
   hideRefresh?: boolean;
   /** "aws-list" is the VPC list layout: a 650px filter, pager and gear on the right, no refresh button, a one-line empty state. */
   variant?: "default" | "aws-list";
+  /** "single" is the AWS single-select table: a radio button per row and no select-all box. */
+  selection?: "multi" | "single";
   className?: string;
   bodyClassName?: string;
 }) {
@@ -211,16 +214,18 @@ export function ResourceTable<T>({
             <thead className="sticky top-0 z-[1] bg-white">
               <tr className="border-b border-[#e6e8eb] text-[12px] text-[#5f6b7a]">
                 <th className="w-10 px-2 py-2">
-                  <input
-                    ref={allRef}
-                    type="checkbox"
-                    aria-label="Select all on this page"
-                    checked={allChecked}
-                    onChange={() => {
-                      if (allChecked) onSelectedIds(selectedIds.filter((id) => !visibleIds.includes(id)));
-                      else onSelectedIds(Array.from(new Set([...selectedIds, ...visibleIds])));
-                    }}
-                  />
+                  {selection === "multi" ? (
+                    <input
+                      ref={allRef}
+                      type="checkbox"
+                      aria-label="Select all on this page"
+                      checked={allChecked}
+                      onChange={() => {
+                        if (allChecked) onSelectedIds(selectedIds.filter((id) => !visibleIds.includes(id)));
+                        else onSelectedIds(Array.from(new Set([...selectedIds, ...visibleIds])));
+                      }}
+                    />
+                  ) : null}
                 </th>
                 {columns.map((column) => (
                   <th
@@ -263,15 +268,25 @@ export function ResourceTable<T>({
                     onClick={() => onSelectedIds([id])}
                   >
                     <td className="px-2">
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${id}`}
-                        checked={selected}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={() => {
-                          onSelectedIds(selected ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]);
-                        }}
-                      />
+                      {selection === "multi" ? (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${id}`}
+                          checked={selected}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => {
+                            onSelectedIds(selected ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]);
+                          }}
+                        />
+                      ) : (
+                        <input
+                          type="radio"
+                          aria-label={`Select ${id}`}
+                          checked={selected}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => onSelectedIds([id])}
+                        />
+                      )}
                     </td>
                     {columns.map((column) => (
                       <td key={column.key} className="px-2 whitespace-nowrap">
