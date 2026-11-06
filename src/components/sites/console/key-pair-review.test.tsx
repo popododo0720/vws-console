@@ -184,6 +184,24 @@ describe("Create key pair page", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("returns to the list once when the saving dialog is closed before the create settles", async () => {
+    let resolve: (value: unknown) => void = () => {};
+    createKeyPairAction.mockReturnValue(new Promise((done) => (resolve = done)));
+    const view = renderCreate("import");
+    fireEvent.change(nameField(), { target: { value: "laptop" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Public key contents" }), {
+      target: { value: "ssh-ed25519 AAAA laptop" },
+    });
+    fireEvent.click(submitButton("Import key pair"));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(push).toHaveBeenCalledTimes(1);
+    view.unmount();
+    resolve({ status: "ready", issued: { keyPair: laptop, privateKey: null, settlement: "succeeded" } });
+    await waitFor(() => expect(createKeyPairAction).toHaveBeenCalledTimes(1));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
   it("returns to the list on Cancel without a request", () => {
     renderCreate("generate");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));

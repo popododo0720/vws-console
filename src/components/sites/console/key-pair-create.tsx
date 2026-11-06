@@ -341,10 +341,16 @@ export function useKeyPairCreator(options: {
 /** The Create key pair and Import key pair pages. Every way out of the flow returns to the Key pairs list. */
 export function KeyPairCreateView({ mode }: { mode: CreateMode }) {
   const router = useRouter();
+  const left = useRef(false);
   const flow = useKeyPairFlow({
     initial: emptyForm(mode),
     onCreated: () => {},
-    onClosed: () => router.push(KEY_PAIRS_HREF),
+    onClosed: () => {
+      // A create keeps running after its saving dialog is closed, and must not pull the user back when it settles.
+      if (left.current) return;
+      left.current = true;
+      router.push(KEY_PAIRS_HREF);
+    },
   });
   const editing = flow.dialog.step === "form";
   const title = mode === "import" ? "Import key pair" : "Create key pair";
