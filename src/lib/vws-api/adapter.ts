@@ -389,6 +389,7 @@ export function toStoredKeyPair(item: Record<string, unknown>): StoredKeyPair {
     fingerprint: str(item.keyFingerprint),
     type: str(item.keyType),
     ownerId: str(item.ownerId),
+    created: str(item.createTime),
   };
 }
 

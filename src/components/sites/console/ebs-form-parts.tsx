@@ -15,7 +15,7 @@ export function CreatePage({
   crumbs: { label: string; href?: string }[];
   title: string;
   info: string;
-  lead: string;
+  lead?: string;
   children: ReactNode;
 }) {
   return (
@@ -27,7 +27,7 @@ export function CreatePage({
             <h1 className="text-[24px] font-bold leading-8">{title}</h1>
             <InfoTip text={info} />
           </div>
-          <p className="mt-0.5 text-[14px] text-[#16191f]">{lead}</p>
+          {lead ? <p className="mt-0.5 text-[14px] text-[#16191f]">{lead}</p> : null}
           <div className="mt-4 space-y-5">{children}</div>
         </div>
       </div>

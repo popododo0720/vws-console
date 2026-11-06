@@ -33,6 +33,7 @@ const pair: StoredKeyPair = {
   fingerprint: "fp",
   type: "rsa",
   ownerId: "1",
+  created: "",
 };
 
 const file: PrivateKeyFile = { fileName: "web.pem", material: "SECRET", format: "pem" };

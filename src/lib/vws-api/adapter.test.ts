@@ -347,6 +347,7 @@ describe("console-api adapter", () => {
       keyFingerprint: "SHA256:abc",
       keyType: "rsa",
       ownerId: "123456789012",
+      createTime: "2026-11-01T09:30:00Z",
       keyMaterial: "SECRET",
     });
     expect(row).toEqual({
@@ -355,6 +356,7 @@ describe("console-api adapter", () => {
       fingerprint: "SHA256:abc",
       type: "rsa",
       ownerId: "123456789012",
+      created: "2026-11-01T09:30:00Z",
     });
     expect(row).not.toHaveProperty("keyMaterial");
     const [parsed] = parseKeyPairs({
@@ -371,6 +373,7 @@ describe("console-api adapter", () => {
     });
     expect(parsed).not.toHaveProperty("keyMaterial");
     expect(parsed.type).toBe("ed25519");
+    expect(parsed.created).toBe("");
   });
 
   it("maps keyName onto an instance and leaves a missing keyName empty", () => {

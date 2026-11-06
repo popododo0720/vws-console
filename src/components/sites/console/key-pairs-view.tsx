@@ -4,33 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteKeyPairsAction } from "@/app/actions/resources";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { useKeyPairCreator } from "@/components/sites/console/key-pair-create";
+import { KeyPairRecoveryNotice } from "@/components/sites/console/key-pair-create";
+import { ListActions } from "@/components/sites/console/list-actions";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, ResourceTable } from "@/components/sites/console/resource-table";
 import { Shell } from "@/components/sites/console/shell";
-import {
-  MenuButton,
-  MenuChevron,
-  OrangeButton,
-  OutlineButton,
-  PanelDialog,
-  dash,
-  menuTriggerClass,
-} from "@/components/sites/console/ui";
+import { OrangeButton, OutlineButton, PanelDialog, dash } from "@/components/sites/console/ui";
 import { computeNav } from "@/lib/console-data";
+import { formatEc2Time } from "@/lib/ebs";
 import { KEY_TYPE_OPTIONS, type StoredKeyPair } from "@/lib/key-pair";
 import type { ApiError } from "@/lib/vws-api/adapter";
-
-const INTRO =
-  "A key pair is a public key that VWS stores, and a private key file that you store. You use the key pair to connect to an instance. For Linux instances, the private key lets you SSH into the instance. For Windows instances, the private key lets you decrypt the administrator password.";
 
 export function KeyPairsView({ keyPairs, loadError }: { keyPairs: StoredKeyPair[]; loadError: ApiError | null }) {
   const router = useRouter();
   const action = useApiAction();
-  const creator = useKeyPairCreator({
-    onCreated: () => router.refresh(),
-    knownNames: keyPairs.map((item) => item.name),
-  });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const selected = keyPairs.filter((item) => selectedIds.includes(item.id));
@@ -43,6 +30,13 @@ export function KeyPairsView({ keyPairs, loadError }: { keyPairs: StoredKeyPair[
       minWidth: 120,
       sortValue: (row) => row.type,
       cell: (row) => dash(KEY_TYPE_OPTIONS.find((item) => item.value === row.type)?.label ?? row.type),
+    },
+    {
+      key: "created",
+      header: "Created",
+      minWidth: 200,
+      sortValue: (row) => row.created,
+      cell: (row) => dash(formatEc2Time(row.created)),
     },
     {
       key: "fingerprint",
@@ -59,30 +53,25 @@ export function KeyPairsView({ keyPairs, loadError }: { keyPairs: StoredKeyPair[
       <PageHeader
         crumbs={[{ label: "EC2", href: "/compute/instances" }, { label: "Key pairs" }]}
         title="Key pairs"
+        info="A key pair is a public key that VWS stores and a private key file that you store. You use it to connect to an instance."
         actions={
-          <>
-            <MenuButton
-              className={menuTriggerClass()}
-              label={
-                <>
-                  Actions <MenuChevron />
-                </>
-              }
-              items={[
-                { label: "Import key pair", onSelect: creator.openImport },
-                {
-                  label: "Delete",
-                  disabled: action.pending || selected.length === 0,
-                  onSelect: () => setConfirmDelete(true),
-                },
-              ]}
-            />
-            <OrangeButton onClick={creator.openGenerate}>Create key pair</OrangeButton>
-          </>
+          <ListActions
+            onRefresh={() => router.refresh()}
+            items={[
+              { label: "Import key pair", href: "/network/key-pairs/import" },
+              { label: "Manage tags", disabled: true },
+              {
+                label: "Delete",
+                disabled: action.pending || selected.length === 0,
+                onSelect: () => setConfirmDelete(true),
+              },
+            ]}
+            createLabel="Create key pair"
+            onCreate={() => router.push("/network/key-pairs/create")}
+          />
         }
       />
-      <p className="max-w-4xl px-4 pb-3 text-[13px] text-[#5f6b7a]">{INTRO}</p>
-      {creator.portal}
+      <KeyPairRecoveryNotice knownNames={keyPairs.map((item) => item.name)} />
       <ApiErrorAlert error={loadError} title="Key pairs could not be loaded" />
       <ApiErrorAlert error={action.error} title="The key pair could not be deleted" />
       <ResourceTable
@@ -91,10 +80,10 @@ export function KeyPairsView({ keyPairs, loadError }: { keyPairs: StoredKeyPair[
         columns={columns}
         selectedIds={selected.map((item) => item.id)}
         onSelectedIds={setSelectedIds}
-        emptyTitle="No key pairs"
-        emptyMessage="There are no key pairs."
-        filterPlaceholder="Find key pairs"
-        onRefresh={() => router.refresh()}
+        emptyTitle=""
+        emptyMessage={loadError ? "" : "No key pairs to display"}
+        filterPlaceholder="Filter Key Pair by attribute or tag"
+        variant="aws-list"
       />
       <PanelDialog
         open={confirmDelete}

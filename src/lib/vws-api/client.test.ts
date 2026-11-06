@@ -1314,6 +1314,7 @@ describe("console-api client", () => {
             fingerprint: "SHA256:abc",
             type: "ed25519",
             ownerId: "123456789012",
+            created: "",
           },
           privateKey: { fileName: "web.ppk", material, format: "ppk" },
           settlement: "succeeded",
