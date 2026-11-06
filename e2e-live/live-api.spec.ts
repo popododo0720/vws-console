@@ -713,3 +713,32 @@ test("shows an instance's public IP and Elastic IP allocation", async ({ page, r
   await page.getByRole("button", { name: "Networking" }).click();
   await expect(page.getByText(allocationId)).toHaveCount(2);
 });
+
+test("counts a VPC created through the API on the VPC dashboard", async ({ page, request }) => {
+  const countInCard = async () => {
+    const text = await page.getByRole("region", { name: "VPCs" }).getByRole("link", { name: /^\d+$/ }).textContent();
+    return Number(text);
+  };
+  await page.goto("/network");
+  await expect(page.getByRole("heading", { name: "Resources by Region" })).toBeVisible();
+  await expect(page.getByText("could not be loaded")).toHaveCount(0);
+  const before = await countInCard();
+
+  const created = await request.post(`${consoleApi()}/vpcs`, {
+    headers: apiHeaders("dashboard-seed-vpc"),
+    data: { cidrBlock: "10.93.0.0/16" },
+  });
+  expect(created.status()).toBe(202);
+
+  await page.getByRole("button", { name: "Refresh Resources" }).click();
+  await expect.poll(countInCard).toBe(before + 1);
+  await page.reload();
+  expect(await countInCard()).toBe(before + 1);
+});
+
+test("shows the empty NAT gateways list", async ({ page }) => {
+  await page.goto("/network/nat-gateways");
+  await expect(page.getByRole("heading", { name: "NAT gateways", exact: true })).toBeVisible();
+  await expect(page.getByText("No NAT gateways found")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Select a NAT gateway" })).toBeVisible();
+});

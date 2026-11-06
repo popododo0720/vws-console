@@ -85,13 +85,16 @@ export type SecurityGroup = {
   rules: SecurityGroupRule[];
 };
 
+/** Empty when console-api does not report the setting. */
+export type BlockPublicAccess = "off" | "on" | "";
+
 export type Vpc = {
   id: string;
   name: string;
   state: "available" | "pending";
   encryption: string;
   encryptionControl: string;
-  blockPublicAccess: "off" | "on" | "";
+  blockPublicAccess: BlockPublicAccess;
   ipv4Cidr: string;
   ipv6Cidr: string;
   owner: string;
@@ -110,6 +113,7 @@ export type Subnet = {
   availabilityZone: string;
   routeTableId: string;
   autoAssignPublicIp: boolean | null;
+  blockPublicAccess: BlockPublicAccess;
   region: string;
   tags: Record<string, string>;
 };
@@ -135,6 +139,26 @@ export type InternetGateway = {
   name: string;
   state: "attached" | "detached";
   vpcId: string;
+  region: string;
+};
+
+export type NatGateway = {
+  id: string;
+  name: string;
+  connectivity: "public" | "private";
+  state: "pending" | "available" | "deleting" | "deleted";
+  stateMessage: string;
+  availabilityMode: "zonal";
+  routeTableId: string;
+  publicIp: string;
+  privateIp: string;
+  networkInterfaceId: string;
+  vpcId: string;
+  subnetId: string;
+  /** ISO 8601. */
+  created: string;
+  /** ISO 8601, empty until the gateway is deleted. */
+  deleted: string;
   region: string;
 };
 
@@ -175,6 +199,7 @@ export type Dataset = {
   subnets: Subnet[];
   routeTables: RouteTable[];
   internetGateways: InternetGateway[];
+  natGateways: NatGateway[];
   buckets: Bucket[];
   objects: BucketObject[];
 };
@@ -184,6 +209,8 @@ export type NavNode = {
   label: string;
   href?: string;
   badge?: string;
+  /** Shows the external-link icon after the label. */
+  external?: boolean;
   defaultOpen?: boolean;
   children?: NavNode[];
 };
@@ -191,5 +218,6 @@ export type NavNode = {
 export type NavTree = {
   id: string;
   title: string;
+  href?: string;
   sections: NavNode[];
 };

@@ -45,6 +45,7 @@ export function RouteTablesView() {
       cell: (row) =>
         row.subnetIds.length ? `${row.subnetIds.length} subnet${row.subnetIds.length === 1 ? "" : "s"}` : "—",
     },
+    { key: "edge", header: "Edge associations", minWidth: 160, sortValue: () => "", cell: () => "—" },
     {
       key: "main",
       header: "Main",
@@ -59,13 +60,7 @@ export function RouteTablesView() {
       sortValue: (row) => row.vpcId,
       cell: (row) => <CopyText value={row.vpcId} />,
     },
-    {
-      key: "routes",
-      header: "Routes",
-      minWidth: 90,
-      sortValue: (row) => String(row.routes.length),
-      cell: (row) => String(row.routes.length),
-    },
+    { key: "owner", header: "Owner ID", minWidth: 130, sortValue: () => api.account.id, cell: () => api.account.id },
   ];
 
   const open = (next: Dialog) => {
@@ -112,9 +107,10 @@ export function RouteTablesView() {
       ]}
       createLabel="Create route table"
       onCreate={() => open({ kind: "create" })}
-      emptyTitle="No route tables found"
-      emptyMessage="You do not have any route tables in this region"
-      filterPlaceholder="Filter route tables"
+      emptyLine="No route tables found"
+      filterPlaceholder="Find route tables by attribute or tag"
+      showLastUpdated
+      selectTitle="Select a route table"
       detailTitle={(row) => `${row.id}${row.name ? ` / ${row.name}` : ""}`}
       detailTabs={[
         { id: "details", label: "Details" },

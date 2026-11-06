@@ -37,6 +37,8 @@ export function ResourceTable<T>({
   initialSort = null,
   onRefresh,
   hideRefresh = false,
+  variant = "default",
+  selection = "multi",
   className,
   bodyClassName,
 }: {
@@ -56,10 +58,15 @@ export function ResourceTable<T>({
   initialSort?: { key: string; dir: "asc" | "desc" } | null;
   onRefresh?: () => void;
   hideRefresh?: boolean;
+  /** "aws-list" is the VPC list layout: a 650px filter, pager and gear on the right, no refresh button, a one-line empty state. */
+  variant?: "default" | "aws-list";
+  /** "single" is the AWS single-select table: a radio button per row and no select-all box. */
+  selection?: "multi" | "single";
   className?: string;
   bodyClassName?: string;
 }) {
   const { density } = useConsole();
+  const awsList = variant === "aws-list";
   const [query, setQuery] = useState("");
   const [preset, setPreset] = useState("");
   const [sort, setSort] = useState(initialSort);
@@ -131,7 +138,7 @@ export function ResourceTable<T>({
             <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6b7a]" />
           </label>
         ) : null}
-        <div className="relative min-w-48 flex-1">
+        <div className={cn("relative min-w-48 flex-1", awsList && "max-w-[650px]")}>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6b7a]" />
           <input
             className="field w-full"
@@ -145,7 +152,7 @@ export function ResourceTable<T>({
             }}
           />
         </div>
-        {hideRefresh ? null : (
+        {hideRefresh || awsList ? null : (
           <button
             type="button"
             aria-label="Refresh"
@@ -161,7 +168,7 @@ export function ResourceTable<T>({
             <RefreshCw className="size-3.5" />
           </button>
         )}
-        <div className="flex items-center gap-1 text-[13px]">
+        <div className={cn("flex items-center gap-1 text-[13px]", awsList && "ml-auto")}>
           <button
             type="button"
             aria-label="Previous page"
@@ -207,16 +214,18 @@ export function ResourceTable<T>({
             <thead className="sticky top-0 z-[1] bg-white">
               <tr className="border-b border-[#e6e8eb] text-[12px] text-[#5f6b7a]">
                 <th className="w-10 px-2 py-2">
-                  <input
-                    ref={allRef}
-                    type="checkbox"
-                    aria-label="Select all on this page"
-                    checked={allChecked}
-                    onChange={() => {
-                      if (allChecked) onSelectedIds(selectedIds.filter((id) => !visibleIds.includes(id)));
-                      else onSelectedIds(Array.from(new Set([...selectedIds, ...visibleIds])));
-                    }}
-                  />
+                  {selection === "multi" ? (
+                    <input
+                      ref={allRef}
+                      type="checkbox"
+                      aria-label="Select all on this page"
+                      checked={allChecked}
+                      onChange={() => {
+                        if (allChecked) onSelectedIds(selectedIds.filter((id) => !visibleIds.includes(id)));
+                        else onSelectedIds(Array.from(new Set([...selectedIds, ...visibleIds])));
+                      }}
+                    />
+                  ) : null}
                 </th>
                 {columns.map((column) => (
                   <th
@@ -259,15 +268,25 @@ export function ResourceTable<T>({
                     onClick={() => onSelectedIds([id])}
                   >
                     <td className="px-2">
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${id}`}
-                        checked={selected}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={() => {
-                          onSelectedIds(selected ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]);
-                        }}
-                      />
+                      {selection === "multi" ? (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${id}`}
+                          checked={selected}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => {
+                            onSelectedIds(selected ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]);
+                          }}
+                        />
+                      ) : (
+                        <input
+                          type="radio"
+                          aria-label={`Select ${id}`}
+                          checked={selected}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => onSelectedIds([id])}
+                        />
+                      )}
                     </td>
                     {columns.map((column) => (
                       <td key={column.key} className="px-2 whitespace-nowrap">
@@ -280,7 +299,9 @@ export function ResourceTable<T>({
             </tbody>
           </table>
         </div>
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && awsList && rows.length === 0 ? (
+          <p className="py-3 text-center text-[13px] text-[#5f6b7a]">{emptyMessage}</p>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-4 text-center">
             <p className="font-semibold">{rows.length === 0 ? emptyTitle : "No matches"}</p>
             <p className="mt-1 max-w-md text-[13px] text-[#5f6b7a]">

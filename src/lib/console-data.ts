@@ -3,6 +3,7 @@ import type {
   BucketObject,
   Dataset,
   InternetGateway,
+  NatGateway,
   NavNode,
   NavTree,
   RouteTable,
@@ -24,7 +25,7 @@ export const computeNav: NavTree = {
   title: "EC2",
   sections: [
     { id: "dashboard", label: "Dashboard" },
-    { id: "global-view", label: "VWS Global View" },
+    { id: "global-view", label: "VWS Global View", external: true },
     { id: "events", label: "Events" },
     {
       id: "instances-group",
@@ -90,8 +91,9 @@ export const computeNav: NavTree = {
 export const networkNav: NavTree = {
   id: "network",
   title: "VPC dashboard",
+  href: "/network",
   sections: [
-    { id: "global", label: "Global view" },
+    { id: "global", label: "VWS Global View", external: true },
     {
       id: "vpc-group",
       label: "Virtual private cloud",
@@ -101,11 +103,10 @@ export const networkNav: NavTree = {
         { id: "routes", label: "Route tables", href: "/network/route-tables" },
         { id: "igw", label: "Internet gateways", href: "/network/internet-gateways" },
         { id: "eigw", label: "Egress-only internet gateways" },
-        { id: "carrier", label: "Carrier gateways" },
         { id: "dhcp", label: "DHCP option sets" },
         { id: "addresses", label: "Elastic IPs", href: "/network/elastic-ips" },
         { id: "prefix", label: "Managed prefix lists" },
-        { id: "nat", label: "NAT gateways" },
+        { id: "nat", label: "NAT gateways", href: "/network/nat-gateways" },
         { id: "peer", label: "Peering connections" },
         { id: "route-servers", label: "Route servers" },
       ],
@@ -224,6 +225,7 @@ export function createEmptyAccount(): Dataset {
     subnets: [],
     routeTables: [],
     internetGateways: [],
+    natGateways: [],
   };
 }
 
@@ -258,6 +260,7 @@ export function createSampleAccount(): Dataset {
       availabilityZone: "north-a",
       routeTableId: "rtb-0a1b2c3d4e5f6071",
       autoAssignPublicIp: true,
+      blockPublicAccess: "off",
       region: HOME_REGION,
       tags: {},
     },
@@ -271,6 +274,7 @@ export function createSampleAccount(): Dataset {
       availabilityZone: "north-b",
       routeTableId: "rtb-0a1b2c3d4e5f6071",
       autoAssignPublicIp: true,
+      blockPublicAccess: "off",
       region: HOME_REGION,
       tags: {},
     },
@@ -284,6 +288,7 @@ export function createSampleAccount(): Dataset {
       availabilityZone: "north-a",
       routeTableId: "rtb-0b2c3d4e5f607182",
       autoAssignPublicIp: false,
+      blockPublicAccess: "off",
       region: HOME_REGION,
       tags: {},
     },
@@ -319,6 +324,43 @@ export function createSampleAccount(): Dataset {
       name: "sample-igw",
       state: "attached",
       vpcId: DEFAULT_VPC_ID,
+      region: HOME_REGION,
+    },
+  ];
+  // MOCK_NAT_GATEWAYS: sample-only data. Public addresses come from 203.0.113.0/24, reserved for documentation.
+  const MOCK_NAT_GATEWAYS: NatGateway[] = [
+    {
+      id: "nat-0a1b2c3d4e5f6071",
+      name: "sample-nat",
+      connectivity: "public",
+      state: "available",
+      stateMessage: "",
+      availabilityMode: "zonal",
+      routeTableId: "rtb-0a1b2c3d4e5f6071",
+      publicIp: "203.0.113.17",
+      privateIp: "172.31.0.57",
+      networkInterfaceId: "eni-0a1b2c3d4e5f6071",
+      vpcId: DEFAULT_VPC_ID,
+      subnetId: "subnet-0a1b2c3d4e5f6071",
+      created: "2026-09-14T08:30:00.000Z",
+      deleted: "",
+      region: HOME_REGION,
+    },
+    {
+      id: "nat-0b2c3d4e5f607182",
+      name: "sample-private-nat",
+      connectivity: "private",
+      state: "available",
+      stateMessage: "",
+      availabilityMode: "zonal",
+      routeTableId: "rtb-0b2c3d4e5f607182",
+      publicIp: "",
+      privateIp: "10.20.1.84",
+      networkInterfaceId: "eni-0b2c3d4e5f607182",
+      vpcId: "vpc-07c1e9aa22b4d310",
+      subnetId: "subnet-0c3d4e5f60718293",
+      created: "2026-09-20T11:05:00.000Z",
+      deleted: "",
       region: HOME_REGION,
     },
   ];
@@ -359,6 +401,7 @@ export function createSampleAccount(): Dataset {
     subnets: MOCK_SUBNETS,
     routeTables: MOCK_ROUTE_TABLES,
     internetGateways: MOCK_INTERNET_GATEWAYS,
+    natGateways: MOCK_NAT_GATEWAYS,
     buckets,
     objects: MOCK_OBJECTS,
   };

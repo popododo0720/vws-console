@@ -58,6 +58,7 @@ export function ElasticIpsView({
       sortValue: (row) => row.allocationId,
       cell: (row) => <CopyText value={row.allocationId} />,
     },
+    { key: "rdns", header: "Reverse DNS record", minWidth: 180, sortValue: () => "", cell: () => "—" },
     {
       key: "instance",
       header: "Associated instance ID",
@@ -90,6 +91,7 @@ export function ElasticIpsView({
       live={{
         vpcs: [],
         onRefresh: action.refresh,
+        failed: loadError !== null,
         banner: (
           <>
             <ApiErrorAlert error={loadError} title="Elastic IP addresses could not be loaded" />
@@ -117,9 +119,10 @@ export function ElasticIpsView({
       ]}
       createLabel="Allocate Elastic IP address"
       onCreate={() => open({ kind: "allocate" })}
-      emptyTitle="No Elastic IP addresses found"
-      emptyMessage="You do not have any Elastic IP addresses in this region"
-      filterPlaceholder="Filter Elastic IP addresses"
+      emptyLine="No Elastic IP addresses found in this Region"
+      filterPlaceholder="Find elastic IP addresses by attribute or tag"
+      hideCount
+      selectTitle="Select an elastic IP address"
       detailTitle={(row) => row.address}
       renderDetail={(row) => (
         <DetailGrid

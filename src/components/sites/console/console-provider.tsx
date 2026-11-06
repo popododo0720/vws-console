@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { createEmptyAccount, createSampleAccount, HOME_REGION, REGIONS } from "@/lib/console-data";
-import type { Dataset, Instance, InternetGateway, RouteTable, Subnet, Volume, Vpc } from "@/types/console";
+import type { Dataset, Instance, InternetGateway, NatGateway, RouteTable, Subnet, Volume, Vpc } from "@/types/console";
 import type { AccountBucket, Identity } from "@/lib/vws-api/adapter";
 
 type Mode = "empty" | "sample";
@@ -26,6 +26,9 @@ type ConsoleApi = {
   subnets: Subnet[];
   routeTables: RouteTable[];
   internetGateways: InternetGateway[];
+  natGateways: NatGateway[];
+  /** The browser-only resources of every region, for screens that count across regions. */
+  dataset: Dataset;
   accountBuckets: readonly AccountBucket[];
   createRouteTable: (input: { name: string; vpcId: string }) => void;
   deleteRouteTables: (ids: string[]) => void;
@@ -35,7 +38,26 @@ type ConsoleApi = {
   attachInternetGateway: (id: string, vpcId: string) => string | null;
   detachInternetGateway: (id: string) => void;
   deleteInternetGateways: (ids: string[]) => void;
+  /** Returns an error message, or null when the gateway was created. */
+  createNatGateway: (input: {
+    name: string;
+    subnetId: string;
+    connectivity: NatGateway["connectivity"];
+  }) => string | null;
+  deleteNatGateways: (ids: string[]) => void;
 };
+
+const NAME_MAX = 256;
+
+/** A host address inside the subnet's block; the sample data never models which addresses are taken. */
+function hostAddress(cidr: string, host: number) {
+  const octets = cidr.split("/")[0].split(".");
+  return `${octets.slice(0, 3).join(".")}.${host}`;
+}
+
+function randomHost() {
+  return 10 + (crypto.getRandomValues(new Uint8Array(1))[0] % 240);
+}
 
 const ConsoleContext = createContext<ConsoleApi | null>(null);
 
@@ -76,6 +98,7 @@ export function ConsoleProvider({
     const subnets = data.subnets.filter((item) => item.region === region);
     const routeTables = data.routeTables.filter((item) => item.region === region);
     const internetGateways = data.internetGateways.filter((item) => item.region === region);
+    const natGateways = data.natGateways.filter((item) => item.region === region);
 
     return {
       account: { name: identity.userName, id: identity.accountId },
@@ -92,6 +115,8 @@ export function ConsoleProvider({
       subnets,
       routeTables,
       internetGateways,
+      natGateways,
+      dataset: data,
       accountBuckets,
       showEmpty: () => {
         setMode("empty");
@@ -201,6 +226,39 @@ export function ConsoleProvider({
         setData((prev) => ({
           ...prev,
           internetGateways: prev.internetGateways.filter((item) => item.state === "attached" || !ids.includes(item.id)),
+        }));
+      },
+      createNatGateway: ({ name, subnetId, connectivity }) => {
+        if (name.length > NAME_MAX) return `Name must be ${NAME_MAX} characters or fewer.`;
+        const subnet = subnets.find((item) => item.id === subnetId);
+        if (!subnet) return "Choose a subnet in this region.";
+        const gateway: NatGateway = {
+          id: newId("nat"),
+          name,
+          connectivity,
+          state: "available",
+          stateMessage: "",
+          availabilityMode: "zonal",
+          routeTableId: subnet.routeTableId,
+          publicIp: connectivity === "public" ? `203.0.113.${randomHost()}` : "",
+          privateIp: hostAddress(subnet.ipv4Cidr, randomHost()),
+          networkInterfaceId: newId("eni"),
+          vpcId: subnet.vpcId,
+          subnetId: subnet.id,
+          created: new Date().toISOString(),
+          deleted: "",
+          region,
+        };
+        setData((prev) => ({ ...prev, natGateways: [gateway, ...prev.natGateways] }));
+        return null;
+      },
+      deleteNatGateways: (ids) => {
+        const deleted = new Date().toISOString();
+        setData((prev) => ({
+          ...prev,
+          natGateways: prev.natGateways.map((item) =>
+            item.state === "available" && ids.includes(item.id) ? { ...item, state: "deleted", deleted } : item,
+          ),
         }));
       },
     };

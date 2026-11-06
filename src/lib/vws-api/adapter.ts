@@ -266,6 +266,7 @@ export function toSubnet(item: Json): Subnet {
     availabilityZone: str(item.availabilityZone),
     routeTableId: "",
     autoAssignPublicIp: bool(item.mapPublicIpOnLaunch),
+    blockPublicAccess: "",
     tags: tags(item.tags),
     region: REGION,
   };
