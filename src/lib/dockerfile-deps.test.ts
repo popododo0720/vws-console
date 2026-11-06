@@ -40,18 +40,42 @@ function copiesInPlace(instruction: string, dir: string): boolean {
     );
 }
 
+function installsWithout(all: string[], dir: string): { installs: number; missing: string[] } {
+  let workdir = "/";
+  let landedIn: string | null = null;
+  let installs = 0;
+  const missing: string[] = [];
+  for (const line of all) {
+    const [keyword, arg = ""] = line.split(/\s+/);
+    switch (keyword.toUpperCase()) {
+      case "FROM":
+        workdir = "/";
+        landedIn = null;
+        break;
+      case "WORKDIR":
+        workdir = arg.startsWith("/") ? arg : `${workdir.replace(/\/$/, "")}/${arg}`;
+        break;
+      case "COPY":
+        if (copiesInPlace(line, dir)) landedIn = workdir;
+        break;
+      case "RUN":
+        if (/\bnpm\s+(ci|install)\b/.test(line)) {
+          installs++;
+          if (landedIn !== workdir) missing.push(line);
+        }
+        break;
+    }
+  }
+  return { installs, missing };
+}
+
 describe.each(["Dockerfile", "Dockerfile.dev"])("%s", (dockerfile) => {
   const all = instructions(dockerfile);
-  const install = all.findIndex((line) => /^RUN\b.*\bnpm\s+(ci|install)\b/i.test(line));
 
-  it("installs dependencies", () => {
-    expect(install).toBeGreaterThan(-1);
-  });
-
-  it.each(localDirs)("copies %s before the first npm install", (dir) => {
-    const copy = all.findIndex((line) => copiesInPlace(line, dir));
-    expect(copy, `${dockerfile} must COPY ${dir} before npm install`).toBeGreaterThan(-1);
-    expect(copy, `${dockerfile} must COPY ${dir} before npm install`).toBeLessThan(install);
+  it.each(localDirs)("has %s in the stage and WORKDIR of every npm install", (dir) => {
+    const { installs, missing } = installsWithout(all, dir);
+    expect(installs).toBeGreaterThan(0);
+    expect(missing, `${dockerfile} must COPY ${dir} into WORKDIR before npm install`).toEqual([]);
   });
 });
 
