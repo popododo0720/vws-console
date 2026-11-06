@@ -5,6 +5,7 @@ const api = vi.hoisted(() => ({
   createSnapshot: vi.fn(),
   deleteVolume: vi.fn(),
   deleteSnapshot: vi.fn(),
+  detachVolume: vi.fn(),
 }));
 vi.mock("@/lib/vws-api/client", () => api);
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -14,6 +15,7 @@ import {
   createVolumeAction,
   deleteSnapshotsAction,
   deleteVolumesAction,
+  detachVolumeAction,
 } from "@/app/actions/resources";
 
 const KEY = "0b6f9c64-6c55-4c55-9b7f-1f7d2a1c0e11";
@@ -102,5 +104,23 @@ describe("delete actions", () => {
     expect(api.deleteVolume).toHaveBeenCalledTimes(2);
     api.deleteSnapshot.mockResolvedValueOnce(gone);
     expect(await deleteSnapshotsAction(["snap-0123456789abcdef0"])).toBeNull();
+  });
+});
+
+describe("detachVolumeAction", () => {
+  it("detaches without force unless force is true", async () => {
+    expect(await detachVolumeAction("vol-0123456789abcdef0")).toBeNull();
+    expect(await detachVolumeAction("vol-0123456789abcdef0", true)).toBeNull();
+    expect(api.detachVolume.mock.calls).toEqual([
+      ["vol-0123456789abcdef0", false],
+      ["vol-0123456789abcdef0", true],
+    ]);
+  });
+
+  it.each([["true"], [1], [null], [{}]])("refuses the force value %j without calling the API", async (force) => {
+    expect(await detachVolumeAction("vol-0123456789abcdef0", force as unknown as boolean)).toMatchObject({
+      code: "InvalidParameterValue",
+    });
+    expect(api.detachVolume).not.toHaveBeenCalled();
   });
 });

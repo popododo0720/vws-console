@@ -10,7 +10,7 @@ import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-acti
 import { RefreshIconButton, primaryPill, secondaryPill } from "@/components/sites/console/ebs-form-parts";
 import { DetailLink } from "@/components/sites/console/resource-detail";
 import { deleteVolumesAction, modifyVolumeAction } from "@/app/actions/resources";
-import { DetachVolumeDialog } from "@/components/sites/console/detach-volume-dialog";
+import { DetachVolumeDialog, type DetachMode } from "@/components/sites/console/detach-volume-dialog";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
@@ -50,7 +50,7 @@ export function VolumesView({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [modifySize, setModifySize] = useState(0);
-  const [detachOpen, setDetachOpen] = useState(false);
+  const [detachMode, setDetachMode] = useState<DetachMode | null>(null);
   const selected = volumes.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
   const refresh = () => {
@@ -202,9 +202,13 @@ export function VolumesView({
                 {
                   label: "Detach volume",
                   disabled: action.pending || !one || one.state !== "in-use",
-                  onSelect: () => setDetachOpen(true),
+                  onSelect: () => setDetachMode("detach"),
                 },
-                { label: "Force detach volume", disabled: true },
+                {
+                  label: "Force detach volume",
+                  disabled: action.pending || !one || one.state !== "in-use",
+                  onSelect: () => setDetachMode("force"),
+                },
                 { label: "Manage auto-enabled I/O", disabled: true },
                 { label: "Manage tags", disabled: true },
               ]}
@@ -216,7 +220,6 @@ export function VolumesView({
         }
       />
       <ApiErrorAlert error={loadError} title="Volumes could not be loaded" />
-      <ApiErrorAlert error={action.error} title="The volume action failed" />
       <ResourceTable
         rows={volumes}
         getId={(row) => row.id}
@@ -312,6 +315,7 @@ export function VolumesView({
           </>
         }
       >
+        <ApiErrorAlert error={action.error} title="The volume could not be modified" />
         <div className="space-y-3">
           <div>
             <FieldLabel>Volume ID</FieldLabel>
@@ -334,7 +338,9 @@ export function VolumesView({
           </div>
         </div>
       </PanelDialog>
-      {detachOpen && one ? <DetachVolumeDialog volume={one} onClose={() => setDetachOpen(false)} /> : null}
+      {detachMode && one ? (
+        <DetachVolumeDialog volume={one} mode={detachMode} onClose={() => setDetachMode(null)} />
+      ) : null}
       <PanelDialog
         open={deleteOpen}
         title={selected.length > 1 ? "Delete volumes" : "Delete volume"}
