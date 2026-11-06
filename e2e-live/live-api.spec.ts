@@ -1,10 +1,48 @@
-import { expect, test, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+
+// Every run of a spec, --repeat-each included, shares one console-api, so names and idempotency keys are unique per run.
+const unique = (label: string) => `${label}-${randomUUID().slice(0, 8)}`;
 
 async function dialogButton(page: Page, name: string) {
   await page.getByRole("dialog").getByRole("button", { name }).click();
 }
 
-test("creates and deletes a VPC, subnet and volume through the fake console-api", async ({ page }) => {
+// Lists page 10 rows sorted by ID, so a new resource can land on any page; the list's own filter brings it to page 1.
+async function listRow(page: Page, text: string) {
+  const filter = page.locator("input.field").and(page.getByRole("textbox", { name: /^(Find|Filter|Search)\b/ }));
+  await filter.fill(text);
+  return page.getByRole("row").filter({ hasText: text });
+}
+
+async function listItems<T>(request: APIRequestContext, path: string): Promise<T[]> {
+  const items: T[] = [];
+  let token = "";
+  do {
+    const page = await (
+      await request.get(`${consoleApi()}${path}${token ? `?pageToken=${encodeURIComponent(token)}` : ""}`, {
+        headers: apiHeaders("list"),
+      })
+    ).json();
+    items.push(...page.items);
+    token = page.nextPageToken ?? "";
+  } while (token);
+  return items;
+}
+
+async function createdIds(request: APIRequestContext, path: string, field: string, before: string[]) {
+  let created: string[] = [];
+  await expect
+    .poll(async () => {
+      const ids = (await listItems<Record<string, string>>(request, path)).map((item) => item[field]);
+      created = ids.filter((id) => !before.includes(id));
+      return created.length;
+    })
+    .toBeGreaterThan(0);
+  return created;
+}
+
+test("creates and deletes a VPC, subnet and volume through the fake console-api", async ({ page, request }) => {
   await page.goto("/network/vpcs");
   await expect(page.getByText("VPCs could not be loaded")).toHaveCount(0);
   await expect(page.getByText("Sample data")).toHaveCount(0);
@@ -12,7 +50,7 @@ test("creates and deletes a VPC, subnet and volume through the fake console-api"
   await page.getByRole("button", { name: "Create VPC" }).first().click();
   await page.getByRole("dialog").getByLabel("IPv4 CIDR").fill("10.42.0.0/16");
   await dialogButton(page, "Create VPC");
-  const vpcRow = page.getByRole("row").filter({ hasText: "10.42.0.0/16" });
+  const vpcRow = await listRow(page, "10.42.0.0/16");
   await expect(vpcRow).toHaveCount(1);
   const vpcId = (await vpcRow.getByText(/^vpc-/).first().textContent())!.trim();
 
@@ -21,9 +59,10 @@ test("creates and deletes a VPC, subnet and volume through the fake console-api"
   await page.getByRole("dialog").locator("select").selectOption(vpcId);
   await page.getByRole("dialog").getByPlaceholder("10.0.1.0/24").fill("10.42.1.0/24");
   await dialogButton(page, "Create subnet");
-  const subnetRow = page.getByRole("row").filter({ hasText: "10.42.1.0/24" });
+  const subnetRow = await listRow(page, "10.42.1.0/24");
   await expect(subnetRow).toContainText(vpcId);
 
+  const volumesBefore = (await listItems<{ volumeId: string }>(request, "/volumes")).map((item) => item.volumeId);
   await page.goto("/storage/volumes");
   await page.getByRole("link", { name: "Create volume" }).click();
   await expect(page).toHaveURL(/\/storage\/volumes\/create$/);
@@ -31,13 +70,18 @@ test("creates and deletes a VPC, subnet and volume through the fake console-api"
   await page.getByLabel("IOPS").fill("4000");
   await page.getByRole("button", { name: "Create volume" }).dblclick();
   await expect(page).toHaveURL(/\/storage\/volumes$/);
-  const volumeRow = page.getByRole("row").filter({ hasText: "13 GiB" });
+  const created = await createdIds(request, "/volumes", "volumeId", volumesBefore);
+  expect(created).toHaveLength(1);
+  const [volumeId] = created;
+  const volumeRow = await listRow(page, volumeId);
   await expect(volumeRow).toHaveCount(1);
+  await expect(volumeRow).toContainText("13 GiB");
   await expect(volumeRow).toContainText("gp3");
   await expect(volumeRow).toContainText("4000");
   await expect(volumeRow).toContainText("125");
 
   await page.reload();
+  await listRow(page, volumeId);
   await expect(volumeRow).toHaveCount(1);
   await expect.poll(async () => (await volumeRow.textContent()) ?? "", { timeout: 15_000 }).toMatch(/Available/);
   await volumeRow.getByRole("checkbox").check();
@@ -47,13 +91,13 @@ test("creates and deletes a VPC, subnet and volume through the fake console-api"
   await expect(volumeRow).toHaveCount(0);
 
   await page.goto("/network/subnets");
-  await subnetRow.getByRole("checkbox").check();
+  await (await listRow(page, "10.42.1.0/24")).getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
   await page.getByRole("menuitem", { name: "Delete subnet" }).click();
   await expect(subnetRow).toHaveCount(0);
 
   await page.goto("/network/vpcs");
-  await vpcRow.getByRole("checkbox").check();
+  await (await listRow(page, "10.42.0.0/16")).getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await expect(vpcRow).toHaveCount(0);
@@ -70,6 +114,10 @@ test("shows the API error code when a create is rejected", async ({ page }) => {
 });
 
 test("shows the empty instance list from the API", async ({ page }) => {
+  test.skip(
+    test.info().repeatEachIndex > 0,
+    "the instance list is empty only before the first repeat launches instances",
+  );
   await page.goto("/compute/instances");
   await expect(page.getByText("No instances")).toBeVisible();
   await expect(page.getByText("Instances could not be loaded")).toHaveCount(0);
@@ -77,18 +125,13 @@ test("shows the empty instance list from the API", async ({ page }) => {
 
 test("lists a seeded instance by its Name tag and stops it", async ({ page, request }) => {
   const api = `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
-  const headers = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+  const headers = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": unique(key) });
   const vpc = await (
     await request.post(`${api}/vpcs`, { headers: headers("seed-vpc"), data: { cidrBlock: "10.77.0.0/16" } })
   ).json();
   const vpcId = vpc.items[0].vpcId;
   await expect
-    .poll(
-      async () =>
-        (await (await request.get(`${api}/vpcs`, { headers: headers("x") })).json()).items.find(
-          (v: { vpcId: string }) => v.vpcId === vpcId,
-        ).state,
-    )
+    .poll(async () => (await (await request.get(`${api}/vpcs/${vpcId}`, { headers: headers("x") })).json()).state)
     .toBe("available");
   const subnet = await (
     await request.post(`${api}/subnets`, {
@@ -110,13 +153,14 @@ test("lists a seeded instance by its Name tag and stops it", async ({ page, requ
   const instanceId = (await run.json()).items[0].instanceId;
 
   await page.goto("/compute/instances");
-  const row = page.getByRole("row").filter({ hasText: instanceId });
+  const row = await listRow(page, instanceId);
   await expect(row).toContainText("e2e-web");
   await expect(row).toContainText("vws.small");
   await expect
     .poll(
       async () => {
         await page.reload();
+        await listRow(page, instanceId);
         return (await row.textContent()) ?? "";
       },
       { timeout: 30_000 },
@@ -136,7 +180,7 @@ test("lists a seeded instance by its Name tag and stops it", async ({ page, requ
 });
 
 const consoleApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
-const apiHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+const apiHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": unique(key) });
 
 test("creates a security group, edits its inbound rules, copies it and deletes both", async ({ page, request }) => {
   const vpc = await (
@@ -146,14 +190,15 @@ test("creates a security group, edits its inbound rules, copies it and deletes b
     })
   ).json();
   const vpcId = vpc.items[0].vpcId;
+  const groupName = unique("e2e-web");
 
   await page.goto("/network/security-groups/create");
-  await page.locator("input.field").first().fill("e2e-web");
+  await page.locator("input.field").first().fill(groupName);
   await page.locator("select.field").first().selectOption(vpcId);
   await page.getByRole("button", { name: "Add rule", exact: true }).click();
   await page.getByRole("button", { name: "Create security group" }).click();
   await expect(page).toHaveURL(/\/network\/security-groups$/);
-  const row = page.getByRole("row").filter({ hasText: "e2e-web" });
+  const row = await listRow(page, groupName);
   await expect(row).toContainText(vpcId);
   const groupId = (await row.getByText(/^sg-/).first().textContent())!.trim();
 
@@ -188,8 +233,8 @@ test("creates a security group, edits its inbound rules, copies it and deletes b
   await expect(page.getByRole("cell", { name: "10.88.0.0/16" }).first()).toBeVisible();
   await expect(page.getByRole("cell", { name: "0.0.0.0/0", exact: true })).toHaveCount(1);
 
-  const stored = await (await request.get(`${consoleApi()}/security-groups`, { headers: apiHeaders("x") })).json();
-  const rules = stored.items.find((item: { groupId: string }) => item.groupId === groupId).ipPermissions;
+  const stored = await listItems<{ groupId: string; ipPermissions: unknown[] }>(request, "/security-groups");
+  const rules = stored.find((item) => item.groupId === groupId)!.ipPermissions;
   expect(rules).toEqual(
     expect.arrayContaining([
       { ipProtocol: "tcp", fromPort: 22, toPort: 22, cidrIp: "10.88.0.0/16" },
@@ -207,10 +252,11 @@ test("creates a security group, edits its inbound rules, copies it and deletes b
   await expect(page).toHaveURL(new RegExp(`/network/security-groups/create\\?copy=${groupId}$`));
   await expect(page.getByRole("status")).toContainText(groupId);
   await expect(page.getByLabel("Rule 1 source")).toHaveValue("10.88.0.0/16");
-  await page.locator("input.field").first().fill("e2e-web-copy");
+  const copyName = unique("e2e-web-copy");
+  await page.locator("input.field").first().fill(copyName);
   await page.getByRole("button", { name: "Create security group" }).click();
   await expect(page).toHaveURL(/\/network\/security-groups$/);
-  const copyRow = page.getByRole("row").filter({ hasText: "e2e-web-copy" });
+  const copyRow = await listRow(page, copyName);
   await expect(copyRow).toContainText(vpcId);
   await expect(copyRow).toContainText("2");
   const copyId = (await copyRow.getByText(/^sg-/).first().textContent())!.trim();
@@ -226,13 +272,14 @@ test("creates a security group, edits its inbound rules, copies it and deletes b
   await page.getByRole("menuitem", { name: "Delete security groups" }).click();
   await remove.getByRole("button", { name: "Delete" }).click();
   await expect(page).toHaveURL(/\/network\/security-groups$/);
-  await expect(page.getByRole("row").filter({ hasText: groupId })).toHaveCount(0);
+  await expect(await listRow(page, groupId)).toHaveCount(0);
 
-  await page.getByRole("row").filter({ hasText: copyId }).getByRole("checkbox").check();
+  const copyById = await listRow(page, copyId);
+  await copyById.getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
   await page.getByRole("menuitem", { name: "Delete security groups" }).click();
   await remove.getByRole("button", { name: "Delete" }).click();
-  await expect(page.getByRole("row").filter({ hasText: copyId })).toHaveCount(0);
+  await expect(copyById).toHaveCount(0);
 });
 
 test("allocates, associates, disassociates and releases an Elastic IP address", async ({ page, request }) => {
@@ -246,9 +293,7 @@ test("allocates, associates, disassociates and releases an Elastic IP address", 
   await expect
     .poll(
       async () =>
-        (await (await request.get(`${consoleApi()}/vpcs`, { headers: apiHeaders("x") })).json()).items.find(
-          (v: { vpcId: string }) => v.vpcId === vpcId,
-        ).state,
+        (await (await request.get(`${consoleApi()}/vpcs/${vpcId}`, { headers: apiHeaders("x") })).json()).state,
     )
     .toBe("available");
   const subnet = await (
@@ -277,22 +322,16 @@ test("allocates, associates, disassociates and releases an Elastic IP address", 
     )
     .toBe("running");
 
+  const before = (await listItems<{ allocationId: string }>(request, "/addresses")).map((item) => item.allocationId);
   await page.goto("/network/elastic-ips");
   await expect(page.getByText("Elastic IP addresses could not be loaded")).toHaveCount(0);
-  const before = await page
-    .getByRole("row")
-    .filter({ hasText: /eipalloc-/ })
-    .count();
   await page.getByRole("button", { name: "Allocate Elastic IP address" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Allocate" }).click();
-  const rows = page.getByRole("row").filter({ hasText: /eipalloc-/ });
-  await expect(rows).toHaveCount(before + 1);
-  const row = rows.last();
-  const allocationId = (await row
-    .getByText(/^eipalloc-/)
-    .first()
-    .textContent())!.trim();
-  const byId = page.getByRole("row").filter({ hasText: allocationId });
+  const created = await createdIds(request, "/addresses", "allocationId", before);
+  expect(created).toHaveLength(1);
+  const [allocationId] = created;
+  const byId = await listRow(page, allocationId);
+  await expect(byId).toHaveCount(1);
 
   await byId.getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
@@ -320,23 +359,22 @@ test("creates a snapshot from a volume and deletes it", async ({ page, request }
   await expect
     .poll(
       async () =>
-        (await (await request.get(`${consoleApi()}/volumes`, { headers: apiHeaders("x") })).json()).items.find(
-          (v: { volumeId: string }) => v.volumeId === volumeId,
-        ).state,
+        (await (await request.get(`${consoleApi()}/volumes/${volumeId}`, { headers: apiHeaders("x") })).json()).state,
     )
     .toBe("available");
 
   await page.goto("/storage/volumes");
-  await page.getByRole("row").filter({ hasText: volumeId }).getByRole("checkbox").check();
+  await (await listRow(page, volumeId)).getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
   await page.getByRole("menuitem", { name: "Create snapshot", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/storage/snapshots/create\\?volumeId=${volumeId}$`));
   await expect(page.getByLabel("Volume ID")).toHaveValue(volumeId);
-  await page.getByLabel("Description").fill("e2e backup");
+  const description = unique("e2e backup");
+  await page.getByLabel("Description").fill(description);
   await page.getByRole("button", { name: "Create snapshot" }).dblclick();
   await expect(page).toHaveURL(/\/storage\/snapshots$/);
   await expect(page.getByText("Snapshots could not be loaded")).toHaveCount(0);
-  const row = page.getByRole("row").filter({ hasText: "e2e backup" });
+  const row = await listRow(page, description);
   await expect(row).toHaveCount(1);
   await expect(row).toContainText(volumeId);
   await expect(row).toContainText("7 GiB");
@@ -344,6 +382,7 @@ test("creates a snapshot from a volume and deletes it", async ({ page, request }
     .poll(
       async () => {
         await page.reload();
+        await listRow(page, description);
         return (await row.textContent()) ?? "";
       },
       { timeout: 15_000 },
@@ -356,7 +395,7 @@ test("creates a snapshot from a volume and deletes it", async ({ page, request }
   await expect(page.getByText("Available (100%)")).toBeVisible();
   await page.goto("/storage/snapshots");
 
-  await row.getByRole("checkbox").check();
+  await (await listRow(page, description)).getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
   await page.getByRole("menuitem", { name: "Create volume from snapshot" }).click();
   await expect(page).toHaveURL(new RegExp(`/storage/volumes/create\\?snapshotId=${snapshotId}$`));
@@ -364,7 +403,7 @@ test("creates a snapshot from a volume and deletes it", async ({ page, request }
   await expect(page.getByLabel("Size (GiB)")).toHaveValue("7");
   await page.goto("/storage/snapshots");
 
-  await row.getByRole("checkbox").check();
+  await (await listRow(page, description)).getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
   await page.getByRole("menuitem", { name: "Delete snapshot" }).click();
   await dialogButton(page, "Delete");
@@ -373,18 +412,13 @@ test("creates a snapshot from a volume and deletes it", async ({ page, request }
 
 test("launches an instance from the launch screen", async ({ page, request }) => {
   const api = `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
-  const headers = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+  const headers = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": unique(key) });
   const vpc = await (
     await request.post(`${api}/vpcs`, { headers: headers("launch-vpc"), data: { cidrBlock: "10.88.0.0/16" } })
   ).json();
   const vpcId = vpc.items[0].vpcId;
   await expect
-    .poll(
-      async () =>
-        (await (await request.get(`${api}/vpcs`, { headers: headers("x") })).json()).items.find(
-          (v: { vpcId: string }) => v.vpcId === vpcId,
-        ).state,
-    )
+    .poll(async () => (await (await request.get(`${api}/vpcs/${vpcId}`, { headers: headers("x") })).json()).state)
     .toBe("available");
   const subnet = await (
     await request.post(`${api}/subnets`, {
@@ -396,7 +430,8 @@ test("launches an instance from the launch screen", async ({ page, request }) =>
 
   await page.goto("/compute/launch");
   await expect(page.getByText("Launch options could not be loaded")).toHaveCount(0);
-  await page.getByPlaceholder("e.g. My Web Server").fill("launched-web");
+  const instanceName = unique("launched-web");
+  await page.getByPlaceholder("e.g. My Web Server").fill(instanceName);
   await expect(page.getByLabel("VWS Machine Image (AMI)")).toHaveValue("ami-0123456789abcdef0");
   await page.getByLabel("Instance type", { exact: true }).selectOption("vws.medium");
   await page.getByLabel("Key pair name").selectOption("proceed-without");
@@ -407,13 +442,13 @@ test("launches an instance from the launch screen", async ({ page, request }) =>
   await page.getByRole("button", { name: "Launch instance" }).click();
 
   await expect(page).toHaveURL(/\/compute\/instances$/, { timeout: 60_000 });
-  const row = page.getByRole("row").filter({ hasText: "launched-web" });
+  const row = await listRow(page, instanceName);
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("vws.medium");
 });
 
 const tagsApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
-const tagsHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+const tagsHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": unique(key) });
 
 async function seedInstances(
   request: import("@playwright/test").APIRequestContext,
@@ -469,7 +504,7 @@ test("renames an instance through its Name tag from the list and the detail page
   const [id] = ids;
 
   await page.goto("/compute/instances");
-  const row = page.getByRole("row").filter({ hasText: id });
+  const row = await listRow(page, id);
   await expect(row).toContainText("rename-old");
   await row.getByRole("button", { name: "Edit name" }).click();
   await row.getByLabel("Name").fill("rename-new");
@@ -485,9 +520,10 @@ test("renames an instance through its Name tag from the list and the detail page
 });
 
 test("stops and terminates several instances in one batch", async ({ page, request }) => {
-  const { ids } = await seedInstances(request, "batch", "10.56", 2);
+  const { vpcId, ids } = await seedInstances(request, "batch", "10.56", 2);
 
   await page.goto("/compute/instances");
+  await expect(await listRow(page, vpcId)).toHaveCount(2);
   for (const id of ids) await page.getByRole("row").filter({ hasText: id }).getByRole("checkbox").check();
   await page
     .getByRole("button", { name: /^Instance state/ })
@@ -515,14 +551,14 @@ test("opens VPC and volume detail pages from their lists", async ({ page, reques
   const volumeId: string = volume.items[0].volumeId;
 
   await page.goto("/network/vpcs");
-  await page.getByRole("link", { name: vpcId }).click();
+  await (await listRow(page, vpcId)).getByRole("link", { name: vpcId }).click();
   await expect(page).toHaveURL(new RegExp(`/network/vpcs/${vpcId}$`));
   await expect(page.getByText("10.57.0.0/16")).toBeVisible();
   await expect(page.getByText(subnetId)).toBeVisible();
   await expect(page.locator("dt", { hasText: /^Default VPC$/ }).locator("..")).toContainText("No");
 
   await page.goto("/storage/volumes");
-  await page.getByRole("link", { name: volumeId }).click();
+  await (await listRow(page, volumeId)).getByRole("link", { name: volumeId }).click();
   await expect(page).toHaveURL(new RegExp(`/storage/volumes/${volumeId}$`));
   await expect(page.getByText("6 GiB")).toBeVisible();
 
@@ -531,7 +567,7 @@ test("opens VPC and volume detail pages from their lists", async ({ page, reques
 });
 
 const liveApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
-const liveHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+const liveHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": unique(key) });
 
 test("grows a volume and will not shrink it", async ({ page, request }) => {
   const created = await (
@@ -541,14 +577,12 @@ test("grows a volume and will not shrink it", async ({ page, request }) => {
   await expect
     .poll(
       async () =>
-        (await (await request.get(`${liveApi()}/volumes`, { headers: liveHeaders("x") })).json()).items.find(
-          (v: { volumeId: string }) => v.volumeId === volumeId,
-        ).state,
+        (await (await request.get(`${liveApi()}/volumes/${volumeId}`, { headers: liveHeaders("x") })).json()).state,
     )
     .toBe("available");
 
   await page.goto("/storage/volumes");
-  const row = page.getByRole("row").filter({ hasText: volumeId });
+  const row = await listRow(page, volumeId);
   await row.getByRole("checkbox").check();
   await page.getByRole("button", { name: /^Actions/ }).click();
   await page.getByRole("menuitem", { name: "Modify volume" }).click();
@@ -571,10 +605,7 @@ test("shows instance VPC and launch time, subnet zone and public IP setting, and
   const vpcId = vpc.items[0].vpcId;
   await expect
     .poll(
-      async () =>
-        (await (await request.get(`${liveApi()}/vpcs`, { headers: liveHeaders("x") })).json()).items.find(
-          (v: { vpcId: string }) => v.vpcId === vpcId,
-        ).state,
+      async () => (await (await request.get(`${liveApi()}/vpcs/${vpcId}`, { headers: liveHeaders("x") })).json()).state,
     )
     .toBe("available");
   const subnet = await (
@@ -594,62 +625,71 @@ test("shows instance VPC and launch time, subnet zone and public IP setting, and
   const launchTime: string = run.items[0].launchTime;
 
   await page.goto("/compute/instances");
-  const instanceRow = page.getByRole("row").filter({ hasText: instanceId });
+  const instanceRow = await listRow(page, instanceId);
   await expect(instanceRow).toContainText(vpcId);
   await expect(instanceRow).toContainText(launchTime);
 
   await page.goto("/network/subnets");
-  const subnetRow = page.getByRole("row").filter({ hasText: subnetId });
+  const subnetRow = await listRow(page, subnetId);
   await expect(subnetRow).toContainText("vws-1a");
   await subnetRow.getByRole("checkbox").check();
   await expect(page.getByText("Auto-assign public IPv4 address").locator("..")).toContainText("No");
 
   await page.goto("/network/vpcs");
-  const vpcRow = page.getByRole("row").filter({ hasText: vpcId });
+  const vpcRow = await listRow(page, vpcId);
   await vpcRow.getByRole("checkbox").check();
   await expect(page.locator("dt", { hasText: /^Default VPC$/ }).locator("..")).toContainText("No");
 });
 
 const netApi = () => `http://127.0.0.1:${Number(process.env.E2E_EC2_PORT ?? 48081) - 1}/api/v1`;
-const netHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": key });
+const netHeaders = (key: string) => ({ authorization: "Bearer dev-token", "idempotency-key": unique(key) });
 
 test("names a VPC and a subnet on create, renames them and shows their tags", async ({ page }) => {
+  const vpcName = unique("e2e-net");
   await page.goto("/network/vpcs");
   await page.getByRole("button", { name: "Create VPC" }).first().click();
-  await page.getByRole("dialog").getByLabel("VPC name").fill("e2e-net");
+  await page.getByRole("dialog").getByLabel("VPC name").fill(vpcName);
   await page.getByRole("dialog").getByLabel("IPv4 CIDR").fill("10.44.0.0/16");
   await page.getByRole("dialog").getByRole("button", { name: "Create VPC" }).click();
-  const vpcRow = page.getByRole("row").filter({ hasText: "10.44.0.0/16" });
-  await expect(vpcRow).toContainText("e2e-net");
-  const vpcId = (await vpcRow.getByText(/^vpc-/).first().textContent())!.trim();
+  const named = await listRow(page, vpcName);
+  await expect(named).toContainText("10.44.0.0/16");
+  const vpcId = (await named.getByText(/^vpc-/).first().textContent())!.trim();
 
+  const vpcRow = await listRow(page, vpcId);
   await vpcRow.getByRole("button", { name: "Edit name" }).click();
-  await vpcRow.getByLabel("Name").fill("e2e-net-2");
+  await vpcRow.getByLabel("Name").fill(`${vpcName}-2`);
   await vpcRow.getByLabel("Name").press("Enter");
-  await expect(vpcRow).toContainText("e2e-net-2");
+  await expect(vpcRow).toContainText(`${vpcName}-2`);
   await vpcRow.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Tags" }).click();
-  await expect(page.getByRole("cell", { name: "e2e-net-2", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: `${vpcName}-2`, exact: true })).toBeVisible();
 
   await page.goto(`/network/vpcs/${vpcId}`);
-  await expect(page.getByText("e2e-net-2").first()).toBeVisible();
+  await expect(page.getByText(`${vpcName}-2`).first()).toBeVisible();
 
+  const subnetName = unique("e2e-sub");
   await page.goto("/network/subnets");
   await page.getByRole("button", { name: "Create subnet" }).first().click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Subnet name").fill("e2e-sub");
+  await dialog.getByLabel("Subnet name").fill(subnetName);
   await dialog.locator("select").selectOption(vpcId);
   await dialog.getByPlaceholder("10.0.1.0/24").fill("10.44.1.0/24");
   await dialog.getByRole("button", { name: "Create subnet" }).click();
-  const subnetRow = page.getByRole("row").filter({ hasText: "10.44.1.0/24" });
-  await expect(subnetRow).toContainText("e2e-sub");
+  const subnetNamed = await listRow(page, subnetName);
+  await expect(subnetNamed).toContainText("10.44.1.0/24");
+  const subnetId = (await subnetNamed
+    .getByText(/^subnet-/)
+    .first()
+    .textContent())!.trim();
+
+  const subnetRow = await listRow(page, subnetId);
   await subnetRow.getByRole("button", { name: "Edit name" }).click();
-  await subnetRow.getByLabel("Name").fill("e2e-sub-2");
+  await subnetRow.getByLabel("Name").fill(`${subnetName}-2`);
   await subnetRow.getByLabel("Name").press("Enter");
-  await expect(subnetRow).toContainText("e2e-sub-2");
+  await expect(subnetRow).toContainText(`${subnetName}-2`);
   await subnetRow.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Tags" }).click();
-  await expect(page.getByRole("cell", { name: "e2e-sub-2", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: `${subnetName}-2`, exact: true })).toBeVisible();
 });
 
 test("shows an instance's public IP and Elastic IP allocation", async ({ page, request }) => {
@@ -704,7 +744,7 @@ test("shows an instance's public IP and Elastic IP allocation", async ({ page, r
     .toBe(publicIp);
 
   await page.goto("/compute/instances");
-  const row = page.getByRole("row").filter({ hasText: instanceId });
+  const row = await listRow(page, instanceId);
   await expect(row).toContainText(publicIp);
   await expect(row).toContainText(allocationId);
 
