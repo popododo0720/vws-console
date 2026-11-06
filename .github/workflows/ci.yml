@@ -51,11 +51,29 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      # The sentinel endpoint is only seen at build time; the scan fails if it or any exporter code reaches .next/static.
       - name: Build
+        env:
+          OTEL_EXPORTER_OTLP_ENDPOINT: http://otlp-endpoint-sentinel.invalid:4318
         run: npm run build
+
+      - name: Client bundle scan
+        run: |
+          bash scripts/check-client-bundle_test.sh
+          bash scripts/check-client-bundle.sh .next/static http://otlp-endpoint-sentinel.invalid:4318
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
       - name: E2E smoke
         run: npm run test:e2e
+
+      # The OTel e2e runs the pinned OpenTelemetry Collector that scripts/otelcol.sh downloads and checks by sha256.
+      - name: Cache the OpenTelemetry Collector
+        uses: actions/cache@v6
+        with:
+          path: .cache/otelcol
+          key: otelcol-contrib-0.164.0-linux-amd64
+
+      - name: E2E OpenTelemetry (real Collector)
+        run: npm run test:e2e:otel

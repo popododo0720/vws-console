@@ -5,9 +5,12 @@ import { redirect } from "next/navigation";
 import { currentSession } from "./session";
 import { logAuth } from "./log";
 import { iamMode, iamState, IamUnavailableError, noteLoginEnabled, type IamMode } from "./mode";
+import { recordOperationPoll } from "@/lib/ops/metrics";
+import { withSpan } from "@/lib/ops/span";
 import { objectKeyProblem } from "@/lib/object-upload";
 import type { CreateSnapshotInput, CreateVolumeInput } from "@/lib/ebs";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
+import { keyPath, route, withQuery, type ApiRoute } from "./route";
 import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type {
   ElasticIp,
@@ -170,7 +173,7 @@ type PostOptions = { idempotencyKey?: string; bodyText?: string };
 
 async function request(
   method: "GET" | "POST" | "PUT" | "DELETE",
-  path: string,
+  path: ApiRoute,
   body?: unknown,
   post?: PostOptions,
 ): Promise<RequestResult> {
@@ -208,18 +211,24 @@ async function request(
   let response: ApiReply;
   let json: unknown;
   try {
-    response = await apiFetch(`${base}/api/v1${path}`, {
-      method,
-      headers,
-      body: method === "POST" ? (post?.bodyText ?? JSON.stringify(body ?? {})) : raw ? blobBytes(raw.bytes) : undefined,
-    });
+    response = await apiFetch(
+      base,
+      path,
+      {
+        method,
+        headers,
+        body:
+          method === "POST" ? (post?.bodyText ?? JSON.stringify(body ?? {})) : raw ? blobBytes(raw.bytes) : undefined,
+      },
+      { iamMode: mode },
+    );
   } catch (error) {
     return { ok: false, status: null, error: transportError(error) };
   }
   try {
     json = parseJson(response.text);
   } catch {
-    return { ok: false, status: response.status, error: { ...malformed(path), requestId: response.requestId } };
+    return { ok: false, status: response.status, error: { ...malformed(path.path), requestId: response.requestId } };
   }
   // With IAM off a 401 means a wrong token, which signing in cannot fix, so it is shown as an error.
   if (response.status === 401 && iam) return toLogin("expired");
@@ -247,23 +256,16 @@ function malformed(path: string): ApiError {
   };
 }
 
-function listQuery(path: string, pageSize: number | undefined, token: string): string {
-  const params: string[] = [];
-  if (pageSize !== undefined) params.push(`pageSize=${pageSize}`);
-  if (token) params.push(`pageToken=${encodeURIComponent(token)}`);
-  return params.length === 0 ? path : `${path}?${params.join("&")}`;
-}
-
-async function listAll<T>(path: string, parse: (page: unknown) => T[], pageSize?: number): Promise<ApiResult<T[]>> {
+async function listAll<T>(path: ApiRoute, parse: (page: unknown) => T[], pageSize?: number): Promise<ApiResult<T[]>> {
   const out: T[] = [];
   let token = "";
   do {
-    const result = await request("GET", listQuery(path, pageSize, token));
+    const result = await request("GET", withQuery(path, { pageSize, pageToken: token }));
     if (!result.ok) return { ok: false, error: result.error };
     try {
       out.push(...parse(result.value.json));
     } catch {
-      return { ok: false, error: malformed(path) };
+      return { ok: false, error: malformed(path.path) };
     }
     token = nextPageToken(result.value.json);
   } while (token);
@@ -272,43 +274,60 @@ async function listAll<T>(path: string, parse: (page: unknown) => T[], pageSize?
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Reads GET /operations/{id} every 500 ms until the operation leaves "running" or 60 s pass. A "running"
+ * operation back means the deadline passed; callers decide what that means for them.
+ */
+async function pollOperation(op: Operation): Promise<ApiResult<Operation>> {
+  const started = performance.now();
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  try {
+    while (op.state === "running") {
+      if (Date.now() > deadline) return { ok: true, value: op };
+      await sleep(POLL_INTERVAL_MS);
+      const polled = await request("GET", route("/operations/{id}", { id: op.id }));
+      if (!polled.ok) return { ok: false, error: polled.error };
+      try {
+        op = parseOperation(polled.value.json);
+      } catch {
+        return { ok: false, error: malformed(`/operations/${op.id}`) };
+      }
+    }
+    return { ok: true, value: op };
+  } finally {
+    recordOperationPoll((performance.now() - started) / 1000);
+  }
+}
+
 /** Sends a mutation. A 202 carries an operation, which is polled until it finishes. */
-async function mutate(path: string, body?: unknown, idempotencyKey?: IdempotencyKey): Promise<ApiResult<void>> {
+async function mutate(path: ApiRoute, body?: unknown, idempotencyKey?: IdempotencyKey): Promise<ApiResult<void>> {
   const result = await mutateReturning(path, body, idempotencyKey);
   return result.ok ? { ok: true, value: undefined } : result;
 }
 
 /** Like mutate, but returns the body of the accepted request, which names the new resource. */
 async function mutateReturning(
-  path: string,
+  path: ApiRoute,
   body?: unknown,
   idempotencyKey?: IdempotencyKey,
 ): Promise<ApiResult<unknown>> {
   const sent = await request("POST", path, body, { idempotencyKey });
   if (!sent.ok) return { ok: false, error: sent.error };
   if (sent.value.status !== 202) return { ok: true, value: sent.value.json };
-  let op;
+  let accepted;
   try {
-    op = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
+    accepted = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
   } catch {
-    return { ok: false, error: malformed(path) };
+    return { ok: false, error: malformed(path.path) };
   }
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
-  while (op.state === "running") {
-    if (Date.now() > deadline) {
-      return {
-        ok: false,
-        error: { code: "OperationTimeout", message: `Operation ${op.id} is still running.`, requestId: null },
-      };
-    }
-    await sleep(POLL_INTERVAL_MS);
-    const polled = await request("GET", `/operations/${encodeURIComponent(op.id)}`);
-    if (!polled.ok) return { ok: false, error: polled.error };
-    try {
-      op = parseOperation(polled.value.json);
-    } catch {
-      return { ok: false, error: malformed(`/operations/${op.id}`) };
-    }
+  const polled = await pollOperation(accepted);
+  if (!polled.ok) return polled;
+  const op = polled.value;
+  if (op.state === "running") {
+    return {
+      ok: false,
+      error: { code: "OperationTimeout", message: `Operation ${op.id} is still running.`, requestId: null },
+    };
   }
   if (op.state === "failed") {
     return {
@@ -319,14 +338,13 @@ async function mutateReturning(
   return { ok: true, value: sent.value.json };
 }
 
-const seg = encodeURIComponent;
-
-export const listImages = (): Promise<ApiResult<Image[]>> => listAll("/images", parseImages);
-export const listInstances = (): Promise<ApiResult<Instance[]>> => listAll("/instances", parseInstances);
-export const listVolumes = (): Promise<ApiResult<Volume[]>> => listAll("/volumes", parseVolumes);
-export const listVpcs = (): Promise<ApiResult<Vpc[]>> => listAll("/vpcs", parseVpcs);
-export const listSubnets = (): Promise<ApiResult<Subnet[]>> => listAll("/subnets", parseSubnets);
-export const listBuckets = (): Promise<ApiResult<AccountBucket[]>> => listAll("/buckets", parseAccountBuckets, 100);
+export const listImages = (): Promise<ApiResult<Image[]>> => listAll(route("/images"), parseImages);
+export const listInstances = (): Promise<ApiResult<Instance[]>> => listAll(route("/instances"), parseInstances);
+export const listVolumes = (): Promise<ApiResult<Volume[]>> => listAll(route("/volumes"), parseVolumes);
+export const listVpcs = (): Promise<ApiResult<Vpc[]>> => listAll(route("/vpcs"), parseVpcs);
+export const listSubnets = (): Promise<ApiResult<Subnet[]>> => listAll(route("/subnets"), parseSubnets);
+export const listBuckets = (): Promise<ApiResult<AccountBucket[]>> =>
+  listAll(route("/buckets"), parseAccountBuckets, 100);
 
 /** The S3 call a failure came from; a few console-api codes mean different S3 errors per call. */
 type S3Call = "createBucket" | "headBucket" | "deleteBucket" | "putObject" | "getObject" | "deleteObject";
@@ -386,37 +404,34 @@ function s3Failure(result: Extract<RequestResult, { ok: false }>, call: S3Call):
 }
 
 export async function putBucket(name: BucketName): Promise<ApiResult<AccountBucket>> {
-  const path = `/buckets/${seg(name)}`;
+  const path = route("/buckets/{name}", { name });
   const result = await request("PUT", path);
   if (!result.ok) return { ok: false, error: s3Failure(result, "createBucket") };
-  if (result.value.status !== 200) return { ok: false, error: malformed(path) };
+  if (result.value.status !== 200) return { ok: false, error: malformed(path.path) };
   try {
     return { ok: true, value: toAccountBucket(result.value.json, name) };
   } catch {
-    return { ok: false, error: malformed(path) };
+    return { ok: false, error: malformed(path.path) };
   }
 }
 
 export async function getBucket(name: BucketName): Promise<ApiResult<AccountBucket | null>> {
-  const path = `/buckets/${seg(name)}`;
+  const path = route("/buckets/{name}", { name });
   const result = await request("GET", path);
   if (!result.ok) {
     if (result.status === 404 && result.error.code === "NotFound") return { ok: true, value: null };
     return { ok: false, error: s3Failure(result, "headBucket") };
   }
-  if (result.value.status !== 200) return { ok: false, error: malformed(path) };
+  if (result.value.status !== 200) return { ok: false, error: malformed(path.path) };
   try {
     return { ok: true, value: toAccountBucket(result.value.json, name) };
   } catch {
-    return { ok: false, error: malformed(path) };
+    return { ok: false, error: malformed(path.path) };
   }
 }
 
-function objectPath(bucket: BucketName, key: string): string {
-  return `/buckets/${seg(bucket)}/objects/${key
-    .split("/")
-    .map((part) => encodeURIComponent(part))
-    .join("/")}`;
+function objectPath(bucket: BucketName, key: string): ApiRoute {
+  return route("/buckets/{name}/objects/{key}", { name: bucket, key: keyPath(key) });
 }
 
 function invalidKey(key: string): ApiError | null {
@@ -435,13 +450,13 @@ export async function putObject(
   const path = objectPath(bucket, key);
   const result = await request("PUT", path, { bytes, contentType });
   if (!result.ok) return { ok: false, error: s3Failure(result, "putObject") };
-  if (result.value.status !== 200) return { ok: false, error: malformed(path) };
+  if (result.value.status !== 200) return { ok: false, error: malformed(path.path) };
   const record = result.value.json;
   const got =
     typeof record === "object" && record !== null && "key" in record && typeof record.key === "string"
       ? record.key
       : "";
-  if (got !== key) return { ok: false, error: malformed(path) };
+  if (got !== key) return { ok: false, error: malformed(path.path) };
   return { ok: true, value: undefined };
 }
 
@@ -452,11 +467,11 @@ export async function getObject(bucket: BucketName, key: string): Promise<ApiRes
   const path = objectPath(bucket, key);
   const result = await request("GET", path);
   if (!result.ok) return { ok: false, error: s3Failure(result, "getObject") };
-  if (result.value.status !== 200) return { ok: false, error: malformed(path) };
+  if (result.value.status !== 200) return { ok: false, error: malformed(path.path) };
   try {
     return { ok: true, value: toObjectContent(result.value.json, bucket, key) };
   } catch {
-    return { ok: false, error: malformed(path) };
+    return { ok: false, error: malformed(path.path) };
   }
 }
 
@@ -485,23 +500,23 @@ export async function deleteObject(bucket: BucketName, key: string): Promise<Api
     }
     return { ok: false, error: s3Failure(result, "deleteObject") };
   }
-  if (result.value.status !== 204) return { ok: false, error: malformed(path) };
+  if (result.value.status !== 204) return { ok: false, error: malformed(path.path) };
   return { ok: true, value: undefined };
 }
 
 export async function deleteBucket(name: BucketName): Promise<ApiResult<void>> {
-  const path = `/buckets/${seg(name)}`;
+  const path = route("/buckets/{name}", { name });
   const result = await request("DELETE", path);
   if (!result.ok) {
     if (result.status === 404 && result.error.code === "NotFound") return { ok: true, value: undefined };
     return { ok: false, error: s3Failure(result, "deleteBucket") };
   }
-  if (result.value.status !== 204) return { ok: false, error: malformed(path) };
+  if (result.value.status !== 204) return { ok: false, error: malformed(path.path) };
   return { ok: true, value: undefined };
 }
 
 /** Reads one resource; a 404 is a missing resource, not an error. */
-async function getOne<T>(path: string, map: (item: Record<string, unknown>) => T): Promise<ApiResult<T | null>> {
+async function getOne<T>(path: ApiRoute, map: (item: Record<string, unknown>) => T): Promise<ApiResult<T | null>> {
   const result = await request("GET", path);
   if (!result.ok) {
     return result.error.code === "NotFound" ? { ok: true, value: null } : { ok: false, error: result.error };
@@ -509,14 +524,15 @@ async function getOne<T>(path: string, map: (item: Record<string, unknown>) => T
   try {
     return { ok: true, value: map(result.value.json as Record<string, unknown>) };
   } catch {
-    return { ok: false, error: malformed(path) };
+    return { ok: false, error: malformed(path.path) };
   }
 }
 
 export const getInstance = (id: string): Promise<ApiResult<Instance | null>> =>
-  getOne(`/instances/${seg(id)}`, toInstance);
-export const getVpc = (id: string): Promise<ApiResult<Vpc | null>> => getOne(`/vpcs/${seg(id)}`, toVpc);
-export const getVolume = (id: string): Promise<ApiResult<Volume | null>> => getOne(`/volumes/${seg(id)}`, toVolume);
+  getOne(route("/instances/{id}", { id }), toInstance);
+export const getVpc = (id: string): Promise<ApiResult<Vpc | null>> => getOne(route("/vpcs/{id}", { id }), toVpc);
+export const getVolume = (id: string): Promise<ApiResult<Volume | null>> =>
+  getOne(route("/volumes/{id}", { id }), toVolume);
 
 export const launchInstances = ({ tags, keyPair, ...rest }: LaunchRequest) => {
   if (keyPair.kind !== "pair" && keyPair.kind !== "none") {
@@ -524,10 +540,10 @@ export const launchInstances = ({ tags, keyPair, ...rest }: LaunchRequest) => {
   }
   const named = keyPair.kind === "pair" ? { keyName: keyPair.name } : {};
   const body = { ...rest, ...named };
-  return mutate("/instances", Object.keys(tags).length > 0 ? { ...body, tags } : body);
+  return mutate(route("/instances"), Object.keys(tags).length > 0 ? { ...body, tags } : body);
 };
 
-export const listKeyPairs = (): Promise<ApiResult<StoredKeyPair[]>> => listAll("/key-pairs", parseKeyPairs);
+export const listKeyPairs = (): Promise<ApiResult<StoredKeyPair[]>> => listAll(route("/key-pairs"), parseKeyPairs);
 
 const invalidKeyPairId: ApiError = {
   code: "InvalidArgument",
@@ -571,7 +587,7 @@ export async function createKeyPair(attempt: CreateAttempt): Promise<KeyPairCrea
   }
   const draft = readAttempt({ idempotencyKey, body: attempt.body });
   if ("code" in draft) return failedCreate(draft, null);
-  const sent = await request("POST", "/key-pairs", undefined, { idempotencyKey, bodyText: attempt.body });
+  const sent = await request("POST", route("/key-pairs"), undefined, { idempotencyKey, bodyText: attempt.body });
   if (!sent.ok) return failedCreate(sent.error, null);
   const read = readCreateItem(sent.value.json);
   if (!read || (draft.mode === "generate" && read.material === "")) return failedCreate(malformed("/key-pairs"), null);
@@ -581,24 +597,16 @@ export async function createKeyPair(attempt: CreateAttempt): Promise<KeyPairCrea
     settlement: "succeeded",
   };
   if (sent.value.status !== 202) return { status: "ready", issued };
-  let op: Operation;
+  let accepted: Operation;
   try {
-    op = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
+    accepted = parseOperation((sent.value.json as { operation?: unknown } | null)?.operation);
   } catch {
     return failedCreate(malformed("/key-pairs"), issued);
   }
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
-  while (op.state === "running") {
-    if (Date.now() > deadline) return { status: "ready", issued: { ...issued, settlement: "still-running" } };
-    await sleep(POLL_INTERVAL_MS);
-    const polled = await request("GET", `/operations/${encodeURIComponent(op.id)}`);
-    if (!polled.ok) return failedCreate(polled.error, issued);
-    try {
-      op = parseOperation(polled.value.json);
-    } catch {
-      return failedCreate(malformed(`/operations/${op.id}`), issued);
-    }
-  }
+  const polled = await pollOperation(accepted);
+  if (!polled.ok) return failedCreate(polled.error, issued);
+  const op = polled.value;
+  if (op.state === "running") return { status: "ready", issued: { ...issued, settlement: "still-running" } };
   if (op.state === "failed") {
     return failedCreate(
       op.error ?? { code: "OperationFailed", message: `Operation ${op.id} failed.`, requestId: null },
@@ -612,7 +620,7 @@ export async function createKeyPair(attempt: CreateAttempt): Promise<KeyPairCrea
 export async function deleteKeyPair(id: KeyPairId): Promise<ApiResult<void>> {
   const parsed = parseKeyPairId(id);
   if (!parsed) return { ok: false, error: invalidKeyPairId };
-  return mutate(`/key-pairs/${seg(parsed)}/delete`);
+  return mutate(route("/key-pairs/{id}/delete", { id: parsed }));
 }
 
 /** console-api takes at most this many instance IDs in one batch call. */
@@ -621,7 +629,7 @@ export const INSTANCE_BATCH_LIMIT = 20;
 /** Starts, stops or terminates instances with one operation per batch of up to 20 IDs. */
 export async function instanceBatch(action: "start" | "stop" | "terminate", ids: string[]): Promise<ApiResult<void>> {
   for (let index = 0; index < ids.length; index += INSTANCE_BATCH_LIMIT) {
-    const result = await mutate(`/instances/${action}`, {
+    const result = await mutate(route(`/instances/${action}`), {
       instanceIds: ids.slice(index, index + INSTANCE_BATCH_LIMIT),
     });
     if (!result.ok) return result;
@@ -631,11 +639,11 @@ export async function instanceBatch(action: "start" | "stop" | "terminate", ids:
 
 /** Adds or overwrites tags on one instance; tags not named stay. */
 export const createInstanceTags = (id: string, tags: Record<string, string>) =>
-  mutate(`/instances/${seg(id)}/tags`, { tags });
+  mutate(route("/instances/{id}/tags", { id }), { tags });
 /** The key makes a resent create (double submit, retry) return the first volume instead of making a second. */
 export const createVolume = (input: CreateVolumeInput, idempotencyKey: IdempotencyKey) =>
   mutate(
-    "/volumes",
+    route("/volumes"),
     {
       volumeType: input.volumeType,
       availabilityZone: input.availabilityZone,
@@ -646,27 +654,28 @@ export const createVolume = (input: CreateVolumeInput, idempotencyKey: Idempoten
     },
     idempotencyKey,
   );
-export const deleteVolume = (id: string) => mutate(`/volumes/${seg(id)}/delete`);
+export const deleteVolume = (id: string) => mutate(route("/volumes/{id}/delete", { id }));
 export const createSnapshot = ({ volumeId, description }: CreateSnapshotInput, idempotencyKey: IdempotencyKey) =>
-  mutate("/snapshots", description ? { volumeId, description } : { volumeId }, idempotencyKey);
+  mutate(route("/snapshots"), description ? { volumeId, description } : { volumeId }, idempotencyKey);
 const withTags = <T extends object>(body: T, tags: Record<string, string>) =>
   Object.keys(tags).length > 0 ? { ...body, tags } : body;
 
 export const createVpc = (cidrBlock: string, tags: Record<string, string> = {}) =>
-  mutate("/vpcs", withTags({ cidrBlock }, tags));
-export const deleteVpc = (id: string) => mutate(`/vpcs/${seg(id)}/delete`);
+  mutate(route("/vpcs"), withTags({ cidrBlock }, tags));
+export const deleteVpc = (id: string) => mutate(route("/vpcs/{id}/delete", { id }));
 export const createSubnet = (vpcId: string, cidrBlock: string, tags: Record<string, string> = {}) =>
-  mutate("/subnets", withTags({ vpcId, cidrBlock }, tags));
+  mutate(route("/subnets"), withTags({ vpcId, cidrBlock }, tags));
 /** Adds or overwrites tags on one VPC or subnet; tags not named stay. */
-export const createVpcTags = (id: string, tags: Record<string, string>) => mutate(`/vpcs/${seg(id)}/tags`, { tags });
+export const createVpcTags = (id: string, tags: Record<string, string>) =>
+  mutate(route("/vpcs/{id}/tags", { id }), { tags });
 export const createSubnetTags = (id: string, tags: Record<string, string>) =>
-  mutate(`/subnets/${seg(id)}/tags`, { tags });
-export const deleteSubnet = (id: string) => mutate(`/subnets/${seg(id)}/delete`);
+  mutate(route("/subnets/{id}/tags", { id }), { tags });
+export const deleteSubnet = (id: string) => mutate(route("/subnets/{id}/delete", { id }));
 
 export const listInstanceTypes = (): Promise<ApiResult<InstanceType[]>> =>
-  listAll("/instance-types", parseInstanceTypes);
+  listAll(route("/instance-types"), parseInstanceTypes);
 /** console-api only grows a volume; it refuses a smaller size. */
-export const modifyVolume = (id: string, size: number) => mutate(`/volumes/${seg(id)}/modify`, { size });
+export const modifyVolume = (id: string, size: number) => mutate(route("/volumes/{id}/modify", { id }), { size });
 
 export async function attachVolume(volumeId: string, input: VolumeAttachment): Promise<ApiResult<void>> {
   const instanceId = input.instanceId.trim();
@@ -681,38 +690,39 @@ export async function attachVolume(volumeId: string, input: VolumeAttachment): P
       },
     };
   }
-  return mutate(`/volumes/${seg(volumeId)}/attach`, { instanceId, device });
+  return mutate(route("/volumes/{id}/attach", { id: volumeId }), { instanceId, device });
 }
 
 export function detachVolume(volumeId: string): Promise<ApiResult<void>> {
-  return mutate(`/volumes/${seg(volumeId)}/detach`);
+  return mutate(route("/volumes/{id}/detach", { id: volumeId }));
 }
 
 export const listSecurityGroups = (): Promise<ApiResult<SecurityGroup[]>> =>
-  listAll("/security-groups", parseSecurityGroups);
+  listAll(route("/security-groups"), parseSecurityGroups);
 
 export async function createSecurityGroup(groupName: string, vpcId: string): Promise<ApiResult<string>> {
-  const result = await mutateReturning("/security-groups", { groupName, vpcId });
+  const result = await mutateReturning(route("/security-groups"), { groupName, vpcId });
   if (!result.ok) return result;
   const id = firstItem(result.value, "groupId");
   return id ? { ok: true, value: id } : { ok: false, error: malformed("/security-groups") };
 }
 
 export const authorizeIngress = (groupId: string, ipPermissions: IngressPermission) =>
-  mutate(`/security-groups/${seg(groupId)}/authorize-ingress`, { ipPermissions });
+  mutate(route("/security-groups/{id}/authorize-ingress", { id: groupId }), { ipPermissions });
 export const revokeIngress = (groupId: string, ipPermissions: IngressPermission) =>
-  mutate(`/security-groups/${seg(groupId)}/revoke-ingress`, { ipPermissions });
-export const deleteSecurityGroup = (id: string) => mutate(`/security-groups/${seg(id)}/delete`);
+  mutate(route("/security-groups/{id}/revoke-ingress", { id: groupId }), { ipPermissions });
+export const deleteSecurityGroup = (id: string) => mutate(route("/security-groups/{id}/delete", { id }));
 
-export const listAddresses = (): Promise<ApiResult<ElasticIp[]>> => listAll("/addresses", parseAddresses);
-export const allocateAddress = () => mutate("/addresses", {});
+export const listAddresses = (): Promise<ApiResult<ElasticIp[]>> => listAll(route("/addresses"), parseAddresses);
+export const allocateAddress = () => mutate(route("/addresses"), {});
 export const associateAddress = (allocationId: string, instanceId: string) =>
-  mutate(`/addresses/${seg(allocationId)}/associate`, { instanceId });
-export const disassociateAddress = (allocationId: string) => mutate(`/addresses/${seg(allocationId)}/disassociate`);
-export const releaseAddress = (allocationId: string) => mutate(`/addresses/${seg(allocationId)}/release`);
+  mutate(route("/addresses/{id}/associate", { id: allocationId }), { instanceId });
+export const disassociateAddress = (allocationId: string) =>
+  mutate(route("/addresses/{id}/disassociate", { id: allocationId }));
+export const releaseAddress = (allocationId: string) => mutate(route("/addresses/{id}/release", { id: allocationId }));
 
-export const listSnapshots = (): Promise<ApiResult<Snapshot[]>> => listAll("/snapshots", parseSnapshots);
-export const deleteSnapshot = (id: string) => mutate(`/snapshots/${seg(id)}/delete`);
+export const listSnapshots = (): Promise<ApiResult<Snapshot[]>> => listAll(route("/snapshots"), parseSnapshots);
+export const deleteSnapshot = (id: string) => mutate(route("/snapshots/{id}/delete", { id }));
 
 export type LoginInput = { account: string; userName: string; password: string; mfaCode?: string };
 
@@ -736,13 +746,18 @@ export async function login(input: LoginInput): Promise<ApiResult<ApiSession>> {
   ) => logAuth({ event: "auth.login", outcome, status, requestId, code, durationMs: performance.now() - started });
   let reply: ApiReply;
   try {
-    reply = await apiFetch(`${base}/api/v1/auth/login`, {
-      method: "POST",
-      headers: { accept: "application/json", "content-type": "application/json", ...(await browserOrigin()) },
-      body: JSON.stringify(
-        input.mfaCode ? input : { account: input.account, userName: input.userName, password: input.password },
-      ),
-    });
+    reply = await apiFetch(
+      base,
+      route("/auth/login"),
+      {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json", ...(await browserOrigin()) },
+        body: JSON.stringify(
+          input.mfaCode ? input : { account: input.account, userName: input.userName, password: input.password },
+        ),
+      },
+      { iamMode: "on" },
+    );
   } catch (error) {
     const apiError = transportError(error);
     done("error", null, apiError.requestId, apiError.code);
@@ -789,16 +804,21 @@ export async function logout(): Promise<void> {
     return;
   }
   try {
-    const reply = await apiFetch(`${base}/api/v1/auth/logout`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`,
-        "x-csrf-token": session.csrf,
-        ...(await browserOrigin()),
+    const reply = await apiFetch(
+      base,
+      route("/auth/logout"),
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`,
+          "x-csrf-token": session.csrf,
+          ...(await browserOrigin()),
+        },
+        body: "{}",
       },
-      body: "{}",
-    });
+      { iamMode: "on" },
+    );
     const ok = reply.status >= 200 && reply.status <= 299;
     logAuth({
       event: "auth.logout",
@@ -824,7 +844,7 @@ export async function logout(): Promise<void> {
 export type SessionInfo = { principal: string; account: string; root: boolean; expiresAt: string };
 
 export async function getSession(): Promise<ApiResult<SessionInfo>> {
-  const result = await request("GET", "/auth/session");
+  const result = await request("GET", route("/auth/session"));
   if (!result.ok) return { ok: false, error: result.error };
   const body = (result.value.json ?? {}) as Record<string, unknown>;
   const text = (value: unknown) => (typeof value === "string" ? value : "");
@@ -844,6 +864,10 @@ export async function getSession(): Promise<ApiResult<SessionInfo>> {
  * there is no session, or it no longer answers. Pages still redirect through their own calls.
  */
 export async function signedInSession(): Promise<SessionInfo | null> {
+  return withSpan("vws.session", "internal", {}, readSignedInSession);
+}
+
+async function readSignedInSession(): Promise<SessionInfo | null> {
   const state = await iamState();
   if (state !== "on" && state !== "off") return null;
   const iam = state === "on";
@@ -862,9 +886,12 @@ export async function signedInSession(): Promise<SessionInfo | null> {
   }
   const started = performance.now();
   try {
-    const reply = await apiFetch(`${base}/api/v1/auth/session`, {
-      headers: { accept: "application/json", ...credentials },
-    });
+    const reply = await apiFetch(
+      base,
+      route("/auth/session"),
+      { headers: { accept: "application/json", ...credentials } },
+      { iamMode: state },
+    );
     const ok = reply.status >= 200 && reply.status <= 299;
     logAuth({
       event: "auth.session",

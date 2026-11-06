@@ -65,3 +65,6 @@ docs/design-references/**/*.gif
 /test-results/
 /playwright-report/
 e2e-live/.auth/
+
+# Pinned tools downloaded by scripts (otelcol.sh)
+/.cache/

@@ -58,18 +58,54 @@ Detection fails closed. On a timeout, a network error or an answer without `logi
 
 The console is a VWS service: it is deployed to Kubernetes like the other `vws-*` components, so it serves the same probe and scrape endpoints (decision for #68). They answer without sign-in, are never cached, and never print configuration values, tokens or console-api responses. `/healthz` and `/readyz` are on the app port (`PORT`). `/metrics` is on its own port (`METRICS_PORT`), so a NetworkPolicy can admit only the scraper to it while the app port stays public.
 
-| Endpoint                         | Purpose                                                                                                                                                                                                                                                                                              |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /healthz`                   | Liveness. `200` `{"status":"ok"}` while the server answers; it checks no dependency, so a console-api outage does not restart the console.                                                                                                                                                           |
-| `GET /readyz`                    | Readiness. `200` when `VWS_CONSOLE_IAM` and `VWS_CONSOLE_API_URL` are valid and, if `VWS_CONSOLE_API_URL` is set, console-api answers one unauthenticated `GET /api/v1/auth/session` below 500 within 2 s. Otherwise `503` with `{"status":"unavailable","checks":[{"name","status","reason"}]}`.    |
-| `GET /metrics` on `METRICS_PORT` | Prometheus text. Every metric starts with `vws_console_`: `vws_console_http_requests_total{method}`, `vws_console_api_requests_total{method,outcome}`, `vws_console_api_request_duration_seconds{method,outcome}` and the Node.js process metrics (`vws_console_process_*`, `vws_console_nodejs_*`). |
+| Endpoint                         | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /healthz`                   | Liveness. `200` `{"status":"ok"}` while the server answers; it checks no dependency, so a console-api outage does not restart the console.                                                                                                                                                                                                                                                                                                                                                                          |
+| `GET /readyz`                    | Readiness. `200` when `VWS_CONSOLE_IAM` and `VWS_CONSOLE_API_URL` are valid and, if `VWS_CONSOLE_API_URL` is set, console-api answers one unauthenticated `GET /api/v1/auth/session` below 500 within 2 s. Otherwise `503` with `{"status":"unavailable","checks":[{"name","status","reason"}]}`.                                                                                                                                                                                                                   |
+| `GET /metrics` on `METRICS_PORT` | Prometheus text. Every metric starts with `vws_console_`: `vws_console_http_requests_total{method}`, `vws_console_api_requests_total{method,route,status_class,outcome}`, `vws_console_api_request_duration_seconds{method,route}`, `vws_console_api_retries_total{route,reason}`, `vws_console_api_timeouts_total{method,route}`, `vws_console_auth_events_total{event,outcome}`, `vws_console_operation_poll_duration_seconds` and the Node.js process metrics (`vws_console_process_*`, `vws_console_nodejs_*`). |
 
 | Variable       | Default     | Meaning                                                                                                                                                                                                                                                                      |
 | -------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PORT`         | `3000`      | App port: the console UI, `/healthz` and `/readyz`. `GET /metrics` here answers `404` with no body, in every sign-in mode.                                                                                                                                                   |
 | `METRICS_PORT` | unset (off) | Metrics port. Unset, empty or `0` starts no listener. A whole number from 1 to 65535 starts one on all interfaces (not `HOSTNAME`), so the pod IP can be scraped. It answers only `GET` and `HEAD /metrics`; other paths are `404`. vws-deploy#612 sets `9464` in the chart. |
 
-An invalid `METRICS_PORT`, or a port that is already in use, logs `metrics.listen` with `outcome:"error"` and `code` `InvalidMetricsPort` or the listen error (such as `EADDRINUSE`), and the console runs without metrics. A successful start logs `metrics.listen` with `outcome:"success"`. `/metrics` carries no secrets but is unauthenticated, like the other VWS services' ops endpoints; restrict `METRICS_PORT` to the scraper with a NetworkPolicy. OpenTelemetry traces are not exported yet; #53 tracks them.
+An invalid `METRICS_PORT`, or a port that is already in use, logs `metrics.listen` with `outcome:"error"` and `code` `InvalidMetricsPort` or the listen error (such as `EADDRINUSE`), and the console runs without metrics. A successful start logs `metrics.listen` with `outcome:"success"`. `/metrics` carries no secrets but is unauthenticated, like the other VWS services' ops endpoints; restrict `METRICS_PORT` to the scraper with a NetworkPolicy.
+
+`route` is the console-api route template, such as `/vpcs/{id}/delete`, never a path with an ID, an object key or a query. `status_class` is `1xx` to `5xx`, or `none` when console-api never answered. `outcome` is `success` (below 400), `failure` (400 and up), `timeout` or `network`. `reason` is `timeout`, `network`, `429` or `5xx`. `api_timeouts_total` counts each attempt that hit the deadline, even when a later attempt answered.
+
+**Label migration (#53).** Before #53, `vws_console_api_requests_total` and `vws_console_api_request_duration_seconds` were labelled `{method,outcome}` with `outcome` one of `1xx`…`5xx`, `timeout` or `network`. Now the status class has its own label and the duration histogram has no `outcome`:
+
+| Old query                                                        | New query                                                                 |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `vws_console_api_requests_total{outcome="5xx"}`                  | `vws_console_api_requests_total{status_class="5xx"}`                      |
+| `vws_console_api_requests_total{outcome="2xx"}`                  | `vws_console_api_requests_total{outcome="success",status_class="2xx"}`    |
+| `vws_console_api_requests_total{outcome="timeout"}`              | unchanged (`status_class="none"`)                                         |
+| `vws_console_api_request_duration_seconds_bucket{outcome="2xx"}` | `vws_console_api_request_duration_seconds_bucket` by `method` and `route` |
+
+## OpenTelemetry
+
+The console server exports traces and metrics over OTLP/HTTP (JSON encoding) when an endpoint is set. Unset, it exports nothing and opens no connection for telemetry. Spans still get ids, so console-api calls carry `traceparent` and the auth log lines carry `trace_id` and `span_id`. Only the server is instrumented; no OpenTelemetry code ships to the browser (`scripts/check-client-bundle.sh` checks every build in CI).
+
+A `traceparent` sent by the browser is ignored: every request starts its own trace, so a client cannot pick the trace id in the logs or switch off sampling. The console sends `traceparent` to console-api only.
+
+| Variable                                                                    | Default       | Meaning                                                                                                                        |
+| --------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`                                               | unset (off)   | Collector base URL, such as `http://otel-collector:4318`. Traces go to `/v1/traces` and metrics to `/v1/metrics`.              |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | unset         | Full URL for one signal; it turns that signal on by itself.                                                                    |
+| `OTEL_EXPORTER_OTLP_HEADERS`                                                | unset         | Headers for the collector, `key=value,key2=value2`. The console never logs them.                                               |
+| `OTEL_SERVICE_NAME`                                                         | `vws-console` | `service.name` of every span and metric.                                                                                       |
+| `OTEL_RESOURCE_ATTRIBUTES`                                                  | unset         | Extra resource attributes, `key=value,key2=value2`. Operators set these; put no credentials in them.                           |
+| `OTEL_BSP_SCHEDULE_DELAY`                                                   | `5000`        | Milliseconds between span exports.                                                                                             |
+| `OTEL_METRIC_EXPORT_INTERVAL`                                               | `60000`       | Milliseconds between metric exports.                                                                                           |
+| `OTEL_SDK_DISABLED`                                                         | unset         | `true` installs no OpenTelemetry at all: no export, no `traceparent`, no trace ids in logs. Prometheus `/metrics` still works. |
+
+gRPC is not shipped. On SIGTERM the console flushes buffered telemetry for up to 2 s; a crash loses what was not exported yet.
+
+What is exported:
+
+- **Traces.** One CLIENT span per console-api call, `console-api <METHOD> <route template>` (for example `console-api GET /vpcs/{id}`), with `http.request.method`, `http.response.status_code`, `url.template`, `vws.request_id` (the `X-Request-Id` sent), `vws.attempts`, `vws.iam_mode` and `error.type` (`timeout`, `network`, console-api's error code, or the status). A GET that is retried has one `retry` event per repeated attempt with `attempt`, `reason` and `backoff_ms`. Status is ERROR for a timeout, a network error or a 5xx. Every server action has a span `action <export name>`, the proxy's expired-cookie check is `vws.session_check` and the session read for the header is `vws.session`. Next.js's own spans are not exported, because they carry raw URLs with IDs and object keys.
+- **Metrics.** The same `vws_console_*` instruments as `/metrics` above, with the same names and labels, without the Node.js process metrics.
+- **No secrets.** No attribute, event, label or log field holds a password, MFA code, session, cookie, CSRF value, bearer token or request body. Attribute keys are a closed list in `src/lib/ops/span.ts`.
 
 ## Screens
 
@@ -98,4 +134,8 @@ Launching an instance, or using Create on volumes, security groups, VPCs, or buc
 npm run typecheck
 npm run lint
 npm run build
+bash scripts/check-client-bundle.sh   # after the build: no OpenTelemetry exporter code in .next/static
+npm run test:e2e:otel                 # after the build: a real OpenTelemetry Collector receives the spans and metrics
 ```
+
+`npm run test:e2e:otel` starts the OpenTelemetry Collector `otelcol-contrib` 0.164.0 (`scripts/otelcol.sh` downloads it once into `.cache/otelcol` and checks its sha256), a deterministic fake console-api (`e2e-otel/fake-console-api.mts`) and the console. It drives a sign-in, a GET retried after a 503, a write and a timeout, then reads the Collector's file output.

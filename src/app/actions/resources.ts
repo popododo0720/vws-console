@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { withActionSpan } from "@/lib/ops/span";
 import * as vws from "@/lib/vws-api/client";
 import { fileProblem, objectKeyProblem } from "@/lib/object-upload";
 import {
@@ -48,19 +49,27 @@ const errorOf = async (pending: Promise<ApiResult<void>>) => {
 };
 
 export async function launchInstancesAction(req: LaunchRequest) {
-  return errorOf(vws.launchInstances(req));
+  return withActionSpan("launchInstancesAction", async () => {
+    return errorOf(vws.launchInstances(req));
+  });
 }
 
 export async function startInstancesAction(ids: string[]) {
-  return errorOf(vws.instanceBatch("start", ids));
+  return withActionSpan("startInstancesAction", async () => {
+    return errorOf(vws.instanceBatch("start", ids));
+  });
 }
 
 export async function stopInstancesAction(ids: string[]) {
-  return errorOf(vws.instanceBatch("stop", ids));
+  return withActionSpan("stopInstancesAction", async () => {
+    return errorOf(vws.instanceBatch("stop", ids));
+  });
 }
 
 export async function terminateInstancesAction(ids: string[]) {
-  return errorOf(vws.instanceBatch("terminate", ids));
+  return withActionSpan("terminateInstancesAction", async () => {
+    return errorOf(vws.instanceBatch("terminate", ids));
+  });
 }
 
 /** Renames an instance through its Name tag. console-api has no DeleteTags, so a name cannot be cleared. */
@@ -83,15 +92,21 @@ async function rename(
 const nameTag = (name: string): Record<string, string> => (name.trim() ? { Name: name.trim() } : {});
 
 export async function renameInstanceAction(id: string, name: string): Promise<ApiError | null> {
-  return rename(vws.createInstanceTags, id, name);
+  return withActionSpan("renameInstanceAction", async () => {
+    return rename(vws.createInstanceTags, id, name);
+  });
 }
 
 export async function renameVpcAction(id: string, name: string): Promise<ApiError | null> {
-  return rename(vws.createVpcTags, id, name);
+  return withActionSpan("renameVpcAction", async () => {
+    return rename(vws.createVpcTags, id, name);
+  });
 }
 
 export async function renameSubnetAction(id: string, name: string): Promise<ApiError | null> {
-  return rename(vws.createSubnetTags, id, name);
+  return withActionSpan("renameSubnetAction", async () => {
+    return rename(vws.createSubnetTags, id, name);
+  });
 }
 
 const INVALID_IDEMPOTENCY_KEY: ApiError = {
@@ -102,11 +117,13 @@ const INVALID_IDEMPOTENCY_KEY: ApiError = {
 
 /** Retrying with the same key returns the first volume; console-api refuses the key with a different body. */
 export async function createVolumeAction(raw: unknown, rawKey: unknown): Promise<ApiError | null> {
-  const input = parseCreateVolume(raw);
-  if ("code" in input) return input;
-  const key = typeof rawKey === "string" ? parseIdempotencyKey(rawKey) : null;
-  if (!key) return INVALID_IDEMPOTENCY_KEY;
-  return errorOf(vws.createVolume(input, key));
+  return withActionSpan("createVolumeAction", async () => {
+    const input = parseCreateVolume(raw);
+    if ("code" in input) return input;
+    const key = typeof rawKey === "string" ? parseIdempotencyKey(rawKey) : null;
+    if (!key) return INVALID_IDEMPOTENCY_KEY;
+    return errorOf(vws.createVolume(input, key));
+  });
 }
 
 /** A resource that is already gone counts as deleted, so Delete after a partial failure finishes the rest. */
@@ -118,8 +135,10 @@ const deleteOrGone =
   };
 
 export async function deleteVolumesAction(ids: unknown): Promise<ApiError | null> {
-  if (!Array.isArray(ids) || !ids.every(isVolumeId)) return invalid("A volume ID is not valid.");
-  return each(ids, deleteOrGone(vws.deleteVolume));
+  return withActionSpan("deleteVolumesAction", async () => {
+    if (!Array.isArray(ids) || !ids.every(isVolumeId)) return invalid("A volume ID is not valid.");
+    return each(ids, deleteOrGone(vws.deleteVolume));
+  });
 }
 
 const INVALID_BUCKET_NAME: ApiError = {
@@ -136,95 +155,122 @@ const RESERVED_BUCKET_NAME: ApiError = {
 };
 
 export async function createBucketAction(rawName: string): Promise<ApiError | null> {
-  const name = parseBucketName(rawName);
-  if (name) {
-    const result = await vws.putBucket(name);
-    return result.ok ? null : result.error;
-  }
-  const stored = parseStoredBucketName(rawName);
-  return stored && reservedBucketName(stored) ? RESERVED_BUCKET_NAME : INVALID_BUCKET_NAME;
+  return withActionSpan("createBucketAction", async () => {
+    const name = parseBucketName(rawName);
+    if (name) {
+      const result = await vws.putBucket(name);
+      return result.ok ? null : result.error;
+    }
+    const stored = parseStoredBucketName(rawName);
+    return stored && reservedBucketName(stored) ? RESERVED_BUCKET_NAME : INVALID_BUCKET_NAME;
+  });
 }
 
 export type BucketDeletion = { deleted: string[]; error: ApiError | null; failedName: string | null };
 
 export async function deleteBucketsAction(names: string[]): Promise<BucketDeletion> {
-  const deleted: string[] = [];
-  for (const rawName of names) {
-    const name = parseStoredBucketName(rawName);
-    if (!name) return { deleted, error: INVALID_BUCKET_NAME, failedName: rawName };
-    const result = await vws.deleteBucket(name);
-    if (!result.ok) return { deleted, error: result.error, failedName: name };
-    deleted.push(name);
-  }
-  return { deleted, error: null, failedName: null };
+  return withActionSpan("deleteBucketsAction", async () => {
+    const deleted: string[] = [];
+    for (const rawName of names) {
+      const name = parseStoredBucketName(rawName);
+      if (!name) return { deleted, error: INVALID_BUCKET_NAME, failedName: rawName };
+      const result = await vws.deleteBucket(name);
+      if (!result.ok) return { deleted, error: result.error, failedName: name };
+      deleted.push(name);
+    }
+    return { deleted, error: null, failedName: null };
+  });
 }
 
 export async function uploadObjectAction(rawBucket: string, formData: FormData): Promise<ApiError | null> {
-  const bucket = parseStoredBucketName(rawBucket);
-  if (!bucket) return INVALID_BUCKET_NAME;
-  const key = String(formData.get("key") ?? "");
-  const keyProblem = objectKeyProblem(key);
-  if (keyProblem) return { code: "InvalidArgument", message: keyProblem, requestId: null };
-  const file = formData.get("file");
-  if (!(file instanceof File)) return { code: "InvalidArgument", message: "Choose a file to upload.", requestId: null };
-  const tooLarge = fileProblem(file);
-  if (tooLarge) return tooLarge;
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const result = await vws.putObject(bucket, key, bytes, file.type || "application/octet-stream");
-  if (!result.ok) return result.error;
-  revalidatePath(OBJECT_PAGE, "page");
-  return null;
+  return withActionSpan("uploadObjectAction", async () => {
+    const bucket = parseStoredBucketName(rawBucket);
+    if (!bucket) return INVALID_BUCKET_NAME;
+    const key = String(formData.get("key") ?? "");
+    const keyProblem = objectKeyProblem(key);
+    if (keyProblem) return { code: "InvalidArgument", message: keyProblem, requestId: null };
+    const file = formData.get("file");
+    if (!(file instanceof File))
+      return { code: "InvalidArgument", message: "Choose a file to upload.", requestId: null };
+    const tooLarge = fileProblem(file);
+    if (tooLarge) return tooLarge;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const result = await vws.putObject(bucket, key, bytes, file.type || "application/octet-stream");
+    if (!result.ok) return result.error;
+    revalidatePath(OBJECT_PAGE, "page");
+    return null;
+  });
 }
 
 /** Looks up one object for the Objects tab. A missing key is null, and the bytes never leave the server. */
 export async function getObjectAction(rawBucket: string, key: string): Promise<ApiResult<StoredObject | null>> {
-  const bucket = parseStoredBucketName(rawBucket);
-  if (!bucket) return { ok: false, error: INVALID_BUCKET_NAME };
-  return vws.getObjectMeta(bucket, key);
+  return withActionSpan("getObjectAction", async () => {
+    const bucket = parseStoredBucketName(rawBucket);
+    if (!bucket) return { ok: false, error: INVALID_BUCKET_NAME };
+    return vws.getObjectMeta(bucket, key);
+  });
 }
 
 export async function deleteObjectAction(rawBucket: string, key: string): Promise<ApiError | null> {
-  const bucket = parseStoredBucketName(rawBucket);
-  if (!bucket) return INVALID_BUCKET_NAME;
-  const error = await errorOf(vws.deleteObject(bucket, key));
-  if (!error) revalidatePath(OBJECT_PAGE, "page");
-  return error;
+  return withActionSpan("deleteObjectAction", async () => {
+    const bucket = parseStoredBucketName(rawBucket);
+    if (!bucket) return INVALID_BUCKET_NAME;
+    const error = await errorOf(vws.deleteObject(bucket, key));
+    if (!error) revalidatePath(OBJECT_PAGE, "page");
+    return error;
+  });
 }
 
 export async function createSnapshotAction(raw: unknown, rawKey: unknown): Promise<ApiError | null> {
-  const input = parseCreateSnapshot(raw);
-  if ("code" in input) return input;
-  const key = typeof rawKey === "string" ? parseIdempotencyKey(rawKey) : null;
-  if (!key) return INVALID_IDEMPOTENCY_KEY;
-  return errorOf(vws.createSnapshot(input, key));
+  return withActionSpan("createSnapshotAction", async () => {
+    const input = parseCreateSnapshot(raw);
+    if ("code" in input) return input;
+    const key = typeof rawKey === "string" ? parseIdempotencyKey(rawKey) : null;
+    if (!key) return INVALID_IDEMPOTENCY_KEY;
+    return errorOf(vws.createSnapshot(input, key));
+  });
 }
 
 export async function createVpcAction(cidr: string, name = "") {
-  return errorOf(vws.createVpc(cidr, nameTag(name)));
+  return withActionSpan("createVpcAction", async () => {
+    return errorOf(vws.createVpc(cidr, nameTag(name)));
+  });
 }
 
 export async function deleteVpcsAction(ids: string[]) {
-  return each(ids, vws.deleteVpc);
+  return withActionSpan("deleteVpcsAction", async () => {
+    return each(ids, vws.deleteVpc);
+  });
 }
 
 export async function createSubnetAction(vpcId: string, cidr: string, name = "") {
-  return errorOf(vws.createSubnet(vpcId, cidr, nameTag(name)));
+  return withActionSpan("createSubnetAction", async () => {
+    return errorOf(vws.createSubnet(vpcId, cidr, nameTag(name)));
+  });
 }
 
 export async function deleteSubnetsAction(ids: string[]) {
-  return each(ids, vws.deleteSubnet);
+  return withActionSpan("deleteSubnetsAction", async () => {
+    return each(ids, vws.deleteSubnet);
+  });
 }
 
 export async function modifyVolumeAction(id: string, sizeGiB: number) {
-  return errorOf(vws.modifyVolume(id, sizeGiB));
+  return withActionSpan("modifyVolumeAction", async () => {
+    return errorOf(vws.modifyVolume(id, sizeGiB));
+  });
 }
 
 export async function attachVolumeAction(volumeId: string, input: VolumeAttachment) {
-  return errorOf(vws.attachVolume(volumeId, input));
+  return withActionSpan("attachVolumeAction", async () => {
+    return errorOf(vws.attachVolume(volumeId, input));
+  });
 }
 
 export async function detachVolumeAction(volumeId: string) {
-  return errorOf(vws.detachVolume(volumeId));
+  return withActionSpan("detachVolumeAction", async () => {
+    return errorOf(vws.detachVolume(volumeId));
+  });
 }
 
 const invalid = (message: string): ApiError => ({ code: "InvalidParameterValue", message, requestId: null });
@@ -294,17 +340,19 @@ async function applyRuleChanges(groupId: string, changes: RuleChanges): Promise<
 
 /** Saves the inbound rules page. Every field is checked here, since a server action is a public endpoint. */
 export async function saveInboundRulesAction(rawGroupId: unknown, rawChanges: unknown): Promise<ApiError | null> {
-  const groupId = parseGroupId(rawGroupId);
-  if (!groupId) return invalid("The security group ID is not valid.");
-  const { remove, add } = (typeof rawChanges === "object" && rawChanges !== null ? rawChanges : {}) as Record<
-    string,
-    unknown
-  >;
-  const removed = parseRules(remove, "rules to delete");
-  if (!Array.isArray(removed)) return removed;
-  const added = parseRules(add, "rules to add");
-  if (!Array.isArray(added)) return added;
-  return applyRuleChanges(groupId, { remove: removed, add: added });
+  return withActionSpan("saveInboundRulesAction", async () => {
+    const groupId = parseGroupId(rawGroupId);
+    if (!groupId) return invalid("The security group ID is not valid.");
+    const { remove, add } = (typeof rawChanges === "object" && rawChanges !== null ? rawChanges : {}) as Record<
+      string,
+      unknown
+    >;
+    const removed = parseRules(remove, "rules to delete");
+    if (!Array.isArray(removed)) return removed;
+    const added = parseRules(add, "rules to add");
+    if (!Array.isArray(added)) return added;
+    return applyRuleChanges(groupId, { remove: removed, add: added });
+  });
 }
 
 export async function createSecurityGroupAction(
@@ -312,55 +360,71 @@ export async function createSecurityGroupAction(
   rawVpcId: unknown,
   rawInbound: unknown,
 ): Promise<ApiError | null> {
-  const groupName = typeof rawName === "string" ? rawName.trim() : "";
-  if (!groupName || new TextEncoder().encode(groupName).length > 255)
-    return invalid("Enter a security group name of 1 to 255 characters.");
-  if (typeof rawVpcId !== "string" || !/^vpc-[0-9a-f]{8,17}$/.test(rawVpcId)) return invalid("Choose a VPC.");
-  const inbound = parseRules(rawInbound, "inbound rules");
-  if (!Array.isArray(inbound)) return inbound;
-  const created = await vws.createSecurityGroup(groupName, rawVpcId);
-  if (!created.ok) return created.error;
-  const failed = await applyRuleChanges(created.value, { remove: [], add: inbound });
-  return failed && { ...failed, message: `Security group ${created.value} was created. ${failed.message}` };
+  return withActionSpan("createSecurityGroupAction", async () => {
+    const groupName = typeof rawName === "string" ? rawName.trim() : "";
+    if (!groupName || new TextEncoder().encode(groupName).length > 255)
+      return invalid("Enter a security group name of 1 to 255 characters.");
+    if (typeof rawVpcId !== "string" || !/^vpc-[0-9a-f]{8,17}$/.test(rawVpcId)) return invalid("Choose a VPC.");
+    const inbound = parseRules(rawInbound, "inbound rules");
+    if (!Array.isArray(inbound)) return inbound;
+    const created = await vws.createSecurityGroup(groupName, rawVpcId);
+    if (!created.ok) return created.error;
+    const failed = await applyRuleChanges(created.value, { remove: [], add: inbound });
+    return failed && { ...failed, message: `Security group ${created.value} was created. ${failed.message}` };
+  });
 }
 
 /** Deletes groups in order. A group a fresh read no longer lists counts as deleted, so a retry finishes the rest. */
 export async function deleteSecurityGroupsAction(rawIds: unknown): Promise<ApiError | null> {
-  if (!Array.isArray(rawIds) || rawIds.length === 0 || rawIds.length > MAX_RULE_CHANGES)
-    return invalid("Choose security groups to delete.");
-  const ids = rawIds.map(parseGroupId).filter((id): id is string => id !== null);
-  if (ids.length !== rawIds.length) return invalid("A security group ID is not valid.");
-  return each(ids, async (id) => {
-    const result = await vws.deleteSecurityGroup(id);
-    if (result.ok) return result;
-    const listed = await vws.listSecurityGroups();
-    return listed.ok && !listed.value.some((group) => group.id === id) ? { ok: true, value: undefined } : result;
+  return withActionSpan("deleteSecurityGroupsAction", async () => {
+    if (!Array.isArray(rawIds) || rawIds.length === 0 || rawIds.length > MAX_RULE_CHANGES)
+      return invalid("Choose security groups to delete.");
+    const ids = rawIds.map(parseGroupId).filter((id): id is string => id !== null);
+    if (ids.length !== rawIds.length) return invalid("A security group ID is not valid.");
+    return each(ids, async (id) => {
+      const result = await vws.deleteSecurityGroup(id);
+      if (result.ok) return result;
+      const listed = await vws.listSecurityGroups();
+      return listed.ok && !listed.value.some((group) => group.id === id) ? { ok: true, value: undefined } : result;
+    });
   });
 }
 
 export async function allocateAddressAction() {
-  return errorOf(vws.allocateAddress());
+  return withActionSpan("allocateAddressAction", async () => {
+    return errorOf(vws.allocateAddress());
+  });
 }
 
 export async function associateAddressAction(allocationId: string, instanceId: string) {
-  return errorOf(vws.associateAddress(allocationId, instanceId));
+  return withActionSpan("associateAddressAction", async () => {
+    return errorOf(vws.associateAddress(allocationId, instanceId));
+  });
 }
 
 export async function disassociateAddressesAction(ids: string[]) {
-  return each(ids, vws.disassociateAddress);
+  return withActionSpan("disassociateAddressesAction", async () => {
+    return each(ids, vws.disassociateAddress);
+  });
 }
 
 export async function releaseAddressesAction(ids: string[]) {
-  return each(ids, vws.releaseAddress);
+  return withActionSpan("releaseAddressesAction", async () => {
+    return each(ids, vws.releaseAddress);
+  });
 }
 
 export async function deleteSnapshotsAction(ids: unknown): Promise<ApiError | null> {
-  if (!Array.isArray(ids) || !ids.every(isSnapshotId)) return invalid("A snapshot ID is not valid.");
-  return each(ids, deleteOrGone(vws.deleteSnapshot));
+  return withActionSpan("deleteSnapshotsAction", async () => {
+    if (!Array.isArray(ids) || !ids.every(isSnapshotId)) return invalid("A snapshot ID is not valid.");
+    return each(ids, deleteOrGone(vws.deleteSnapshot));
+  });
 }
 
 export async function createKeyPairAction(attempt: CreateAttempt): Promise<KeyPairCreateResult> {
-  return vws.createKeyPair(attempt);
+  return withActionSpan("createKeyPairAction", async () => {
+    return vws.createKeyPair(attempt);
+  });
 }
 
 const invalidKeyPairId: ApiError = {
@@ -370,14 +434,16 @@ const invalidKeyPairId: ApiError = {
 };
 
 export async function deleteKeyPairsAction(ids: string[]): Promise<ApiError | null> {
-  for (const raw of ids) {
-    const id = parseKeyPairId(raw);
-    if (!id) return invalidKeyPairId;
-    const result = await vws.deleteKeyPair(id);
-    if (!result.ok) {
-      const stopping = deleteBatchError(result.error);
-      if (stopping) return stopping;
+  return withActionSpan("deleteKeyPairsAction", async () => {
+    for (const raw of ids) {
+      const id = parseKeyPairId(raw);
+      if (!id) return invalidKeyPairId;
+      const result = await vws.deleteKeyPair(id);
+      if (!result.ok) {
+        const stopping = deleteBatchError(result.error);
+        if (stopping) return stopping;
+      }
     }
-  }
-  return null;
+    return null;
+  });
 }

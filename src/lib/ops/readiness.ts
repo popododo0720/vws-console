@@ -1,4 +1,5 @@
 import { IamConfigError, forcedMode } from "@/lib/vws-api/mode";
+import { route } from "@/lib/vws-api/route";
 import { ApiTransportError, apiFetch } from "@/lib/vws-api/transport";
 
 /** A readiness probe must answer well inside the kubelet's default 1 s timeout budget plus slack. */
@@ -38,7 +39,8 @@ function configCheck(): CheckResult {
 async function consoleApiCheck(base: string): Promise<CheckResult> {
   try {
     const reply = await apiFetch(
-      `${base.replace(/\/+$/, "")}/api/v1/auth/session`,
+      base,
+      route("/auth/session"),
       { headers: { accept: "application/json" } },
       { timeoutMs: READY_TIMEOUT_MS, retry: false },
     );

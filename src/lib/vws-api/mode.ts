@@ -1,4 +1,5 @@
 import { logAuth } from "./log";
+import { route } from "./route";
 import { apiFetch } from "./transport";
 
 /**
@@ -90,9 +91,10 @@ export async function iamState(): Promise<IamState> {
   let requestId: string | null = null;
   try {
     const reply = await apiFetch(
-      `${base}/api/v1/auth/session`,
+      base,
+      route("/auth/session"),
       { headers: { accept: "application/json" } },
-      { timeoutMs: DETECT_TIMEOUT_MS },
+      { timeoutMs: DETECT_TIMEOUT_MS, iamMode: "unknown" },
     );
     status = reply.status;
     requestId = reply.requestId;

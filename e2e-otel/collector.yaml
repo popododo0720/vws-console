@@ -1,0 +1,28 @@
+# The real Collector for the OTel e2e: OTLP over HTTP in, every span and metric to one JSON-lines file.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:${env:OTEL_E2E_OTLP_PORT}
+
+exporters:
+  file:
+    path: ${env:OTEL_E2E_OUT}
+    flush_interval: 200ms
+
+extensions:
+  health_check:
+    endpoint: 127.0.0.1:${env:OTEL_E2E_HEALTH_PORT}
+
+service:
+  extensions: [health_check]
+  telemetry:
+    metrics:
+      level: none
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [file]
+    metrics:
+      receivers: [otlp]
+      exporters: [file]
