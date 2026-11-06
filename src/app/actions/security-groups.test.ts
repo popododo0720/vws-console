@@ -38,10 +38,10 @@ beforeEach(() => {
       ),
     ),
   );
-  api.authorizeIngress.mockImplementation(async (id: string, rule: IngressPermission) => {
+  api.authorizeIngress.mockImplementation(async (id: string, add: IngressPermission[]) => {
     const rules = groups.get(id)!;
-    if (rules.some((have) => same(have, rule))) return fail("InvalidPermission.Duplicate");
-    rules.push(rule);
+    if (add.some((rule) => rules.some((have) => same(have, rule)))) return fail("InvalidPermission.Duplicate");
+    rules.push(...add);
     return ok(undefined);
   });
   api.revokeIngress.mockImplementation(async (id: string, rule: IngressPermission) => {
@@ -62,6 +62,31 @@ describe("saveInboundRulesAction", () => {
   it("deletes and adds the changed rules", async () => {
     expect(await saveInboundRulesAction(GROUP, changes)).toBeNull();
     expect(groups.get(GROUP)).toEqual([tcp(22), tcp(443)]);
+  });
+
+  it("adds every new rule in one authorize call after the revokes, as the AWS console saves", async () => {
+    const add = [tcp(443), tcp(8080)];
+    expect(await saveInboundRulesAction(GROUP, { remove: [tcp(80)], add })).toBeNull();
+    expect(api.authorizeIngress.mock.calls).toEqual([[GROUP, add]]);
+    expect(api.revokeIngress.mock.invocationCallOrder[0]).toBeLessThan(
+      api.authorizeIngress.mock.invocationCallOrder[0],
+    );
+    expect(groups.get(GROUP)).toEqual([tcp(22), tcp(443), tcp(8080)]);
+  });
+
+  it("names every rule of a refused authorize call, since console-api adds all or none", async () => {
+    api.authorizeIngress.mockResolvedValueOnce(fail("ServiceUnavailable"));
+    const error = await saveInboundRulesAction(GROUP, { remove: [], add: [tcp(443), tcp(8080)] });
+    expect(error?.message).toBe(
+      "Rules TCP 443 from 0.0.0.0/0; TCP 8080 from 0.0.0.0/0 were not added: ServiceUnavailable",
+    );
+    expect(groups.get(GROUP)).toEqual([tcp(22), tcp(80)]);
+  });
+
+  it("sends only the missing rules when a parallel save added some of them first", async () => {
+    groups.get(GROUP)!.push(tcp(443));
+    expect(await saveInboundRulesAction(GROUP, { remove: [], add: [tcp(443), tcp(8080)] })).toBeNull();
+    expect(api.authorizeIngress.mock.calls).toEqual([[GROUP, [tcp(8080)]]]);
   });
 
   it("is safe to run twice, as on a double submit or a reload and save", async () => {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_AUTHORIZE_RULES,
   normalizeCidr,
+  opRules,
   permissionLabel,
   opApplied,
   parseIngressPermission,
@@ -76,17 +78,27 @@ describe("planRuleChanges", () => {
 describe("planRuleOps", () => {
   const changes: RuleChanges = { remove: [tcp(80)], add: [tcp(443), tcp(8080)] };
 
-  it("revokes before it authorizes", () => {
-    expect(planRuleOps([tcp(22), tcp(80)], changes).map((op) => [op.kind, op.permission.fromPort])).toEqual([
-      ["revoke", 80],
-      ["authorize", 443],
-      ["authorize", 8080],
+  it("revokes before it authorizes, and adds every new rule in one call", () => {
+    expect(planRuleOps([tcp(22), tcp(80)], changes)).toEqual([
+      { kind: "revoke", permission: tcp(80) },
+      { kind: "authorize", permissions: [tcp(443), tcp(8080)] },
     ]);
   });
 
   it("sends only the rest on a retry after a partial failure", () => {
     const afterFirstTwo = [tcp(22), tcp(443)];
-    expect(planRuleOps(afterFirstTwo, changes)).toEqual([{ kind: "authorize", permission: tcp(8080) }]);
+    expect(planRuleOps(afterFirstTwo, changes)).toEqual([{ kind: "authorize", permissions: [tcp(8080)] }]);
+  });
+
+  it("splits additions into calls of at most the rules console-api takes at once", () => {
+    const add = Array.from({ length: MAX_AUTHORIZE_RULES + 1 }, (_, port) => tcp(port + 1));
+    expect(planRuleOps([], { remove: [], add }).map((op) => opRules(op).length)).toEqual([MAX_AUTHORIZE_RULES, 1]);
+  });
+
+  it("sends a rule named twice once, since console-api refuses a duplicate in one call", () => {
+    expect(planRuleOps([], { remove: [], add: [tcp(443), tcp(443)] })).toEqual([
+      { kind: "authorize", permissions: [tcp(443)] },
+    ]);
   });
 
   it("sends nothing when a double submit already applied the changes", () => {
@@ -95,7 +107,7 @@ describe("planRuleOps", () => {
 
   it("keeps a rule another user added since the page loaded", () => {
     const ops = planRuleOps([tcp(22), tcp(80), tcp(3306, "10.0.0.0/8")], changes);
-    expect(ops.some((op) => op.permission.fromPort === 3306)).toBe(false);
+    expect(ops.flatMap(opRules).some((rule) => rule.fromPort === 3306)).toBe(false);
   });
 
   it("revokes the stored values, so an ICMP type and code match exactly", () => {
@@ -107,8 +119,9 @@ describe("planRuleOps", () => {
 
   it("knows when an op already shows in the group", () => {
     expect(opApplied([tcp(22)], { kind: "revoke", permission: tcp(80) })).toBe(true);
-    expect(opApplied([tcp(22)], { kind: "authorize", permission: tcp(22) })).toBe(true);
+    expect(opApplied([tcp(22)], { kind: "authorize", permissions: [tcp(22)] })).toBe(true);
     expect(opApplied([tcp(22)], { kind: "revoke", permission: tcp(22) })).toBe(false);
+    expect(opApplied([tcp(22)], { kind: "authorize", permissions: [tcp(22), tcp(443)] })).toBe(false);
   });
 });
 

@@ -17,6 +17,7 @@ import type { IngressPermission, VolumeAttachment } from "@/types/console";
 import {
   MAX_RULE_CHANGES,
   opApplied,
+  opRules,
   parseIngressPermission,
   permissionLabel,
   planRuleOps,
@@ -311,7 +312,7 @@ async function currentRules(groupId: string): Promise<ApiResult<IngressPermissio
 }
 
 const send = (groupId: string, op: RuleOp) =>
-  op.kind === "revoke" ? vws.revokeIngress(groupId, op.permission) : vws.authorizeIngress(groupId, op.permission);
+  op.kind === "revoke" ? vws.revokeIngress(groupId, op.permission) : vws.authorizeIngress(groupId, op.permissions);
 
 /**
  * Applies rule changes against the rules the group holds now, so a double submit, a retry after a partial failure
@@ -326,15 +327,14 @@ async function applyRuleChanges(groupId: string, changes: RuleChanges): Promise<
   for (const op of planRuleOps(current.value, changes)) {
     const result = await send(groupId, op);
     const reread = result.ok ? null : await currentRules(groupId);
+    const labels = opRules(op).map(permissionLabel);
     if (result.ok || (reread?.ok && opApplied(reread.value, op))) {
-      done.push(`${verb(op)} ${permissionLabel(op.permission)}`);
+      done.push(...labels.map((label) => `${verb(op)} ${label}`));
       continue;
     }
     const saved = done.length > 0 ? ` Already saved: ${done.join("; ")}.` : "";
-    return {
-      ...result.error,
-      message: `Rule ${permissionLabel(op.permission)} was not ${verb(op)}: ${result.error.message}${saved}`,
-    };
+    const rules = labels.length === 1 ? `Rule ${labels[0]} was` : `Rules ${labels.join("; ")} were`;
+    return { ...result.error, message: `${rules} not ${verb(op)}: ${result.error.message}${saved}` };
   }
   return null;
 }

@@ -120,12 +120,20 @@ export function planRuleChanges(loaded: IngressPermission[], wanted: IngressPerm
   };
 }
 
-export type RuleOp = { kind: "revoke" | "authorize"; permission: IngressPermission };
+/** The most rules one authorize-ingress call takes; console-api refuses a longer list. */
+export const MAX_AUTHORIZE_RULES = 60;
+
+/** Revoke takes one rule. Authorize takes a list and adds all of it or none of it, as AWS AuthorizeSecurityGroupIngress does. */
+export type RuleOp =
+  { kind: "revoke"; permission: IngressPermission } | { kind: "authorize"; permissions: IngressPermission[] };
+
+export const opRules = (op: RuleOp): IngressPermission[] => (op.kind === "revoke" ? [op.permission] : op.permissions);
 
 /**
  * The calls still needed to apply changes to the rules the group holds now. A removal already gone and an
  * addition already present drop out, so a retry after a partial failure or a double submit sends only the rest.
- * Revokes go first, so a save that stops halfway leaves the group allowing less, not more.
+ * Revokes go first, so a save that stops halfway leaves the group allowing less, not more. The additions go in
+ * one authorize call, as the AWS console's "Edit inbound rules" save sends them.
  */
 export function planRuleOps(current: IngressPermission[], changes: RuleChanges): RuleOp[] {
   const held = new Map(current.map((rule) => [ruleKey(rule), rule]));
@@ -133,16 +141,17 @@ export function planRuleOps(current: IngressPermission[], changes: RuleChanges):
     const stored = held.get(ruleKey(rule));
     return stored ? [{ kind: "revoke", permission: stored }] : [];
   });
-  const authorizes = changes.add
-    .filter((rule) => !held.has(ruleKey(rule)))
-    .map((permission): RuleOp => ({ kind: "authorize", permission }));
+  const missing = uniqueByKey(changes.add.filter((rule) => !held.has(ruleKey(rule))));
+  const authorizes: RuleOp[] = [];
+  for (let start = 0; start < missing.length; start += MAX_AUTHORIZE_RULES)
+    authorizes.push({ kind: "authorize", permissions: missing.slice(start, start + MAX_AUTHORIZE_RULES) });
   return [...revokes, ...authorizes];
 }
 
 /** Whether a rule op already shows in the rules the group holds. */
 export function opApplied(current: IngressPermission[], op: RuleOp): boolean {
-  const present = current.some((rule) => ruleKey(rule) === ruleKey(op.permission));
-  return op.kind === "revoke" ? !present : present;
+  const keys = new Set(current.map(ruleKey));
+  return opRules(op).every((rule) => keys.has(ruleKey(rule)) === (op.kind === "authorize"));
 }
 
 /** A short label for one stored rule, such as "TCP 22 from 10.0.0.0/16". */
