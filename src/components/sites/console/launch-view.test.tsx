@@ -54,6 +54,7 @@ const web: StoredKeyPair = {
   fingerprint: "fp",
   type: "rsa",
   ownerId: "123456789012",
+  created: "",
 };
 
 function renderLaunch() {
@@ -112,6 +113,7 @@ describe("launch key pair selection", () => {
       fingerprint: "fp",
       type: "rsa",
       ownerId: "123456789012",
+      created: "",
     };
     render(
       <ConsoleProvider>

@@ -782,3 +782,49 @@ test("shows the empty NAT gateways list", async ({ page }) => {
   await expect(page.getByText("No NAT gateways found")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Select a NAT gateway" })).toBeVisible();
 });
+
+test("creates, imports and deletes key pairs from the Key pairs pages", async ({ page, request }) => {
+  const created = unique("e2e-key");
+  const imported = unique("e2e-import");
+
+  await page.goto("/network/key-pairs");
+  await page.getByRole("button", { name: "Create key pair" }).click();
+  await expect(page).toHaveURL(/\/network\/key-pairs\/create$/);
+  await page.getByRole("textbox", { name: "Name" }).fill(created);
+  await page.getByRole("radio", { name: "ED25519" }).check();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Create key pair" }).click();
+  expect((await download).suggestedFilename()).toBe(`${created}.pem`);
+  const dialog = page.getByRole("dialog", { name: "Download private key" });
+  await dialog.getByRole("button", { name: "Close" }).last().click();
+  await expect(page).toHaveURL(/\/network\/key-pairs$/);
+  const createdRow = await listRow(page, created);
+  await expect(createdRow).toContainText("ED25519");
+  await expect(createdRow).toContainText(/key-[0-9a-f]+/);
+
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Import key pair" }).click();
+  await expect(page).toHaveURL(/\/network\/key-pairs\/import$/);
+  await page.getByRole("textbox", { name: "Name" }).fill(imported);
+  await page
+    .getByRole("textbox", { name: "Public key contents" })
+    .fill("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJo+RmvgVTZXJbeHRr1s/lPbHK0wo4uo6k7gv4q6K9P4 e2e");
+  await page.getByRole("button", { name: "Import key pair" }).click();
+  await expect(page).toHaveURL(/\/network\/key-pairs$/);
+  await expect(await listRow(page, imported)).toHaveCount(1);
+
+  const stored = await listItems<{ keyName: string; keyMaterial?: string }>(request, "/key-pairs");
+  expect(stored.filter((item) => item.keyName === created || item.keyName === imported)).toHaveLength(2);
+  expect(stored.some((item) => item.keyMaterial)).toBe(false);
+
+  for (const name of [created, imported]) {
+    const row = await listRow(page, name);
+    await row.getByRole("checkbox").check();
+    await page.getByRole("button", { name: /^Actions/ }).click();
+    await page.getByRole("menuitem", { name: "Delete" }).click();
+    await page.getByRole("dialog", { name: "Delete key pair" }).getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByRole("row").filter({ hasText: name })).toHaveCount(0);
+  }
+  const after = await listItems<{ keyName: string }>(request, "/key-pairs");
+  expect(after.some((item) => item.keyName === created || item.keyName === imported)).toBe(false);
+});

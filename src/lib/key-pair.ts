@@ -26,6 +26,8 @@ export type StoredKeyPair = {
   fingerprint: string;
   type: string;
   ownerId: string;
+  /** ISO 8601 from console-api's createTime, empty when the API does not send it. */
+  created: string;
 };
 
 export type KeyPairDraft =
