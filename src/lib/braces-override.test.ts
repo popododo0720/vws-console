@@ -16,8 +16,8 @@ type Micromatch = {
 const braces = require("braces") as Braces;
 const micromatch = require("micromatch") as Micromatch;
 
-function nested(depth: number): string {
-  return `${"{".repeat(depth)}a${"}".repeat(depth)}`;
+function nested(depth: number, open = "{", close = "}"): string {
+  return `${open.repeat(depth)}a${close.repeat(depth)}`;
 }
 
 describe("braces override", () => {
@@ -38,6 +38,15 @@ describe("braces override", () => {
     expect(() => braces(nested(101))).toThrow(SyntaxError);
     expect(() => braces(nested(3), { maxDepth: 2 })).toThrow(SyntaxError);
     expect(braces(nested(2), { maxDepth: 2 }).length).toBeGreaterThan(0);
+  });
+
+  it("counts parentheses toward the same depth cap", () => {
+    expect(braces(nested(100, "(", ")"))).toEqual([nested(100, "(", ")")]);
+    expect(() => braces(nested(101, "(", ")"))).toThrow(SyntaxError);
+    expect(() => braces(nested(4999, "(", ")"))).toThrow(SyntaxError);
+    expect(() => braces(nested(51, "{(", ")}"))).toThrow(SyntaxError);
+    expect(braces(nested(50, "{(", ")}")).length).toBeGreaterThan(0);
+    expect(() => braces(nested(3, "(", ")"), { maxDepth: 2 })).toThrow(SyntaxError);
   });
 
   it("still lets micromatch expand a brace pattern", () => {
