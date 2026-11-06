@@ -439,7 +439,10 @@ test("launches an instance from the launch screen", async ({ page, request }) =>
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByLabel("VPC").selectOption(vpcId);
   await expect(page.getByLabel("Subnet", { exact: true })).toHaveValue(subnetId);
-  await page.getByRole("button", { name: "Launch instance" }).click();
+  // click() waits on a disabled button until the test times out (#90), so name the cause first.
+  const launch = page.getByRole("button", { name: "Launch instance" });
+  await expect(launch, "Launch instance is disabled: a required launch field is unset").toBeEnabled();
+  await launch.click();
 
   await expect(page).toHaveURL(/\/compute\/instances$/, { timeout: 60_000 });
   const row = await listRow(page, instanceName);
