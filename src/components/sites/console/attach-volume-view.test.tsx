@@ -148,7 +148,7 @@ describe("Attach volume page", () => {
     expect(await screen.findByText("The volume could not be attached")).toBeTruthy();
     expect(screen.getByText("Volume vol-1 is already attached.")).toBeTruthy();
     expect(router.push).not.toHaveBeenCalled();
-    expect(attachButton()).toBeEnabled();
+    await waitFor(() => expect(attachButton()).toBeEnabled());
   });
 
   it("asks for an instance without calling the action", () => {
