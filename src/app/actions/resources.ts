@@ -267,9 +267,10 @@ export async function attachVolumeAction(volumeId: string, input: VolumeAttachme
   });
 }
 
-export async function detachVolumeAction(volumeId: string) {
+export async function detachVolumeAction(volumeId: string, force: boolean = false) {
   return withActionSpan("detachVolumeAction", async () => {
-    return errorOf(vws.detachVolume(volumeId));
+    if (typeof force !== "boolean") return invalid("Force must be true or false.");
+    return errorOf(vws.detachVolume(volumeId, force));
   });
 }
 

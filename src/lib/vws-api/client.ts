@@ -707,8 +707,8 @@ export async function attachVolume(volumeId: string, input: VolumeAttachment): P
   return mutate(route("/volumes/{id}/attach", { id: volumeId }), { instanceId, device });
 }
 
-export function detachVolume(volumeId: string): Promise<ApiResult<void>> {
-  return mutate(route("/volumes/{id}/detach", { id: volumeId }));
+export function detachVolume(volumeId: string, force = false): Promise<ApiResult<void>> {
+  return mutate(route("/volumes/{id}/detach", { id: volumeId }), force ? { force: true } : undefined);
 }
 
 export const listSecurityGroups = (): Promise<ApiResult<SecurityGroup[]>> =>

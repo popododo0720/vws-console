@@ -829,7 +829,10 @@ test("creates, imports and deletes key pairs from the Key pairs pages", async ({
   expect(after.some((item) => item.keyName === created || item.keyName === imported)).toBe(false);
 });
 
-test("attaches a volume from its attach page and detaches it from the volumes list", async ({ page, request }) => {
+test("attaches a volume from its attach page, then detaches and force detaches it from the volumes list", async ({
+  page,
+  request,
+}) => {
   const vpc = await (
     await request.post(`${liveApi()}/vpcs`, { headers: liveHeaders("attach-vpc"), data: { cidrBlock: "10.55.0.0/16" } })
   ).json();
@@ -898,6 +901,40 @@ test("attaches a volume from its attach page and detaches it from the volumes li
   await expect(dialog).toContainText(`from instance ${instanceId} (/dev/sdf)`);
   await dialog.getByRole("button", { name: "Detach" }).click();
   await expect(dialog).toHaveCount(0);
+  await expect
+    .poll(
+      async () => {
+        await page.reload();
+        await listRow(page, volumeId);
+        return (await row.textContent()) ?? "";
+      },
+      { timeout: 30_000 },
+    )
+    .toMatch(/Available/);
+  await expect(row).not.toContainText(instanceId);
+
+  await request.post(`${liveApi()}/volumes/${volumeId}/attach`, {
+    headers: liveHeaders("reattach"),
+    data: { instanceId, device: "/dev/sdg" },
+  });
+  await expect
+    .poll(
+      async () => {
+        await page.reload();
+        await listRow(page, volumeId);
+        return (await row.textContent()) ?? "";
+      },
+      { timeout: 30_000 },
+    )
+    .toContain(`${instanceId}: /dev/sdg`);
+  await row.getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Actions/ }).click();
+  await page.getByRole("menuitem", { name: "Force detach volume" }).click();
+  const force = page.getByRole("dialog", { name: "Force detach volume" });
+  await expect(force).toContainText("Force detaching a volume can lead to data loss");
+  await expect(force).toContainText(`from instance ${instanceId} (/dev/sdg)`);
+  await force.getByRole("button", { name: "Force detach" }).dblclick();
+  await expect(force).toHaveCount(0);
   await expect
     .poll(
       async () => {

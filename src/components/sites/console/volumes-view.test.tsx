@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deleteVolumesAction, detachVolumeAction } from "@/app/actions/resources";
+import { deleteVolumesAction, detachVolumeAction, modifyVolumeAction } from "@/app/actions/resources";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { VolumesView } from "@/components/sites/console/volumes-view";
 import type { ApiError } from "@/lib/vws-api/adapter";
@@ -129,8 +129,52 @@ describe("VolumesView attach and detach", () => {
     expect(dialog).toHaveTextContent("vol-1");
     expect(dialog).toHaveTextContent("from instance i-1 (/dev/sdf)");
     fireEvent.click(screen.getByRole("button", { name: "Detach" }));
-    expect(detachVolumeAction).toHaveBeenCalledWith("vol-1");
+    expect(detachVolumeAction).toHaveBeenCalledWith("vol-1", false);
     expect(detachVolumeAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("enables Force detach volume only for one in-use volume", () => {
+    renderVolumes([
+      volume("vol-1", "available", null),
+      volume("vol-2", "in-use", { instanceId: "i-1", device: "/dev/sdf" }),
+    ]);
+    openActions();
+    expect(screen.getByRole("menuitem", { name: "Force detach volume" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    expect(screen.getByRole("menuitem", { name: "Force detach volume" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-2" }));
+    expect(screen.getByRole("menuitem", { name: "Force detach volume" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    expect(screen.getByRole("menuitem", { name: "Force detach volume" })).toBeEnabled();
+  });
+
+  it("warns before a force detach and sends force once on a double click", () => {
+    renderVolumes([volume("vol-1", "in-use", { instanceId: "i-1", device: "/dev/sdf" })]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Force detach volume" }));
+    const dialog = screen.getByRole("dialog", { name: "Force detach volume" });
+    expect(dialog).toHaveTextContent("Force detaching a volume can lead to data loss or a corrupted file system.");
+    expect(dialog).toHaveTextContent("Are you sure that you want to force detach the following volume?");
+    expect(dialog).toHaveTextContent("from instance i-1 (/dev/sdf)");
+    expect(detachVolumeAction).not.toHaveBeenCalled();
+    const button = within(dialog).getByRole("button", { name: "Force detach" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(detachVolumeAction).toHaveBeenCalledTimes(1);
+    expect(detachVolumeAction).toHaveBeenCalledWith("vol-1", true);
+  });
+
+  it("shows a failed force detach inside its dialog", async () => {
+    vi.mocked(detachVolumeAction).mockResolvedValue({ code: "NotFound", message: "gone", requestId: "req-2" });
+    renderVolumes([volume("vol-1", "in-use", { instanceId: "i-1", device: "/dev/sdf" })]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Force detach volume" }));
+    const dialog = screen.getByRole("dialog", { name: "Force detach volume" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Force detach" }));
+    expect(await within(dialog).findByText("The volume could not be force detached")).toBeTruthy();
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
   });
 
   it("keeps the detach dialog open with an error, and a reopened dialog starts clean", async () => {
@@ -193,6 +237,30 @@ describe("VolumesView attach and detach", () => {
     const dialog = screen.getByRole("dialog", { name: "Delete volume" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     expect(deleteVolumesAction).toHaveBeenCalledWith(["vol-1"]);
+  });
+
+  it("shows a failed modify inside the modify dialog and nowhere behind it", async () => {
+    vi.mocked(modifyVolumeAction).mockResolvedValue({ code: "Conflict", message: "busy", requestId: "req-3" });
+    renderVolumes([volume("vol-1", "available", null)]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Modify volume" }));
+    const dialog = screen.getByRole("dialog", { name: "Modify volume" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Modify" }));
+    expect(await within(dialog).findByText("The volume could not be modified")).toBeTruthy();
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+
+  it("shows a failed delete once, inside the delete dialog", async () => {
+    vi.mocked(deleteVolumesAction).mockResolvedValue({ code: "VolumeInUse", message: "in use", requestId: "req-4" });
+    renderVolumes([volume("vol-1", "available", null)]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select vol-1" }));
+    openActions();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete volume" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete volume" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(await within(dialog).findByText("The volume could not be deleted")).toBeTruthy();
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
   });
 
   it("opens Create snapshot with the selected volume", () => {

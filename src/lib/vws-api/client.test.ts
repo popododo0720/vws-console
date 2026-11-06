@@ -383,6 +383,13 @@ describe("console-api client", () => {
     expect(calls[0].init.body).toBe("{}");
   });
 
+  it("posts force true to the detach endpoint for a force detach", async () => {
+    serve(respond(202, { operation: { id: "op-force", state: "succeeded" }, items: [] }));
+    expect(await detachVolume("vol-1", true)).toEqual({ ok: true, value: undefined });
+    expect(calls[0].url).toBe("http://api.test/api/v1/volumes/vol-1/detach");
+    expect(calls[0].init.body).toBe('{"force":true}');
+  });
+
   it("sends a Name tag on create and renames VPCs and subnets through their tags endpoints", async () => {
     const ok = () => respond(202, { operation: { id: "op-n", state: "succeeded" }, items: [] });
     serve(ok(), ok(), ok(), ok());
