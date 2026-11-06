@@ -180,7 +180,7 @@ const rows: Row[] = [
   },
   {
     name: "authorizeIngress",
-    run: () => vws.authorizeIngress(ID, { ipProtocol: "tcp", fromPort: 22, toPort: 22, cidrIp: "10.0.0.0/8" }),
+    run: () => vws.authorizeIngress(ID, [{ ipProtocol: "tcp", fromPort: 22, toPort: 22, cidrIp: "10.0.0.0/8" }]),
     sent: [`POST ${api(`/security-groups/${enc(ID)}/authorize-ingress`)}`],
   },
   {

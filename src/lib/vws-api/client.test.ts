@@ -47,6 +47,8 @@ import {
   detachVolume,
   putBucket,
   putObject,
+  authorizeIngress,
+  revokeIngress,
 } from "./client";
 
 function mustName(input: string): BucketName {
@@ -231,6 +233,29 @@ describe("console-api client", () => {
     );
     expect(await createSecurityGroup("web", "vpc-1")).toEqual({ ok: true, value: "sg-9" });
     expect(calls[0].init.body).toBe('{"groupName":"web","vpcId":"vpc-1"}');
+  });
+
+  it("authorizes ingress with the AWS IpPermissions list and revokes one rule", async () => {
+    serve(
+      respond(202, { operation: { id: "op-5", state: "succeeded" } }),
+      respond(202, { operation: { id: "op-6", state: "succeeded" } }),
+    );
+    const ssh = { ipProtocol: "tcp", fromPort: 22, toPort: 22, cidrIp: "10.0.0.0/16" };
+    const all = { ipProtocol: "-1", fromPort: 0, toPort: 0, cidrIp: "0.0.0.0/0" };
+    expect(await authorizeIngress("sg-9", [ssh, all])).toEqual({ ok: true, value: undefined });
+    expect(await revokeIngress("sg-9", ssh)).toEqual({ ok: true, value: undefined });
+    expect(calls.map((c) => [c.url.replace("http://api.test/api/v1", ""), JSON.parse(c.init.body as string)])).toEqual([
+      [
+        "/security-groups/sg-9/authorize-ingress",
+        {
+          ipPermissions: [
+            { ipProtocol: "tcp", fromPort: 22, toPort: 22, ipRanges: [{ cidrIp: "10.0.0.0/16" }] },
+            { ipProtocol: "-1", fromPort: 0, toPort: 0, ipRanges: [{ cidrIp: "0.0.0.0/0" }] },
+          ],
+        },
+      ],
+      ["/security-groups/sg-9/revoke-ingress", { ipPermissions: ssh }],
+    ]);
   });
 
   it("launches with tags only when there are some", async () => {

@@ -721,8 +721,16 @@ export async function createSecurityGroup(groupName: string, vpcId: string): Pro
   return id ? { ok: true, value: id } : { ok: false, error: malformed("/security-groups") };
 }
 
-export const authorizeIngress = (groupId: string, ipPermissions: IngressPermission) =>
-  mutate(route("/security-groups/{id}/authorize-ingress", { id: groupId }), { ipPermissions });
+/** console-api takes the AWS IpPermissions list and adds all of it or none of it. */
+export const authorizeIngress = (groupId: string, permissions: IngressPermission[]) =>
+  mutate(route("/security-groups/{id}/authorize-ingress", { id: groupId }), {
+    ipPermissions: permissions.map(({ ipProtocol, fromPort, toPort, cidrIp }) => ({
+      ipProtocol,
+      fromPort,
+      toPort,
+      ipRanges: [{ cidrIp }],
+    })),
+  });
 export const revokeIngress = (groupId: string, ipPermissions: IngressPermission) =>
   mutate(route("/security-groups/{id}/revoke-ingress", { id: groupId }), { ipPermissions });
 export const deleteSecurityGroup = (id: string) => mutate(route("/security-groups/{id}/delete", { id }));
