@@ -115,6 +115,26 @@ describe("UploadView", () => {
     expect(counts).toMatchObject({ Succeeded: "1", Failed: "1" });
   });
 
+  it("shows each file's outcome in Status and its reason in a separate Error column", async () => {
+    uploadObjectAction.mockResolvedValueOnce(null).mockResolvedValueOnce(denied).mockResolvedValueOnce(null);
+    renderView();
+    addFiles(file("a.txt"), file("b.txt"), file("c.txt"));
+    fireEvent.click(uploadButton());
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Upload failed"));
+
+    const headers = screen.getAllByRole("columnheader").map((th) => th.textContent);
+    const column = (fileName: string, header: string) =>
+      within(rowOf(fileName)).getAllByRole("cell")[headers.indexOf(header)];
+    expect(headers).toEqual(expect.arrayContaining(["Status", "Error"]));
+    expect(column("a.txt", "Status")).toHaveTextContent(/^Succeeded$/);
+    expect(column("a.txt", "Error")).toHaveTextContent(/^-$/);
+    expect(column("b.txt", "Status")).toHaveTextContent(/^Failed$/);
+    expect(column("b.txt", "Error")).toHaveTextContent("Access Denied");
+    expect(column("b.txt", "Error")).toHaveTextContent("AccessDenied · Request ID r-1");
+    expect(column("c.txt", "Status")).toHaveTextContent(/^Succeeded$/);
+    expect(column("c.txt", "Error")).toHaveTextContent(/^-$/);
+  });
+
   it("retries only the failed file and keeps the succeeded one untouched", async () => {
     uploadObjectAction.mockResolvedValueOnce(denied);
     renderView();

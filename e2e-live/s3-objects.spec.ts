@@ -8,6 +8,11 @@ const MAX_OBJECT_BYTES = 4 * 1024 * 1024;
 const field = (page: Page, label: string) =>
   page.locator(`xpath=//dt[normalize-space()="${label}"]/following-sibling::dd`);
 
+async function cell(page: Page, fileName: string, header: string) {
+  const headers = await page.getByRole("columnheader").allTextContents();
+  return page.getByRole("row").filter({ hasText: fileName }).getByRole("cell").nth(headers.indexOf(header));
+}
+
 test("uploads with per-file status, opens the object, downloads the same bytes and deletes it", async ({
   page,
   request,
@@ -36,8 +41,10 @@ test("uploads with per-file status, opens the object, downloads the same bytes a
     await expect(page.getByText("Upload: status")).toBeVisible();
     await expect(field(page, "Succeeded")).toHaveText("1");
     await expect(field(page, "Failed")).toHaveText("1");
-    await expect(page.getByRole("row").filter({ hasText: "data.bin" })).toContainText("Succeeded");
-    await expect(page.getByRole("row").filter({ hasText: "too-big.bin" })).toContainText(
+    await expect(await cell(page, "data.bin", "Status")).toHaveText("Succeeded");
+    await expect(await cell(page, "data.bin", "Error")).toHaveText("-");
+    await expect(await cell(page, "too-big.bin", "Status")).toHaveText("Failed");
+    await expect(await cell(page, "too-big.bin", "Error")).toContainText(
       "Objects larger than 4 MiB cannot be uploaded.",
     );
     await expect(page).toHaveURL(/\/upload\?prefix=docs%2F$/);
