@@ -37,24 +37,30 @@ function banner(phase: UploadRun["phase"], summary: UploadSummary): string {
 }
 
 function StatusCell({ item }: { item: UploadItem }) {
-  const { status } = item;
-  if (status.kind !== "failed") {
-    return <span className={status.kind === "succeeded" ? "text-[#037f0c]" : undefined}>{label(status.kind)}</span>;
-  }
+  const { kind } = item.status;
+  const color = kind === "succeeded" ? "text-[#037f0c]" : kind === "failed" ? "text-[#d91515]" : undefined;
+  return <span className={color}>{STATUS_LABEL[kind]}</span>;
+}
+
+function ErrorCell({ item }: { item: UploadItem }) {
+  if (item.status.kind !== "failed") return <span className="text-[#5f6b7a]">-</span>;
+  const { error } = item.status;
   return (
     <div>
-      <span className="text-[#d91515]">Failed</span>
-      <p className="text-[12px]">{status.error.message || "The VWS API returned an error."}</p>
+      <p className="text-[12px]">{error.message || "The VWS API returned an error."}</p>
       <p className="font-mono text-[12px] text-[#5f6b7a]">
-        {status.error.code} · Request ID {status.error.requestId ?? "—"}
+        {error.code} · Request ID {error.requestId ?? "—"}
       </p>
     </div>
   );
 }
 
-function label(kind: "pending" | "uploading" | "succeeded"): string {
-  return kind === "pending" ? "Pending" : kind === "uploading" ? "Uploading" : "Succeeded";
-}
+const STATUS_LABEL: Record<UploadItem["status"]["kind"], string> = {
+  pending: "Pending",
+  uploading: "Uploading",
+  succeeded: "Succeeded",
+  failed: "Failed",
+};
 
 export function UploadView({
   name,
@@ -209,6 +215,7 @@ export function UploadView({
                     <th>Type</th>
                     <th>Size</th>
                     <th>Status</th>
+                    <th>Error</th>
                     <th />
                   </tr>
                 </thead>
@@ -228,6 +235,9 @@ export function UploadView({
                       <td>{formatBytes(item.file.size)}</td>
                       <td>
                         <StatusCell item={item} />
+                      </td>
+                      <td>
+                        <ErrorCell item={item} />
                       </td>
                       <td className="text-right">
                         {item.status.kind === "succeeded" ? null : (
