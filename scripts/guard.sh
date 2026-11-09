@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Repo guard (popododo0720/vws-deploy#448). Runs the checks of the shared scripts/guard-agents.sh that
-# read this repo's own files. repo-guard.yml runs it on every pull request; scripts/guard_test.sh shows
-# that it fails on a broken input.
+# read this repo's own files. The guard job of .github/workflows/ci.yml runs it on every pull request;
+# scripts/guard_test.sh shows that it fails on a broken input.
 # Usage: scripts/guard.sh [all|correct|english|references]
 set -euo pipefail
 cd "$(dirname "$0")/.."

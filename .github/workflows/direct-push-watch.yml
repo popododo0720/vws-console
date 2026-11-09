@@ -1,6 +1,6 @@
 # Reports a commit that landed on main without a pull request, and a rewritten main history.
-# Detection after the fact, not a block. Copy this file, repo-guard.yml and scripts/guard-agents.sh
-# as-is into another repo. Change `branches` if the default branch is not main.
+# Detection after the fact, not a block. Copy this file and scripts/guard-agents.sh as-is
+# into another repo; repo-guard.yml is the pinned vws-deploy caller. Change `branches` if the default branch is not main.
 name: direct-push-watch
 
 on:

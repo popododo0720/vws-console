@@ -5,3 +5,5 @@ playwright-report/
 test-results/
 package-lock.json
 vendor/braces/
+# The pinned vws-deploy caller stays in its flow style to fit the 40-line cap of vws-deploy caller_pin.py.
+.github/workflows/repo-guard.yml
