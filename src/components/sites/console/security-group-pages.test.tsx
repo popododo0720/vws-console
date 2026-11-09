@@ -209,11 +209,73 @@ describe("Security group detail", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("shows no flash on a plain visit", () => {
+    renderDetail();
+    expect(screen.queryByText(/successfully modified/)).toBeNull();
+  });
+
   it("opens Copy to new security group with the source ID", () => {
     renderDetail();
     fireEvent.click(screen.getByRole("button", { name: /^Actions/ }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Copy to new security group" }));
     expect(push).toHaveBeenCalledWith(`/network/security-groups/create?copy=${GROUP_ID}`);
+  });
+});
+
+describe("Save success flash", () => {
+  const FLASH = `Inbound security group rules successfully modified on security group (${GROUP_ID} | web)`;
+  const detail = <SecurityGroupDetailView key="detail" id={GROUP_ID} group={group} loadError={null} />;
+
+  async function saveThenOpenDetail() {
+    const view = wrap(<SecurityGroupRulesEditView id={GROUP_ID} direction="in" group={group} loadError={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    fireEvent.change(screen.getByLabelText("Rule 3 type"), { target: { value: "https" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+    });
+    view.rerender(<ConsoleProvider>{detail}</ConsoleProvider>);
+    return view;
+  }
+
+  it("shows once on the group page after a save and lets it be dismissed", async () => {
+    await saveThenOpenDetail();
+    expect(screen.getByRole("status").textContent).toBe(`${FLASH}×`);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByText(FLASH)).toBeNull();
+  });
+
+  it("does not come back when the group page mounts again, as on Back or Forward", async () => {
+    const view = await saveThenOpenDetail();
+    expect(screen.getByText(FLASH)).toBeTruthy();
+    view.rerender(<ConsoleProvider>{null}</ConsoleProvider>);
+    view.rerender(<ConsoleProvider>{detail}</ConsoleProvider>);
+    expect(screen.queryByText(FLASH)).toBeNull();
+  });
+
+  it("is not shown on another group's page", async () => {
+    const view = wrap(<SecurityGroupRulesEditView id={GROUP_ID} direction="in" group={group} loadError={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    fireEvent.change(screen.getByLabelText("Rule 3 type"), { target: { value: "https" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+    });
+    const other = { ...group, id: "sg-0fedcba9876543210" };
+    view.rerender(
+      <ConsoleProvider>
+        <SecurityGroupDetailView id={other.id} group={other} loadError={null} />
+      </ConsoleProvider>,
+    );
+    expect(screen.queryByText(/successfully modified/)).toBeNull();
+  });
+
+  it("is not set when the save fails", async () => {
+    actions.saveInboundRulesAction.mockResolvedValue({
+      code: "InvalidGroup.NotFound",
+      message: "gone",
+      requestId: "r9",
+    });
+    await saveThenOpenDetail();
+    expect(screen.queryByText(/successfully modified/)).toBeNull();
   });
 });
 

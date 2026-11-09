@@ -170,3 +170,5 @@ export function permissionLabel(permission: IngressPermission): string {
       : `${permission.fromPort}-${permission.toPort}`;
   return `${protocol} ${port} from ${permission.cidrIp}`;
 }
+
+export const securityGroupFlashKey = (id: string) => `security-group:${id}`;

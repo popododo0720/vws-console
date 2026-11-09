@@ -5,9 +5,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { computeNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { useConsole } from "@/components/sites/console/console-provider";
 import { saveInboundRulesAction } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
-import { permissionLabel, planRuleChanges, ruleKey, type RuleChanges } from "@/lib/security-group-rules";
+import {
+  permissionLabel,
+  planRuleChanges,
+  ruleKey,
+  securityGroupFlashKey,
+  type RuleChanges,
+} from "@/lib/security-group-rules";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
 import { RuleEditor, firstRuleError } from "@/components/sites/console/sg-rule-editor";
@@ -73,6 +80,7 @@ export function SecurityGroupRulesEditView({
 function InboundRulesForm({ crumbs, group }: { crumbs: { label: string; href?: string }[]; group: SecurityGroup }) {
   const action = useApiAction();
   const router = useRouter();
+  const { showFlash } = useConsole();
   const [rows, setRows] = useState<SecurityGroupRule[]>(() =>
     group.rules.map((rule, index) => ({ ...rule, id: `stored-${index}` })),
   );
@@ -94,7 +102,13 @@ function InboundRulesForm({ crumbs, group }: { crumbs: { label: string; href?: s
         if (failed) router.refresh();
         return failed;
       },
-      () => router.push(back),
+      () => {
+        showFlash({
+          key: securityGroupFlashKey(group.id),
+          message: `Inbound security group rules successfully modified on security group (${group.id} | ${group.groupName})`,
+        });
+        router.push(back);
+      },
     );
 
   return (
