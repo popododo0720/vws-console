@@ -7,7 +7,13 @@ import { computeNav } from "@/lib/console-data";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
 import { saveInboundRulesAction } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
-import { permissionLabel, planRuleChanges, ruleKey, type RuleChanges } from "@/lib/security-group-rules";
+import {
+  permissionLabel,
+  planRuleChanges,
+  ruleKey,
+  savedInboundHref,
+  type RuleChanges,
+} from "@/lib/security-group-rules";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
 import { RuleEditor, firstRuleError } from "@/components/sites/console/sg-rule-editor";
@@ -94,7 +100,7 @@ function InboundRulesForm({ crumbs, group }: { crumbs: { label: string; href?: s
         if (failed) router.refresh();
         return failed;
       },
-      () => router.push(back),
+      () => router.push(savedInboundHref(group.id)),
     );
 
   return (

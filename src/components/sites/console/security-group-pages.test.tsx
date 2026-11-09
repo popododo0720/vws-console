@@ -76,7 +76,7 @@ describe("Edit inbound rules", () => {
       remove: [{ ipProtocol: "tcp", fromPort: 22, toPort: 22, cidrIp: "0.0.0.0/0" }],
       add: [{ ipProtocol: "tcp", fromPort: 22, toPort: 22, cidrIp: "10.1.0.0/16" }],
     });
-    expect(push).toHaveBeenCalledWith(`/network/security-groups/${GROUP_ID}`);
+    expect(push).toHaveBeenCalledWith(`/network/security-groups/${GROUP_ID}?saved=inbound`);
   });
 
   it("saves an added rule without a delete confirmation and keeps the stored ICMP values", async () => {
@@ -207,6 +207,22 @@ describe("Security group detail", () => {
     });
     expect(within(screen.getByRole("dialog")).getByText(/has a dependent object/)).toBeTruthy();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("shows the success flash once after a save and lets it be dismissed", () => {
+    window.history.replaceState(null, "", `/network/security-groups/${GROUP_ID}?saved=inbound`);
+    wrap(<SecurityGroupDetailView id={GROUP_ID} group={group} loadError={null} savedInbound />);
+    expect(screen.getByRole("status").textContent).toBe(
+      `Inbound security group rules successfully modified on security group (${GROUP_ID} | web)×`,
+    );
+    expect(window.location.search).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("shows no flash on a plain visit", () => {
+    renderDetail();
+    expect(screen.queryByText(/successfully modified/)).toBeNull();
   });
 
   it("opens Copy to new security group with the source ID", () => {
