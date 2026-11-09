@@ -228,11 +228,19 @@ test("creates a security group, edits its inbound rules, copies it and deletes b
   const confirm = page.getByRole("dialog", { name: "Delete inbound rules" });
   await expect(confirm).toContainText("TCP 22 from 0.0.0.0/0");
   await confirm.getByRole("button", { name: "Delete and save" }).click();
-  await expect(
-    page.getByText(`Inbound security group rules successfully modified on security group (${groupId} | ${groupName})`),
-  ).toBeVisible();
+  const flash = page.getByText(
+    `Inbound security group rules successfully modified on security group (${groupId} | ${groupName})`,
+  );
+  await expect(flash).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/network/security-groups/${groupId}$`));
   await expect(page.getByText("Inbound rules (2)")).toBeVisible();
+  await page.getByRole("button", { name: "Dismiss" }).click();
+  await expect(flash).toBeHidden();
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Security Groups" }).click();
+  await expect(page).toHaveURL(/\/network\/security-groups$/);
+  await page.goBack();
+  await expect(page.getByText("Inbound rules (2)")).toBeVisible();
+  await expect(flash).toBeHidden();
   await expect(page.getByRole("cell", { name: "10.88.0.0/16" }).first()).toBeVisible();
   await expect(page.getByRole("cell", { name: "0.0.0.0/0", exact: true })).toHaveCount(1);
 

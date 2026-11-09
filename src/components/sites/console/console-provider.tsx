@@ -6,6 +6,9 @@ import type { Dataset, Instance, InternetGateway, NatGateway, RouteTable, Subnet
 import type { AccountBucket, Identity } from "@/lib/vws-api/adapter";
 
 type Mode = "empty" | "sample";
+
+/** A success message for the page named by `key`, shown once after a redirect as the AWS console flashbar does. */
+export type ConsoleFlash = { key: string; message: string };
 type Density = "comfortable" | "compact";
 
 type ConsoleApi = {
@@ -30,6 +33,9 @@ type ConsoleApi = {
   /** The browser-only resources of every region, for screens that count across regions. */
   dataset: Dataset;
   accountBuckets: readonly AccountBucket[];
+  flash: ConsoleFlash | null;
+  showFlash: (flash: ConsoleFlash) => void;
+  clearFlash: () => void;
   createRouteTable: (input: { name: string; vpcId: string }) => void;
   deleteRouteTables: (ids: string[]) => void;
   addRoute: (tableId: string, destination: string, target: string) => string | null;
@@ -90,6 +96,7 @@ export function ConsoleProvider({
   const [mode, setMode] = useState<Mode>("empty");
   const [data, setData] = useState<Dataset>(() => createEmptyAccount());
   const [density, setDensity] = useState<Density>("comfortable");
+  const [flash, setFlash] = useState<ConsoleFlash | null>(null);
 
   const api = useMemo<ConsoleApi>(() => {
     const instances = data.instances.filter((item) => item.region === region);
@@ -118,6 +125,9 @@ export function ConsoleProvider({
       natGateways,
       dataset: data,
       accountBuckets,
+      flash,
+      showFlash: setFlash,
+      clearFlash: () => setFlash(null),
       showEmpty: () => {
         setMode("empty");
         setData(createEmptyAccount());
@@ -262,7 +272,7 @@ export function ConsoleProvider({
         }));
       },
     };
-  }, [accountBuckets, data, density, identity.accountId, identity.userName, mode, region, signIn]);
+  }, [accountBuckets, data, density, flash, identity.accountId, identity.userName, mode, region, signIn]);
 
   return <ConsoleContext.Provider value={api}>{children}</ConsoleContext.Provider>;
 }

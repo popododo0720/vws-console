@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { computeNav } from "@/lib/console-data";
 import { ApiErrorAlert } from "@/components/sites/console/api-action";
+import { useConsole } from "@/components/sites/console/console-provider";
+import { securityGroupFlashKey } from "@/lib/security-group-rules";
 import { SecurityGroupDeleteDialog } from "@/components/sites/console/security-group-delete-dialog";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import type { SecurityGroup } from "@/types/console";
@@ -43,22 +45,21 @@ export function SecurityGroupDetailView({
   id,
   group,
   loadError,
-  savedInbound = false,
 }: {
   id: string;
   group: SecurityGroup | null;
   loadError: ApiError | null;
-  savedInbound?: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<DetailTab>("in");
   const [deleting, setDeleting] = useState(false);
-  const [flash, setFlash] = useState(savedInbound);
+  const { flash: pending, clearFlash } = useConsole();
+  const flashKey = securityGroupFlashKey(id);
+  const [flash, setFlash] = useState(() => (pending?.key === flashKey ? pending.message : null));
 
   useEffect(() => {
-    // The flash shows once, as in the AWS console, so a reload or a shared link does not repeat it.
-    if (savedInbound) window.history.replaceState(null, "", window.location.pathname);
-  }, [savedInbound]);
+    if (pending?.key === flashKey) clearFlash();
+  }, [pending, flashKey, clearFlash]);
 
   if (!group) {
     return (
@@ -123,10 +124,8 @@ export function SecurityGroupDetailView({
           role="status"
           className="mx-4 my-2 flex items-start justify-between gap-3 rounded-lg border border-[#037f0c] bg-[#f2fcf3] px-3 py-2 text-[13px] text-[#037f0c]"
         >
-          <p>
-            Inbound security group rules successfully modified on security group ({group.id} | {group.groupName})
-          </p>
-          <button type="button" aria-label="Dismiss" className="font-semibold" onClick={() => setFlash(false)}>
+          <p>{flash}</p>
+          <button type="button" aria-label="Dismiss" className="font-semibold" onClick={() => setFlash(null)}>
             ×
           </button>
         </div>

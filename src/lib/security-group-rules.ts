@@ -171,6 +171,4 @@ export function permissionLabel(permission: IngressPermission): string {
   return `${protocol} ${port} from ${permission.cidrIp}`;
 }
 
-/** The `saved` search param the inbound rules page adds when its save succeeds. */
-export const SAVED_INBOUND = "inbound";
-export const savedInboundHref = (id: string) => `/network/security-groups/${id}?saved=${SAVED_INBOUND}`;
+export const securityGroupFlashKey = (id: string) => `security-group:${id}`;
