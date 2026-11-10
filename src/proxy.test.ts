@@ -46,7 +46,7 @@ describe("proxy", () => {
     const response = await proxy(req("/login?reason=expired&next=%2F", { vws_session: "old", vws_csrf: "c" }));
     expect(deleted(response).sort()).toEqual(["vws_csrf", "vws_session"]);
     expect(fetchMock.mock.calls[0][0]).toBe("http://api.test/api/v1/auth/session");
-    expect(fetchMock.mock.calls[0][1].headers.cookie).toBe("vws_session=old");
+    expect(fetchMock.mock.calls[0][1].headers.cookie).toBe("__Host-vws_session=old");
   });
 
   it("keeps a session console-api still accepts, or cannot confirm", async () => {
