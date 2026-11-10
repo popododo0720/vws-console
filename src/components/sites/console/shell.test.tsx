@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("Shell branding", () => {
-  it("puts the VWS logo first in the top bar", () => {
+  it("puts the VWS logo first in the top bar and says AWS-compatible in the footer", () => {
     render(
       <ConsoleProvider>
         <Shell tree={null}>
@@ -24,5 +24,6 @@ describe("Shell branding", () => {
     expect(logo).toHaveAttribute("src", "/images/vws-logo.svg");
     expect(header.firstElementChild).toContainElement(logo);
     expect(header.firstElementChild).toHaveAttribute("href", "/compute/instances");
+    expect(screen.getByRole("contentinfo")).toHaveTextContent("© 2026, VWS contributors. AWS-compatible console.");
   });
 });

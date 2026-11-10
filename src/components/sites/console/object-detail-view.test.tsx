@@ -64,7 +64,7 @@ describe("ObjectDetailView", () => {
       screen.getAllByText(/./, { selector: "dt" }).map((dt) => [dt.textContent, dt.nextElementSibling?.textContent]),
     );
     expect(fields.get("Owner")).toBe("123456789012");
-    expect(fields.get("AWS Region")).toBe("vws-1");
+    expect(fields.get("Region")).toBe("vws-1");
     expect(fields.get("Last modified")).toBe("Aug 2, 2026, 12:00:00 AM UTC");
     expect(fields.get("Size")).toBe("2.0 KB");
     expect(fields.get("Type")).toBe("txt");

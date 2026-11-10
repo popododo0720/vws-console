@@ -82,7 +82,7 @@ export function Shell({
           ))}
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden sm:inline">© 2026, VWS contributors.</span>
+          <span className="hidden sm:inline">© 2026, VWS contributors. AWS-compatible console.</span>
           {["Privacy", "Terms", "Cookie preferences"].map((label) => (
             <button key={label} type="button" className="hover:underline" onClick={() => setNotice(label)}>
               {label}

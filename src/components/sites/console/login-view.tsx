@@ -20,6 +20,7 @@ export function LoginView({ next, expired }: { next: string; expired: boolean })
       >
         <div>
           <Mark className="block" width={64} height={38} />
+          <p className="mt-1 text-[#5f6b7a]">AWS-compatible console</p>
           <h1 className="mt-1 text-[16px] font-semibold">Sign in to the console</h1>
         </div>
         {expired && !state.error ? (

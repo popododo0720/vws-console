@@ -59,7 +59,7 @@ test("uploads with per-file status, opens the object, downloads the same bytes a
       await expect(field(page, "Type")).toHaveText("bin");
       await expect(field(page, "S3 URI")).toHaveText(`s3://${bucket}/${key}`);
       await expect(field(page, "Amazon Resource Name (ARN)")).toHaveText(`arn:aws:s3:::${bucket}/${key}`);
-      await expect(field(page, "AWS Region")).toHaveText("vws-1");
+      await expect(field(page, "Region")).toHaveText("vws-1");
       await expect(field(page, "Owner")).toHaveText("123456789012");
       await expect(field(page, "Object URL")).toHaveText(downloadUrl);
       await expect(field(page, "Entity tag (Etag)")).not.toHaveText("—");
