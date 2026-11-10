@@ -20,7 +20,7 @@ function send(
 }
 
 function signedIn(request: IncomingMessage): boolean {
-  return (request.headers.cookie ?? "").includes(`vws_session=${session}`);
+  return (request.headers.cookie ?? "").includes(`__Host-vws_session=${session}`);
 }
 
 const server = createServer((request, response) => {
@@ -34,7 +34,7 @@ const server = createServer((request, response) => {
       { loginEnabled: true, principal: "root" },
       {
         "set-cookie": [
-          `vws_session=${session}; Path=/; HttpOnly; Max-Age=3600`,
+          `__Host-vws_session=${session}; Path=/; HttpOnly; Max-Age=3600`,
           `vws_csrf=${csrf}; Path=/; HttpOnly; Max-Age=3600`,
         ],
       },

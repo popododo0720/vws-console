@@ -73,7 +73,7 @@ test("writes carry the CSRF token: the console creates a VPC, a cookie write wit
         "content-type": "application/json",
         origin: new URL(page.url()).origin,
         "idempotency-key": crypto.randomUUID(),
-        cookie: `vws_session=${session}; vws_csrf=${csrf}`,
+        cookie: `__Host-vws_session=${session}; vws_csrf=${csrf}`,
         ...headers,
       },
       body: JSON.stringify({ cidrBlock: "10.78.0.0/16" }),
@@ -98,7 +98,7 @@ test("sign out revokes the session and returns to the login screen", async ({ pa
   expect((await context.cookies()).filter((c) => c.name.startsWith("vws_"))).toEqual([]);
 
   const after = await fetch(`${process.env.E2E_API_URL}/api/v1/auth/session`, {
-    headers: { cookie: `vws_session=${session}` },
+    headers: { cookie: `__Host-vws_session=${session}` },
   });
   expect(after.status).toBe(401);
   await page.goto("/compute/instances");
