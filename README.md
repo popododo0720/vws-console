@@ -4,7 +4,7 @@ A local mock of a cloud operations console. It covers six screens: instances, th
 
 VWS console is an independent open-source project. It is not affiliated with, endorsed by, or sponsored by Amazon Web Services or any other cloud provider. Service names such as EC2, EBS, S3, and VPC appear only to describe the kind of resource a screen manages. All other product names and trademarks belong to their owners.
 
-The on-screen product name is VWS. Service menus use the names from the reference console screens. The header mark is the VWS wordmark.
+The on-screen product name is VWS. Service menus use the names from the reference console screens. The header mark is the VWS logo (`public/images/vws-logo.svg`).
 
 The app was scaffolded from the MIT-licensed [ai-website-cloner-template](https://github.com/JCodesMore/ai-website-cloner-template). The clone workflow (map, observe, build, compare) is in `.agents/skills/clone-website/`. Reference screenshots are used locally only (`docs/design-references/console/`, gitignored) and are not committed to the repo.
 

@@ -78,7 +78,7 @@ describe("ObjectDetailView", () => {
   it("renders a key full of markup as text", () => {
     const key = "<img src=x onerror=alert(1)>.txt";
     renderView({ objectKey: key, object: { ...notes, key } });
-    expect(document.querySelector("img")).toBeNull();
+    expect(document.querySelector('img[src="x"]')).toBeNull();
     expect(screen.getAllByText(key).length).toBeGreaterThan(0);
   });
 

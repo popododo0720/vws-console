@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect } from "react";
 import { loginAction, type LoginState } from "@/app/actions/auth";
-import { FieldLabel } from "@/components/sites/console/ui";
+import { FieldLabel, Mark } from "@/components/sites/console/ui";
 
 const initial: LoginState = { error: null };
 
@@ -19,7 +19,7 @@ export function LoginView({ next, expired }: { next: string; expired: boolean })
         className="w-full max-w-sm space-y-4 rounded-lg border border-[#d5dbdb] bg-white p-6 text-[13px] shadow-sm"
       >
         <div>
-          <p className="text-[20px] font-bold tracking-tight text-[#16191f]">VWS</p>
+          <Mark className="block" width={64} height={38} />
           <h1 className="mt-1 text-[16px] font-semibold">Sign in to the console</h1>
         </div>
         {expired && !state.error ? (
