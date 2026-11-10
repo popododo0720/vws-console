@@ -107,7 +107,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // The setup installer, the e2e error routes, static assets and the probe endpoints need no session.
+  // The e2e error routes, static assets and the probe endpoints need no session.
   // /login is matched only to delete an expired session's cookies.
-  matcher: ["/((?!installer|e2e/|_next/|favicon\\.ico|(?:healthz|readyz)$).*)"],
+  matcher: ["/((?!e2e/|_next/|favicon\\.ico|(?:healthz|readyz)$).*)"],
 };

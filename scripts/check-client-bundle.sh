@@ -12,7 +12,7 @@ if [[ ! -d "$dir" ]]; then
   exit 2
 fi
 
-# Identifiers of the SDK and the OTLP exporters, not the word OTLP: the installer form labels its OTLP field.
+# Identifiers of the SDK and the OTLP exporters, not the word OTLP.
 patterns=(
   OTLPTraceExporter
   OTLPMetricExporter
