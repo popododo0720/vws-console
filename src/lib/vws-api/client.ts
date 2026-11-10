@@ -11,7 +11,7 @@ import { objectKeyProblem } from "@/lib/object-upload";
 import { DEVICE_NAME, type CreateSnapshotInput, type CreateVolumeInput } from "@/lib/ebs";
 import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
 import { keyPath, route, withQuery, type ApiRoute } from "./route";
-import { CSRF_COOKIE, SESSION_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
+import { API_SESSION_COOKIE, CSRF_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type {
   ElasticIp,
   IngressPermission,
@@ -194,7 +194,7 @@ async function request(
   if (iam) {
     const session = await currentSession();
     if (!session) return toLogin("signin");
-    headers.cookie = `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`;
+    headers.cookie = `${API_SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`;
     if (method !== "GET") {
       headers["x-csrf-token"] = session.csrf;
       Object.assign(headers, await browserOrigin());
@@ -833,7 +833,7 @@ export async function logout(): Promise<void> {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`,
+          cookie: `${API_SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}`,
           "x-csrf-token": session.csrf,
           ...(await browserOrigin()),
         },
@@ -899,7 +899,7 @@ async function readSignedInSession(): Promise<SessionInfo | null> {
   if (iam) {
     const session = await currentSession();
     if (!session) return null;
-    credentials = { cookie: `${SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}` };
+    credentials = { cookie: `${API_SESSION_COOKIE}=${session.session}; ${CSRF_COOKIE}=${session.csrf}` };
   } else {
     // IAM off: the bearer is the account root; console-api reports its account the same way.
     const token = bearer();

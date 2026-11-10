@@ -43,7 +43,7 @@ function fakeConsoleApi(sent: Sent[]) {
     const route = `${method} ${path}`;
     if (route === "POST /auth/login") {
       const response = json(200, { loginEnabled: true, principal: "root" });
-      response.headers.append("set-cookie", `vws_session=${SESSION}; Path=/; HttpOnly; Max-Age=3600`);
+      response.headers.append("set-cookie", `__Host-vws_session=${SESSION}; Path=/; HttpOnly; Max-Age=3600`);
       response.headers.append("set-cookie", `vws_csrf=${CSRF}; Path=/; HttpOnly; Max-Age=3600`);
       return response;
     }
@@ -51,7 +51,7 @@ function fakeConsoleApi(sent: Sent[]) {
       const cookie = (init.headers as Record<string, string>).cookie ?? "";
       const bearer = (init.headers as Record<string, string>).authorization;
       if (bearer === `Bearer ${BEARER}`) return json(200, { loginEnabled: false, principal: "root", account: "1" });
-      if (cookie.includes(`vws_session=${SESSION}`) && jar.size > 0) return json(200, { principal: "root" });
+      if (cookie.includes(`__Host-vws_session=${SESSION}`) && jar.size > 0) return json(200, { principal: "root" });
       return json(401, { error: { code: "Unauthenticated", message: `session ${SESSION} expired` } });
     }
     if (route === "GET /vpcs") return ++vpcs === 1 ? json(503, {}) : json(200, { items: [] });

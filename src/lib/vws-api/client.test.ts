@@ -100,7 +100,7 @@ describe("console-api client", () => {
       "http://api.test/api/v1/vpcs?pageToken=p2",
     ]);
     const headers = calls[0].init.headers as Record<string, string>;
-    expect(headers.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+    expect(headers.cookie).toBe("__Host-vws_session=sess-1; vws_csrf=csrf-1");
     expect(headers.authorization).toBeUndefined();
     expect(headers["x-csrf-token"]).toBeUndefined();
     expect(headers.origin).toBeUndefined();
@@ -117,7 +117,7 @@ describe("console-api client", () => {
     expect(headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
     expect(headers["x-csrf-token"]).toBe("csrf-1");
     expect(headers.origin).toBe("http://console.test");
-    expect(headers.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+    expect(headers.cookie).toBe("__Host-vws_session=sess-1; vws_csrf=csrf-1");
     expect(calls[0].init.body).toBe('{"cidrBlock":"10.9.0.0/16"}');
     expect(calls.slice(1).map((c) => c.url)).toEqual([
       "http://api.test/api/v1/operations/op-1",
@@ -191,7 +191,10 @@ describe("console-api client", () => {
       expiresAt: "x",
       csrfToken: "c",
     });
-    reply.headers.append("set-cookie", "vws_session=s2; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict");
+    reply.headers.append(
+      "set-cookie",
+      "__Host-vws_session=s2; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict",
+    );
     reply.headers.append("set-cookie", "vws_csrf=c2; Path=/; Max-Age=43200; Secure; SameSite=Strict");
     serve(reply);
     expect(await login({ account: "123456789012", userName: "root", password: "pw" })).toEqual({
@@ -216,7 +219,7 @@ describe("console-api client", () => {
     expect(calls[0].url).toBe("http://api.test/api/v1/auth/logout");
     expect(calls[0].init.headers).toEqual({
       "content-type": "application/json",
-      cookie: "vws_session=sess-1; vws_csrf=csrf-1",
+      cookie: "__Host-vws_session=sess-1; vws_csrf=csrf-1",
       "x-csrf-token": "csrf-1",
       origin: "http://console.test",
       "x-request-id": expect.stringMatching(/^[0-9a-f-]{36}$/),
@@ -446,7 +449,7 @@ describe("console-api client", () => {
       expiresAt: "t",
     });
     expect(calls[0].url).toBe("http://api.test/api/v1/auth/session");
-    expect((calls[0].init.headers as Record<string, string>).cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+    expect((calls[0].init.headers as Record<string, string>).cookie).toBe("__Host-vws_session=sess-1; vws_csrf=csrf-1");
   });
 
   it("gives no session for the menu instead of redirecting", async () => {
@@ -557,7 +560,7 @@ describe("console-api client", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(capture);
       nav.session = { session: "SESSION-TOKEN-SECRET", csrf: "CSRF-VALUE-SECRET" };
       const ok = respond(200, {});
-      ok.headers.append("set-cookie", "vws_session=NEW-SESSION-SECRET; HttpOnly");
+      ok.headers.append("set-cookie", "__Host-vws_session=NEW-SESSION-SECRET; HttpOnly");
       ok.headers.append("set-cookie", "vws_csrf=NEW-CSRF-SECRET");
       serve(
         respond(401, { error: { code: "Unauthenticated", message: "authentication failed" } }),
@@ -626,7 +629,7 @@ describe("console-api client", () => {
       ]);
       const sent = headers(calls[0]);
       expect(sent.accept).toBe("application/json");
-      expect(sent.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+      expect(sent.cookie).toBe("__Host-vws_session=sess-1; vws_csrf=csrf-1");
       expect(sent["x-csrf-token"]).toBeUndefined();
       expect(sent.origin).toBeUndefined();
       expect(sent["content-type"]).toBeUndefined();
@@ -662,7 +665,7 @@ describe("console-api client", () => {
       const sent = headers(calls[0]);
       expect(sent.accept).toBe("application/json");
       expect(sent["content-type"]).toBe("application/json");
-      expect(sent.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+      expect(sent.cookie).toBe("__Host-vws_session=sess-1; vws_csrf=csrf-1");
       expect(sent["x-csrf-token"]).toBe("csrf-1");
       expect(sent.origin).toBe("http://console.test");
       expect(sent["idempotency-key"]).toBeUndefined();
@@ -710,7 +713,7 @@ describe("console-api client", () => {
       const sent = headers(calls[0]);
       expect(sent.accept).toBe("application/json");
       expect(sent["content-type"]).toBe("application/json");
-      expect(sent.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+      expect(sent.cookie).toBe("__Host-vws_session=sess-1; vws_csrf=csrf-1");
       expect(sent["x-csrf-token"]).toBe("csrf-1");
       expect(sent.origin).toBe("http://console.test");
       expect(sent["idempotency-key"]).toBeUndefined();
@@ -873,7 +876,7 @@ describe("console-api client", () => {
       expect(calls[0].url).toBe("http://api.test/api/v1/buckets/logs-1/objects/a/b.txt");
       expect(calls[0].init.method).toBe("GET");
       const sent = headers(calls[0]);
-      expect(sent.cookie).toBe("vws_session=sess-1; vws_csrf=csrf-1");
+      expect(sent.cookie).toBe("__Host-vws_session=sess-1; vws_csrf=csrf-1");
       expect(sent["x-csrf-token"]).toBeUndefined();
     });
 
@@ -1308,7 +1311,7 @@ describe("console-api client", () => {
       expect(posts[0].init.headers).toEqual({
         accept: "application/json",
         "content-type": "application/json",
-        cookie: "vws_session=sess-1; vws_csrf=csrf-1",
+        cookie: "__Host-vws_session=sess-1; vws_csrf=csrf-1",
         "idempotency-key": "attempt-web-1",
         origin: "http://console.test",
         "x-csrf-token": "csrf-1",

@@ -3,7 +3,7 @@ import { METRICS_PATH, recordHttpRequest } from "@/lib/ops/metrics";
 import { withSpan } from "@/lib/ops/span";
 import { logAuth } from "@/lib/vws-api/log";
 import { iamState } from "@/lib/vws-api/mode";
-import { CSRF_COOKIE, SESSION_COOKIE } from "@/lib/vws-api/session-cookies";
+import { API_SESSION_COOKIE, CSRF_COOKIE, SESSION_COOKIE } from "@/lib/vws-api/session-cookies";
 import { route } from "@/lib/vws-api/route";
 import { apiFetch } from "@/lib/vws-api/transport";
 
@@ -23,7 +23,7 @@ async function sessionRejected(base: string, session: string): Promise<boolean> 
       const reply = await apiFetch(
         base,
         route("/auth/session"),
-        { headers: { accept: "application/json", cookie: `${SESSION_COOKIE}=${session}` } },
+        { headers: { accept: "application/json", cookie: `${API_SESSION_COOKIE}=${session}` } },
         { timeoutMs: SESSION_CHECK_TIMEOUT_MS, retry: false, iamMode: "on" },
       );
       const rejected = reply.status === 401;

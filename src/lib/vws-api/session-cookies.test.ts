@@ -5,15 +5,23 @@ describe("sessionFromSetCookie", () => {
   it("reads both cookies and the session max-age", () => {
     expect(
       sessionFromSetCookie([
-        "vws_session=abc; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict",
+        "__Host-vws_session=abc; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict",
         "vws_csrf=def; Path=/; Secure; SameSite=Strict",
       ]),
     ).toEqual({ session: "abc", csrf: "def", maxAge: 43200 });
   });
   it("needs both cookies", () => {
-    expect(sessionFromSetCookie(["vws_session=abc; HttpOnly"])).toBeNull();
-    expect(sessionFromSetCookie(["vws_session=; Max-Age=0", "vws_csrf=; Max-Age=0"])).toBeNull();
+    expect(sessionFromSetCookie(["__Host-vws_session=abc; HttpOnly"])).toBeNull();
+    expect(sessionFromSetCookie(["__Host-vws_session=; Max-Age=0", "vws_csrf=; Max-Age=0"])).toBeNull();
     expect(sessionFromSetCookie([])).toBeNull();
+  });
+  it("ignores a bare vws_session cookie without the __Host- prefix console-api now sets", () => {
+    expect(
+      sessionFromSetCookie([
+        "vws_session=abc; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict",
+        "vws_csrf=def",
+      ]),
+    ).toBeNull();
   });
 });
 
