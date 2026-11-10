@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Info, X } from "lucide-react";
@@ -7,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 
-export function Mark({ className }: { className?: string }) {
-  return <span className={cn("text-[15px] font-bold tracking-[0.18em] text-[#ff9900]", className)}>VWS</span>;
+/** The VWS logo; the default size is the AWS console logo's 32x19. */
+export function Mark({ className, width = 32, height = 19 }: { className?: string; width?: number; height?: number }) {
+  return <Image src="/images/vws-logo.svg" alt="VWS" width={width} height={height} className={className} />;
 }
 
 export function OrangeButton({ className, ...props }: React.ComponentProps<typeof Button>) {

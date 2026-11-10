@@ -72,9 +72,9 @@ describe("proxy", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("keeps the probe endpoints out of the matcher, but not metrics or lookalike pages", () => {
+  it("keeps the probe endpoints and public images out of the matcher, but not metrics or lookalike pages", () => {
     const matcher = new RegExp(`^${config.matcher[0]}$`);
-    for (const path of ["/healthz", "/readyz"]) expect(matcher.test(path)).toBe(false);
+    for (const path of ["/healthz", "/readyz", "/images/vws-logo.svg"]) expect(matcher.test(path)).toBe(false);
     for (const path of ["/metrics", "/healthz/x", "/compute/instances"]) expect(matcher.test(path)).toBe(true);
   });
 

@@ -157,7 +157,7 @@ export function ObjectDetailView({ name, objectKey, bucket, object, loadError }:
           <DetailGrid
             items={[
               ["Owner", dash(bucket.ownerId)],
-              ["AWS Region", REGION],
+              ["Region", REGION],
               ["Last modified", object.lastModified ? formatBucketCreationDate(object.lastModified) : "—"],
               ["Size", formatBytes(object.size)],
               ["Type", objectType(object.key)],

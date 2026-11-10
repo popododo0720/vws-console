@@ -49,6 +49,9 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
 
   return (
     <header className="flex h-10 shrink-0 items-center gap-2 bg-[#161d26] px-3 text-white">
+      <Link href="/compute/instances" className="flex shrink-0 items-center gap-2 pr-2">
+        <Mark />
+      </Link>
       <button
         type="button"
         className="grid size-8 place-items-center rounded-md text-[#d5dbdb] hover:bg-white/10 lg:hidden"
@@ -68,9 +71,6 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
           items={pageLinks.map((link) => ({ label: link.label, href: link.href }))}
         />
       </div>
-      <Link href="/compute/instances" className="flex items-center gap-2 pr-2">
-        <Mark />
-      </Link>
       <div className="relative mx-2 hidden min-w-0 flex-1 sm:block">
         <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[#9aa4ad]" />
         <input

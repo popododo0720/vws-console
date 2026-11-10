@@ -27,7 +27,7 @@ Measured from the 1024×594 reference screenshots. Reference screenshots are use
 
 ## Intentional differences
 
-- The header name is VWS. Service menus use the reference labels EC2, EBS, S3, and VPC. The header mark is the VWS wordmark.
+- The header name is VWS. Service menus use the reference labels EC2, EBS, S3, and VPC. The header mark is the VWS logo (`public/images/vws-logo.svg`), in the reference logo's place and size.
 - Operating system tiles use original names and letter marks.
 - Account id, resource ids, and region names are fictional.
 - The reference instances panel was still loading alarms. This app shows the settled empty copy.

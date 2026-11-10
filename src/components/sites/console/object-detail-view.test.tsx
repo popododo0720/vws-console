@@ -64,7 +64,7 @@ describe("ObjectDetailView", () => {
       screen.getAllByText(/./, { selector: "dt" }).map((dt) => [dt.textContent, dt.nextElementSibling?.textContent]),
     );
     expect(fields.get("Owner")).toBe("123456789012");
-    expect(fields.get("AWS Region")).toBe("vws-1");
+    expect(fields.get("Region")).toBe("vws-1");
     expect(fields.get("Last modified")).toBe("Aug 2, 2026, 12:00:00 AM UTC");
     expect(fields.get("Size")).toBe("2.0 KB");
     expect(fields.get("Type")).toBe("txt");
@@ -78,7 +78,7 @@ describe("ObjectDetailView", () => {
   it("renders a key full of markup as text", () => {
     const key = "<img src=x onerror=alert(1)>.txt";
     renderView({ objectKey: key, object: { ...notes, key } });
-    expect(document.querySelector("img")).toBeNull();
+    expect(document.querySelector('img[src="x"]')).toBeNull();
     expect(screen.getAllByText(key).length).toBeGreaterThan(0);
   });
 
