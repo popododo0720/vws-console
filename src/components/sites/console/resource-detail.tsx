@@ -27,6 +27,8 @@ export function ResourceDetail({
   found,
   loadError,
   items,
+  info = `A single ${kind} in the current region, read from the VWS API.`,
+  missing = `${id} is not in this region.`,
   children,
 }: {
   tree: NavTree;
@@ -37,19 +39,19 @@ export function ResourceDetail({
   found: boolean;
   loadError: ApiError | null;
   items: [string, ReactNode][];
+  info?: string;
+  /** The line under "<Kind> not found". */
+  missing?: string;
   children?: ReactNode;
 }) {
   return (
     <Shell tree={tree}>
-      <PageHeader
-        crumbs={[...crumbs, { label: id }]}
-        info={`A single ${kind} in the current region, read from the VWS API.`}
-      />
+      <PageHeader crumbs={[...crumbs, { label: id }]} info={info} />
       <ApiErrorAlert error={loadError} title={`The ${kind} could not be loaded`} />
       {!loadError && !found ? (
         <div className="px-4 py-6 text-[13px]">
           <p className="font-semibold">{kind.charAt(0).toUpperCase() + kind.slice(1)} not found</p>
-          <p className="mt-1 text-[#5f6b7a]">{id} is not in this region.</p>
+          <p className="mt-1 text-[#5f6b7a]">{missing}</p>
           <Link href={backHref} className="mt-3 inline-block text-[#006ce0] hover:underline">
             Back
           </Link>

@@ -184,6 +184,16 @@ export const storageNav: NavTree = {
   ],
 };
 
+/** The IAM action the operator's Regions screens need. GET /admin/permissions lists the actions a caller has. */
+export const ADMIN_REGIONS_ACTION = "vws:AdminListRegions";
+
+/** Kept out of navTrees: the top bar adds these links only for a caller who has ADMIN_REGIONS_ACTION. */
+export const adminNav: NavTree = {
+  id: "admin",
+  title: "Administration",
+  sections: [{ id: "regions", label: "Regions", href: "/admin/regions" }],
+};
+
 export const navTrees = [computeNav, networkNav, storageNav];
 
 export function linksIn(tree: NavTree) {
