@@ -12,17 +12,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 This repo started from the website cloner template and now implements a mock cloud console. Screen notes are in `docs/research/console/`.
 
-## Using pstack
-
-This project and every other VWS project use pstack for agent work.
+## Console rules
 
 | Rule                                                                                                                                                                                                | What enforces it                                           |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Nontrivial design that crosses a function boundary goes through the architect skill before implementation.                                                                                          | Judgment. The skill lives in the pstack plugin.            |
-| A contested design goes through the interrogate skill before it ships.                                                                                                                              | Judgment. Reviewers do not auto-apply changes.             |
-| A repeated agent mistake goes through the correct skill. Fix it in architecture, then types, then lint, then a test. Write the rule here only after those levels cannot hold it.                    | This table. Add a row when the operator corrects a repeat. |
 | Visual parity is checked on the running app against reference images. Reference images are local-only and never committed. No AWS screenshots, logos, or trademarks go in the repo.                 | Review of the diff.                                        |
-| All coding and dev work follows pstack's poteto-mode style. Read the poteto-mode skill first. Subagents run with effort high. Cursor cloud agents are never used.                                   | Judgment and review of the PR.                             |
 | The header shows the VWS wordmark and substitute icons. Do not add an AWS logo, an AWS wordmark, or original icon files. Service menu names stay EC2, EBS, S3, VPC, and the other reference labels. | Review of the diff and the screenshots.                    |
 
 # Website Reverse-Engineer Template
