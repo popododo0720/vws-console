@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { CircleCheck, CircleX } from "lucide-react";
+import { CircleCheck, CircleMinus } from "lucide-react";
 import { ADMIN_REGIONS_ACTION, adminNav } from "@/lib/console-data";
 import type { AdminRegionHealth, ApiError } from "@/lib/vws-api/adapter";
 import { cn } from "@/lib/utils";
@@ -28,7 +28,7 @@ export type RegionRow = {
 /** A value with the AWS status icon, a green check or a red cross; with no verdict it is plain text or a dash. */
 export function StatusText({ ok, text }: { ok: boolean | null; text: string }) {
   if (ok === null) return dash(text);
-  const Icon = ok ? CircleCheck : CircleX;
+  const Icon = ok ? CircleCheck : CircleMinus;
   return (
     <span className={cn("flex items-center gap-1", ok ? "text-[#037f0c]" : "text-[#d13212]")}>
       <Icon className="size-3.5" />
