@@ -25,7 +25,6 @@ export type RegionRow = {
   health: AdminRegionHealth | null;
 };
 
-/** A value with the AWS status icon, a green check or a red cross; with no verdict it is plain text or a dash. */
 export function StatusText({ ok, text }: { ok: boolean | null; text: string }) {
   if (ok === null) return dash(text);
   const Icon = ok ? CircleCheck : CircleMinus;
@@ -134,7 +133,6 @@ export function AdminRegionsView({
   );
 }
 
-/** The AWS console's access-denied alert, in place of an operator screen console-api refuses the caller. */
 export function AdminAccessDenied({ error }: { error: ApiError }) {
   const message = `You don't have permission to ${ADMIN_REGIONS_ACTION}. To request access, send this action name and the request ID below to your VWS administrator.`;
   return (
