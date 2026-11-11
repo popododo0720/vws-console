@@ -33,6 +33,8 @@ type ConsoleApi = {
   /** The browser-only resources of every region, for screens that count across regions. */
   dataset: Dataset;
   accountBuckets: readonly AccountBucket[];
+  /** The vws:Admin* actions console-api grants the signed-in caller; the operator menu needs one of them. */
+  adminActions: readonly string[];
   flash: ConsoleFlash | null;
   showFlash: (flash: ConsoleFlash) => void;
   clearFlash: () => void;
@@ -86,11 +88,13 @@ export function ConsoleProvider({
   identity = UNKNOWN,
   signIn = false,
   accountBuckets = [],
+  adminActions = [],
 }: {
   children: ReactNode;
   identity?: Identity;
   signIn?: boolean;
   accountBuckets?: readonly AccountBucket[];
+  adminActions?: readonly string[];
 }) {
   const [region, setRegion] = useState<string>(HOME_REGION);
   const [mode, setMode] = useState<Mode>("empty");
@@ -125,6 +129,7 @@ export function ConsoleProvider({
       natGateways,
       dataset: data,
       accountBuckets,
+      adminActions,
       flash,
       showFlash: setFlash,
       clearFlash: () => setFlash(null),
@@ -272,7 +277,7 @@ export function ConsoleProvider({
         }));
       },
     };
-  }, [accountBuckets, data, density, flash, identity.accountId, identity.userName, mode, region, signIn]);
+  }, [accountBuckets, adminActions, data, density, flash, identity.accountId, identity.userName, mode, region, signIn]);
 
   return <ConsoleContext.Provider value={api}>{children}</ConsoleContext.Provider>;
 }

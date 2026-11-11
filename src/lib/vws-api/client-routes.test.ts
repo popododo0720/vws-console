@@ -210,6 +210,15 @@ const rows: Row[] = [
     sent: [`POST ${api(`/addresses/${enc(ID)}/release`)}`],
   },
   { name: "deleteSnapshot", run: () => vws.deleteSnapshot(ID), sent: [`POST ${api(`/snapshots/${enc(ID)}/delete`)}`] },
+  { name: "getAdminPermissions", run: vws.getAdminPermissions, sent: [`GET ${api("/admin/permissions")}`] },
+  { name: "listAdminRegions", run: vws.listAdminRegions, sent: [`GET ${api("/admin/regions")}`] },
+  { name: "listAdminAwsAccounts", run: vws.listAdminAwsAccounts, sent: [`GET ${api("/admin/aws-accounts")}`] },
+  { name: "getAdminRegion", run: () => vws.getAdminRegion(ID), sent: [`GET ${api(`/admin/regions/${enc(ID)}`)}`] },
+  {
+    name: "getAdminRegionHealth",
+    run: () => vws.getAdminRegionHealth(ID),
+    sent: [`GET ${api(`/admin/regions/${enc(ID)}/health`)}`],
+  },
   {
     name: "login",
     run: () => vws.login({ account: "1", userName: "root", password: "p" }),
