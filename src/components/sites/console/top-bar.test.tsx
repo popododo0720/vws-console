@@ -41,6 +41,20 @@ describe("TopBar account menu", () => {
     expect(screen.queryByRole("menuitem", { name: "Sign out" })).toBeNull();
   });
 
+  it("lists Regions under Services only for a caller granted vws:AdminListRegions", () => {
+    const bar = (adminActions: string[]) => (
+      <ConsoleProvider adminActions={adminActions}>
+        <TopBar onMenu={() => {}} />
+      </ConsoleProvider>
+    );
+    const view = render(bar(["vws:AdminListAwsAccounts"]));
+    fireEvent.click(screen.getByRole("button", { name: "Services" }));
+    expect(screen.getByRole("menuitem", { name: "Instances" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Regions" })).toBeNull();
+    view.rerender(bar(["vws:AdminListRegions"]));
+    expect(screen.getByRole("menuitem", { name: "Regions" }).getAttribute("href")).toBe("/admin/regions");
+  });
+
   it("links an account bucket to its page and ignores sample buckets", () => {
     const name = parseBucketName("logs-1");
     if (!name) throw new Error("logs-1");

@@ -4,7 +4,7 @@ import { logoutAction } from "@/app/actions/auth";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Bell, CircleQuestionMark, Globe, LayoutGrid, Search, Settings, SquareTerminal } from "lucide-react";
-import { linksIn, navTrees } from "@/lib/console-data";
+import { ADMIN_REGIONS_ACTION, adminNav, linksIn, navTrees } from "@/lib/console-data";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { Mark, MenuButton, MenuChevron, PanelDialog } from "@/components/sites/console/ui";
 
@@ -15,16 +15,21 @@ const pageLinks = Array.from(
     ),
   ).values(),
 );
+const adminLinks = linksIn(adminNav);
 
 export function TopBar({ onMenu }: { onMenu: () => void }) {
   const consoleApi = useConsole();
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
+  const links = useMemo(
+    () => (consoleApi.adminActions.includes(ADMIN_REGIONS_ACTION) ? [...pageLinks, ...adminLinks] : pageLinks),
+    [consoleApi.adminActions],
+  );
 
   const hits = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    const pages = pageLinks
+    const pages = links
       .filter((link) => link.label.toLowerCase().includes(q))
       .map((link) => ({ label: link.label, detail: "Page", href: link.href }));
     const resources = [
@@ -45,7 +50,7 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
       })),
     ].filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(q));
     return [...pages, ...resources].slice(0, 8);
-  }, [consoleApi.accountBuckets, consoleApi.instances, consoleApi.volumes, query]);
+  }, [consoleApi.accountBuckets, consoleApi.instances, consoleApi.volumes, links, query]);
 
   return (
     <header className="flex h-10 shrink-0 items-center gap-2 bg-[#161d26] px-3 text-white">
@@ -68,7 +73,7 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
               <span className="sr-only">Services</span>
             </span>
           }
-          items={pageLinks.map((link) => ({ label: link.label, href: link.href }))}
+          items={links.map((link) => ({ label: link.label, href: link.href }))}
         />
       </div>
       <div className="relative mx-2 hidden min-w-0 flex-1 sm:block">
@@ -143,7 +148,7 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
               <span className="sr-only">Help</span>
             </span>
           }
-          items={pageLinks.map((link) => ({ label: link.label, href: link.href }))}
+          items={links.map((link) => ({ label: link.label, href: link.href }))}
         />
         <MenuButton
           align="right"
