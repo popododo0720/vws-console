@@ -50,6 +50,15 @@ import {
   toStoredKeyPair,
   toVolume,
   toVpc,
+  parseAdminAwsAccounts,
+  parseAdminPermissions,
+  parseAdminRegions,
+  toAdminRegion,
+  toAdminRegionHealth,
+  unknownHealth,
+  type AdminAwsAccount,
+  type AdminRegion,
+  type AdminRegionHealth,
   type ApiError,
   type ApiResult,
   type Image,
@@ -745,6 +754,29 @@ export const releaseAddress = (allocationId: string) => mutate(route("/addresses
 
 export const listSnapshots = (): Promise<ApiResult<Snapshot[]>> => listAll(route("/snapshots"), parseSnapshots);
 export const deleteSnapshot = (id: string) => mutate(route("/snapshots/{id}/delete", { id }));
+
+/**
+ * The vws:Admin* actions the operator menu may show. Empty when console-api grants none (its 403 for a caller who
+ * is not an administrator) or the read failed: the menu stays hidden, and each admin page reports its own error.
+ */
+export async function getAdminPermissions(): Promise<string[]> {
+  const result = await getOne(route("/admin/permissions"), parseAdminPermissions);
+  return result.ok && result.value ? result.value : [];
+}
+
+export const listAdminRegions = (): Promise<ApiResult<AdminRegion[]>> =>
+  listAll(route("/admin/regions"), parseAdminRegions);
+export const listAdminAwsAccounts = (): Promise<ApiResult<AdminAwsAccount[]>> =>
+  listAll(route("/admin/aws-accounts"), parseAdminAwsAccounts);
+export const getAdminRegion = (name: string): Promise<ApiResult<AdminRegion | null>> =>
+  getOne(route("/admin/regions/{name}", { name }), toAdminRegion);
+
+/** Never fails: a reading console-api did not return has status "unknown" and the reason as its last error. */
+export async function getAdminRegionHealth(name: string): Promise<AdminRegionHealth> {
+  const result = await getOne(route("/admin/regions/{name}/health", { name }), toAdminRegionHealth);
+  if (!result.ok) return unknownHealth(result.error);
+  return result.value ?? unknownHealth({ code: "NotFound", message: "registration not found", requestId: null });
+}
 
 export type LoginInput = { account: string; userName: string; password: string; mfaCode?: string };
 

@@ -403,6 +403,93 @@ export function firstItem(body: unknown, key: string): string {
   return Array.isArray(items) && items.length > 0 ? str(obj(items[0])[key]) : "";
 }
 
+/** One registered Proxmox cluster (vws-console-api internal/admin/store Region). tokenSecret is secretLabel's text. */
+export type AdminRegion = {
+  name: string;
+  clusterName: string;
+  pveApiUrl: string;
+  hasCa: boolean;
+  tokenId: string;
+  tokenSecret: string;
+  regionEndpoint: string;
+  zones: { letter: string; nodes: string[] }[];
+};
+
+/** A live reading of GET /admin/regions/{name}/health; "unknown" is the console's status for one it did not get. */
+export type AdminRegionHealth = {
+  status: "ok" | "unreachable" | "unknown";
+  quorate: boolean;
+  leader: string;
+  nodes: { name: string; online: boolean }[];
+  lastError: { time: string; message: string } | null;
+  checkedAt: string;
+};
+
+export type AdminAwsAccount = { id: string; allowedRegions: string[] };
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function objects(value: unknown): Json[] {
+  return Array.isArray(value) ? value.map(obj) : [];
+}
+
+/**
+ * A write-only secret as the console shows it: "Set" and the first 8 hex digits of its SHA-256, which is all
+ * console-api describes. Nothing else passes, so a secret value it must never send cannot reach a page.
+ */
+function secretLabel(value: unknown): string {
+  const fingerprint = str(obj(value).fingerprint);
+  if (obj(value).set !== true) return "Not set";
+  return /^[0-9a-f]{8}$/.test(fingerprint) ? `Set · ${fingerprint}` : "Set";
+}
+
+export function toAdminRegion(item: Json): AdminRegion {
+  const name = str(item.name);
+  if (!name) throw new Error("region name");
+  return {
+    name,
+    clusterName: str(item.clusterName),
+    pveApiUrl: str(item.pveApiUrl),
+    hasCa: str(item.caPem) !== "",
+    tokenId: str(item.tokenId),
+    tokenSecret: secretLabel(item.tokenSecret),
+    regionEndpoint: str(item.regionEndpoint),
+    zones: objects(item.zones).map((zone) => ({ letter: str(zone.letter), nodes: strings(zone.nodes) })),
+  };
+}
+
+export function toAdminRegionHealth(item: Json): AdminRegionHealth {
+  const status = str(item.status);
+  if (status !== "ok" && status !== "unreachable") throw new Error(`unknown region status ${status}`);
+  const lastError = item.lastError ? obj(item.lastError) : null;
+  return {
+    status,
+    quorate: item.quorate === true,
+    leader: str(item.leader),
+    nodes: objects(item.nodes).map((node) => ({ name: str(node.name), online: node.online === true })),
+    lastError: lastError ? { time: str(lastError.time), message: str(lastError.message) } : null,
+    checkedAt: str(item.checkedAt),
+  };
+}
+
+/** The reading shown when console-api returned none: why, with the code and request ID an operator can quote. */
+export function unknownHealth(error: ApiError): AdminRegionHealth {
+  const message = `${error.message} (${error.code} · Request ID ${error.requestId ?? "—"})`;
+  return { status: "unknown", quorate: false, leader: "", nodes: [], lastError: { time: "", message }, checkedAt: "" };
+}
+
+export const parseAdminRegions = (page: unknown) => list(page).map(toAdminRegion);
+export const parseAdminAwsAccounts = (page: unknown): AdminAwsAccount[] =>
+  list(page).map((item) => ({ id: str(item.awsAccountId), allowedRegions: strings(item.allowedRegions) }));
+
+export function parseAdminPermissions(body: unknown): string[] {
+  const permissions = obj(body).permissions;
+  if (!Array.isArray(permissions)) throw new Error("expected permissions");
+  return strings(permissions);
+}
+
 /** The signed-in user and account shown in the account menu. A missing field is "—", like the rest of the console. */
 export type Identity = { userName: string; accountId: string };
 

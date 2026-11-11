@@ -32,6 +32,7 @@ import {
   deleteKeyPair,
   deleteBucket,
   deleteObject,
+  getAdminPermissions,
   getBucket,
   getObject,
   getObjectMeta,
@@ -147,6 +148,15 @@ describe("console-api client", () => {
       ok: false,
       error: { code: "InvalidArgument", message: "must be an ipv4 network", requestId: "r-1" },
     });
+  });
+
+  it("reads the admin permissions and takes a 403 or an unreadable answer as none", async () => {
+    const granted = respond(200, { permissions: ["vws:AdminListRegions", 7] });
+    serve(granted, respond(403, { permissions: [] }), respond(200, { items: [] }));
+    expect(await getAdminPermissions()).toEqual(["vws:AdminListRegions"]);
+    expect(await getAdminPermissions()).toEqual([]);
+    expect(await getAdminPermissions()).toEqual([]);
+    expect(new Set(calls.map((c) => c.url))).toEqual(new Set(["http://api.test/api/v1/admin/permissions"]));
   });
 
   it("reports missing configuration without calling the API", async () => {
