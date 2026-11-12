@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { isInstanceId } from "@/lib/instance-id";
 import { withActionSpan } from "@/lib/ops/span";
 import * as vws from "@/lib/vws-api/client";
 import { fileProblem, objectKeyProblem } from "@/lib/object-upload";
@@ -73,8 +74,6 @@ export async function terminateInstancesAction(ids: string[]) {
     return errorOf(vws.instanceBatch("terminate", ids));
   });
 }
-
-const isInstanceId = (id: unknown): id is string => typeof id === "string" && /^i-[0-9a-f]{8,17}$/.test(id);
 
 /** One operation per instance, in order; the first failure stops the rest. */
 export async function rebootInstancesAction(ids: unknown): Promise<ApiError | null> {

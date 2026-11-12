@@ -86,6 +86,9 @@ jobs:
       - name: E2E smoke
         run: npm run test:e2e
 
+      - name: Standalone runner layout and websocket relay
+        run: npm run test:e2e:standalone
+
       # The OTel e2e runs the pinned OpenTelemetry Collector that scripts/otelcol.sh downloads and checks by sha256.
       - name: Cache the OpenTelemetry Collector
         uses: actions/cache@v6
