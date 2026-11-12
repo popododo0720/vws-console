@@ -45,6 +45,8 @@ test("unauthenticated and malformed upgrades are refused before dialing", async 
     "/api/v1/instances/i-123/console?kind=vnc",
     "/api/v1/instances/i-00000001/console?kind=serial&extra=secret",
     "/api/v1/instances/i-00000001/console?kind=vnc&kind=serial",
+    "/api/v1/instances/i-00000001/console?kind=vnc&region=a&region=b",
+    "/api/v1/instances/i-00000001/console?kind=vnc&region=BAD",
   ])
     expect((await refusal(path, `vws_session=${secret}`)).status).toBe(400);
   expect((await refusal("/other", `vws_session=${secret}`)).status).toBe(404);
@@ -124,6 +126,32 @@ test("binary banner and echo, serial text, repeated connections, and browser clo
     expect(seen.path).not.toContain(secret);
   }
   await expect.poll(async () => (await (await request.get(`${api}/__stats`)).json()).active).toBe(0);
+});
+
+test("a region on the websocket reaches console-api only as X-Vws-Region", async ({
+  context,
+  page,
+  baseURL,
+  request,
+}) => {
+  await context.addCookies([{ name: "vws_session", value: secret, url: baseURL! }]);
+  await page.goto("/healthz");
+  for (const path of [`${route}&region=pve-seoul`, route])
+    await page.evaluate(async (path) => {
+      await new Promise<void>((resolve, reject) => {
+        const ws = new WebSocket(`${location.origin.replace("http", "ws")}${path}`);
+        const deadline = setTimeout(() => reject(new Error("websocket timed out")), 5000);
+        ws.onopen = () => ws.close();
+        ws.onclose = () => {
+          clearTimeout(deadline);
+          resolve();
+        };
+      });
+    }, path);
+  const { seen } = await (await request.get(`${api}/__stats`)).json();
+  expect(seen).toHaveLength(2);
+  expect(seen[0]).toMatchObject({ region: "pve-seoul", path: route });
+  expect(seen[1].region).toBeUndefined();
 });
 
 test("upstream loss closes the browser and the next connection is independent", async ({

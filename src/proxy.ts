@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { METRICS_PATH, recordHttpRequest } from "@/lib/ops/metrics";
 import { withSpan } from "@/lib/ops/span";
+import { isRegionName } from "@/lib/region-name";
 import { logAuth } from "@/lib/vws-api/log";
 import { iamState } from "@/lib/vws-api/mode";
 import { API_SESSION_COOKIE, CSRF_COOKIE, SESSION_COOKIE } from "@/lib/vws-api/session-cookies";
@@ -50,12 +51,9 @@ async function sessionRejected(base: string, session: string): Promise<boolean> 
   });
 }
 
-/** The names console-api takes in X-Vws-Region; anything else in ?region= is not carried to the next page. */
-const REGION_NAME = /^[a-z0-9-]{1,63}$/;
-
 /**
  * The same URL with the region of the page the browser came from. Links and router calls name no region,
- * so without this a choice would last for one page.
+ * so without this a choice would last for one page. A ?region= that is not a region name is not carried.
  */
 function withInheritedRegion(request: NextRequest): URL | null {
   if (request.method !== "GET" || request.nextUrl.searchParams.has("region")) return null;
@@ -65,7 +63,7 @@ function withInheritedRegion(request: NextRequest): URL | null {
   const region = from.searchParams.get("region");
   // Not nextUrl.host: behind a reverse proxy that is the address Next listens on, not the one the browser used.
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (!region || !REGION_NAME.test(region) || from.host !== host) return null;
+  if (!region || !isRegionName(region) || from.host !== host) return null;
   const url = request.nextUrl.clone();
   url.searchParams.set("region", region);
   return url;

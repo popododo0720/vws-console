@@ -11,6 +11,7 @@ cp -a .next/static/. "$runner/.next/static/"
 cp -a public "$runner/public"
 cp -a server "$runner/server"
 cp src/lib/instance-id.ts "$runner/src/lib/instance-id.ts"
+cp src/lib/region-name.ts "$runner/src/lib/region-name.ts"
 cp src/lib/vws-api/session-cookies.ts "$runner/src/lib/vws-api/session-cookies.ts"
 
 # The config runs Docker's CMD in the copied directory and probes /healthz before the relay scenarios.
