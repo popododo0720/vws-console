@@ -13,7 +13,8 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers(nav.path === null ? {} : { "x-vws-path": nav.path }),
 }));
 
-import { createVpc, getInstance, listInstances, listRegions } from "./client";
+import { createVpc, getInstance, listInstances, listRegions, getCapabilities } from "./client";
+import { pveLiveBox } from "./testdata/capabilities";
 
 type Call = { method: string; path: string; region: string | undefined; signal: unknown };
 
@@ -25,13 +26,14 @@ const listed = [
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 const denied = () => json(403, { error: { code: "PermissionDenied", message: "ec2:DescribeRegions is not allowed" } });
 
-function serve(regions: () => Response = () => json(200, { items: listed })) {
+function serve(regions: () => Response = () => json(200, { items: listed }), capabilities = () => json(200, {})) {
   const calls: Call[] = [];
   vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
     const path = new URL(url).pathname.replace("/api/v1", "");
     const region = (init.headers as Record<string, string>)["x-vws-region"];
     calls.push({ method: init.method ?? "GET", path, region, signal: init.signal });
     if (path === "/regions") return regions();
+    if (path.endsWith("/capabilities")) return capabilities();
     if (path === "/vpcs") return json(202, { operation: { id: "op-1", state: "running" }, items: [] });
     if (path === "/operations/op-1") return json(200, { id: "op-1", state: "succeeded" });
     return json(200, { items: [] });
@@ -110,6 +112,48 @@ describe("the region a console-api call is sent to", () => {
       await listInstances();
       expect(sent(calls)).toEqual(["all"]);
     }
+  });
+
+  it("reads the capability document of the page's region, with a timeout", async () => {
+    nav.path = "/compute/launch?region=pve-seoul-1";
+    const calls = serve(undefined, () => json(200, pveLiveBox));
+    const read = await getCapabilities();
+    expect(read.ok && read.value?.instanceTypes.map((type) => type.id)).toEqual(["vws.small", "vws.medium"]);
+    expect(read.ok && read.value?.zones).toEqual([{ name: "pve-lab-1a", state: "available" }]);
+    const call = calls.find((item) => item.path === "/regions/pve-seoul-1/capabilities");
+    expect(call).toMatchObject({ method: "GET", region: "pve-seoul-1" });
+    expect(call?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("asks for no document under All regions or with no region listed", async () => {
+    for (const [path, regions] of [
+      ["/compute/launch?region=all", undefined] as const,
+      ["/compute/launch", denied] as const,
+    ]) {
+      nav.path = path;
+      const calls = serve(regions);
+      expect(await getCapabilities()).toEqual({ ok: true, value: null });
+      expect(calls.map((call) => call.path)).toEqual(["/regions"]);
+    }
+  });
+
+  it("retries a transient failure of the capability read, then answers the document", async () => {
+    const replies = [() => json(503, {}), () => json(200, pveLiveBox)];
+    const calls = serve(undefined, () => (replies.shift() ?? denied)());
+    vi.useFakeTimers();
+    const read = getCapabilities();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect((await read).ok).toBe(true);
+    expect(calls.filter((call) => call.path.endsWith("/capabilities"))).toHaveLength(2);
+  });
+
+  it.each([
+    ["is refused", denied, "PermissionDenied"],
+    ["is not a capability document", () => json(200, { items: [] }), "MalformedResponse"],
+    ["is not JSON", () => new Response("<html>", { status: 200 }), "MalformedResponse"],
+  ])("answers an error, never an empty document, when the capability read %s", async (_case, reply, code) => {
+    serve(undefined, reply);
+    expect(await getCapabilities()).toMatchObject({ ok: false, error: { code } });
   });
 
   it("answers one available region and calls nothing when no console-api is configured", async () => {

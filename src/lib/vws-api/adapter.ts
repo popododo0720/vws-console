@@ -119,6 +119,66 @@ export function pickRegion(regions: readonly Region[], choice: string | null): s
   return regions[0]?.name ?? null;
 }
 
+/** How a region serves one action. `reason` is the sentence a user reads; `reasonCode` is for the console. */
+export type ActionCapability = {
+  state: "supported" | "partial" | "unsupported" | "empty";
+  reasonCode: string;
+  reason: string;
+};
+
+export type RegionZone = { name: string; state: string };
+
+/** GET /regions/{region}/capabilities: the one source for which controls are enabled and what a form offers. */
+export type RegionCapabilities = {
+  region: string;
+  actions: Record<string, ActionCapability>;
+  zones: RegionZone[];
+  instanceTypes: InstanceType[];
+};
+
+const ACTION_STATES = ["supported", "partial", "unsupported", "empty"] as const;
+
+/** console-api's own answer for a mutation a document does not name (resource.RegionCapabilities.Mutation). */
+const NOT_DECLARED: ActionCapability = {
+  state: "unsupported",
+  reasonCode: "NotDeclared",
+  reason: "not declared by the region",
+};
+
+/** A Go nil slice arrives as null; any other value that is not a list is a broken document. */
+function optionalList(value: unknown): Json[] {
+  if (value === null || value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error("expected a list");
+  return value.map(obj);
+}
+
+/**
+ * Throws on a document without a region or with the wrong shape, so a broken answer is an error and never an empty
+ * document. An action whose state this console does not know is left out, which makes it unsupported.
+ */
+export function parseCapabilities(doc: unknown): RegionCapabilities {
+  const { region, actions, zones, instanceTypes } = obj(doc);
+  const actionsOk =
+    actions === null || actions === undefined || (typeof actions === "object" && !Array.isArray(actions));
+  if (typeof region !== "string" || region === "" || !actionsOk) throw new Error("expected a capability document");
+  return {
+    region,
+    actions: Object.fromEntries(
+      Object.entries(obj(actions)).flatMap(([name, value]): [string, ActionCapability][] => {
+        const { state, reasonCode, reason } = obj(value);
+        const known = ACTION_STATES.find((item) => item === state);
+        return known ? [[name, { state: known, reasonCode: str(reasonCode), reason: str(reason) }]] : [];
+      }),
+    ),
+    zones: optionalList(zones).map((zone) => ({ name: str(zone.zoneName), state: str(zone.state) })),
+    instanceTypes: optionalList(instanceTypes).map(toInstanceType),
+  };
+}
+
+export function mutationCapability(capabilities: RegionCapabilities, action: string): ActionCapability {
+  return Object.hasOwn(capabilities.actions, action) ? capabilities.actions[action] : NOT_DECLARED;
+}
+
 const BUCKET_NAME = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 const RESERVED_PREFIX = ["xn--", "sthree-", "amzn-s3-demo-"] as const;
 const RESERVED_SUFFIX = ["-s3alias", "--ol-s3", "--x-s3", "--table-s3"] as const;

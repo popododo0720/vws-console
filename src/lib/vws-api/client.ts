@@ -25,6 +25,7 @@ import type {
   Vpc,
 } from "@/types/console";
 import {
+  ALL_REGIONS,
   firstItem,
   parseAccountBuckets,
   parseAddresses,
@@ -38,6 +39,7 @@ import {
   toObjectContent,
   nextPageToken,
   parseApiError,
+  parseCapabilities,
   parseImages,
   parseKeyPairs,
   parseInstanceTypes,
@@ -72,6 +74,7 @@ import {
   type LaunchRequest,
   type Operation,
   type Region,
+  type RegionCapabilities,
 } from "./adapter";
 import {
   parseIdempotencyKey,
@@ -389,6 +392,23 @@ export const listRegions = cache(async (): Promise<ApiResult<Region[]>> => {
   if (!result.ok) return { ok: false, error: result.error };
   try {
     return { ok: true, value: parseRegions(result.value.json) };
+  } catch {
+    return { ok: false, error: malformed(path.path) };
+  }
+});
+
+/**
+ * What the page's region supports, read once for a page render. Null when the page names no single region (All
+ * regions, or none listed): console-api has no document for that, so nothing is known to be supported there.
+ */
+export const getCapabilities = cache(async (): Promise<ApiResult<RegionCapabilities | null>> => {
+  const region = await regionHeader();
+  if (region === null || region === ALL_REGIONS) return { ok: true, value: null };
+  const path = route("/regions/{region}/capabilities", { region });
+  const result = await request("GET", path, undefined, { region });
+  if (!result.ok) return { ok: false, error: result.error };
+  try {
+    return { ok: true, value: parseCapabilities(result.value.json) };
   } catch {
     return { ok: false, error: malformed(path.path) };
   }

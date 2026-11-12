@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import {
+  mutationCapability,
   nextPageToken,
   parseAccountBuckets,
   parseApiError,
   parseBucketName,
+  parseCapabilities,
   parseStoredBucketName,
   parseImages,
   parseInstances,
@@ -26,6 +28,7 @@ import {
   identityFromSession,
 } from "./adapter";
 import { makeRule } from "@/lib/security-group-rules";
+import { awsRegion, pveLiveBox } from "./testdata/capabilities";
 
 const instance = {
   instanceId: "i-72a10f87b54bdd869",
@@ -505,6 +508,53 @@ describe("object content", () => {
       expect(() => toObjectContent(reply(body, 1), bucket, "a.bin"), body).toThrow();
     }
     expect(toObjectContent(reply("QQ==", 1), bucket, "a.bin").bytes).toEqual(new Uint8Array([65]));
+  });
+});
+
+describe("parseCapabilities", () => {
+  const notDeclared = { state: "unsupported", reasonCode: "NotDeclared", reason: "not declared by the region" };
+
+  it("reads zones, instance types and action states from a pve and an AWS document", () => {
+    const pve = parseCapabilities(pveLiveBox);
+    expect(pve.zones).toEqual([{ name: "pve-lab-1a", state: "available" }]);
+    expect(pve.instanceTypes).toEqual([
+      { id: "vws.small", vcpus: 1, memoryMiB: 1024 },
+      { id: "vws.medium", vcpus: 2, memoryMiB: 4096 },
+    ]);
+    expect(mutationCapability(pve, "ec2:RunInstances")).toEqual({
+      state: "unsupported",
+      reasonCode: "ReadOnly",
+      reason: "read-only",
+    });
+    const aws = parseCapabilities(awsRegion);
+    expect(aws.zones).toEqual([]);
+    expect(mutationCapability(aws, "ec2:RunInstances")).toEqual({ state: "supported", reasonCode: "", reason: "" });
+  });
+
+  it("makes an action unsupported when the document does not name it or gives it an unknown state", () => {
+    const actions = { "ec2:CreateVpc": { state: "later", reason: "soon" }, "ec2:CreateSubnet": 7 };
+    const doc = parseCapabilities({ region: "r-1", actions, zones: null, instanceTypes: null });
+    for (const action of ["ec2:CreateVpc", "ec2:CreateSubnet", "ec2:RunInstances", "constructor"]) {
+      expect(mutationCapability(doc, action)).toEqual(notDeclared);
+    }
+    expect([doc.zones, doc.instanceTypes]).toEqual([[], []]);
+    expect(mutationCapability(parseCapabilities({ region: "r-1", actions: null }), "ec2:RunInstances")).toEqual(
+      notDeclared,
+    );
+  });
+
+  it.each([
+    null,
+    [],
+    {},
+    { items: [] },
+    { region: "", actions: {} },
+    { region: "r-1", actions: [] },
+    { region: "r-1", actions: "all" },
+    { region: "r-1", zones: "a" },
+    { region: "r-1", instanceTypes: {} },
+  ])("rejects the malformed document %j", (doc) => {
+    expect(() => parseCapabilities(doc)).toThrow();
   });
 });
 
