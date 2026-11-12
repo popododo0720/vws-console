@@ -57,12 +57,14 @@ describe("proxy", () => {
       request.headers.set("x-vws-path", "/forged?region=all");
       const response = await proxy(request);
       expect(response.headers.get("x-middleware-request-x-vws-path")).toBe("/storage/volumes?region=pve-seoul-1");
+      expect(response.headers.get("cache-control")).toBe("no-store");
     }
   });
 
   it("keeps the region of the page the browser came from, before it asks for sign-in", async () => {
     const response = await proxy(req("/storage/volumes?tab=x", {}, { referer: FROM_SEOUL }));
     expect(response.headers.get("location")).toBe("http://console.test/storage/volumes?tab=x&region=pve-seoul-1");
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
   it("inherits no region for a write, a named region, another host, a malformed name or the login page", async () => {

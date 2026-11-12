@@ -71,11 +71,19 @@ function withInheritedRegion(request: NextRequest): URL | null {
   return url;
 }
 
-/** Passes the request on with the page path, which the server reads for the sign-in return and the region. */
+/**
+ * Passes the request on with the page path, which the server reads for the sign-in return and the region.
+ *
+ * The answer is marked no-store. Next redirects an RSC request that lacks its _rsc to the same URL with one, and
+ * that redirect has no cache headers: a browser stores it under the page's own URL and replays it on Back, which
+ * leaves _rsc in the address bar. The redirect above sends an RSC request exactly there.
+ */
 function forward(request: NextRequest) {
   const headers = new Headers(request.headers);
   headers.set("x-vws-path", `${request.nextUrl.pathname}${request.nextUrl.search}`);
-  return NextResponse.next({ request: { headers } });
+  const response = NextResponse.next({ request: { headers } });
+  response.headers.set("cache-control", "no-store");
+  return response;
 }
 
 /**
@@ -94,7 +102,7 @@ export async function proxy(request: NextRequest) {
   }
   recordHttpRequest(request.method);
   const inherited = request.nextUrl.pathname === "/login" ? null : withInheritedRegion(request);
-  if (inherited) return NextResponse.redirect(inherited);
+  if (inherited) return NextResponse.redirect(inherited, { headers: { "cache-control": "no-store" } });
   const base = process.env.VWS_CONSOLE_API_URL;
   // IAM off (the default) uses the server-side token and asks for no sign-in; without console-api
   // there is nothing to sign in to either, and the screens report ConsoleNotConfigured.
