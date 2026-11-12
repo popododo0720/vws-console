@@ -1,15 +1,26 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { deleteRegionAction } from "@/app/actions/admin";
 import { adminNav } from "@/lib/console-data";
 import { formatEc2Time } from "@/lib/ebs";
 import type { AdminRegion, AdminRegionHealth, ApiError } from "@/lib/vws-api/adapter";
 import { cn } from "@/lib/utils";
-import { StatusText, adminCrumb, healthFields } from "@/components/sites/console/admin-regions-view";
-import { useApiAction } from "@/components/sites/console/api-action";
-import { RefreshIconButton } from "@/components/sites/console/ebs-form-parts";
+import { StatusText, adminCrumb, healthFields, regionHref } from "@/components/sites/console/admin-regions-view";
+import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { RefreshIconButton, secondaryPill } from "@/components/sites/console/ebs-form-parts";
 import { ResourceDetail } from "@/components/sites/console/resource-detail";
-import { CopyText, DetailGrid, dash } from "@/components/sites/console/ui";
+import {
+  CopyText,
+  DetailGrid,
+  FieldLabel,
+  OrangeButton,
+  OutlineButton,
+  PanelDialog,
+  dash,
+} from "@/components/sites/console/ui";
 
 const tabs = [
   { id: "status", label: "Status" },
@@ -29,6 +40,7 @@ export function AdminRegionDetailView({
 }) {
   const action = useApiAction();
   const [tab, setTab] = useState("status");
+  const [deleting, setDeleting] = useState(false);
   const zones = region?.zones ?? [];
   return (
     <ResourceDetail
@@ -41,6 +53,18 @@ export function AdminRegionDetailView({
       loadError={loadError}
       info="A Proxmox cluster registered with this console, read from the VWS admin API."
       missing={`${name} is not a registered region.`}
+      actions={
+        region ? (
+          <>
+            <Link href={`${regionHref(name)}/edit`} className={`${secondaryPill} inline-flex items-center`}>
+              Edit
+            </Link>
+            <OutlineButton className={secondaryPill} onClick={() => setDeleting(true)}>
+              Delete
+            </OutlineButton>
+          </>
+        ) : undefined
+      }
       items={
         region
           ? [
@@ -108,6 +132,48 @@ export function AdminRegionDetailView({
           </div>
         )}
       </section>
+      {deleting ? <DeleteRegionDialog name={name} onClose={() => setDeleting(false)} /> : null}
     </ResourceDetail>
+  );
+}
+
+/** Mount it to open it. Delete stays disabled until the region name is typed. */
+function DeleteRegionDialog({ name, onClose }: { name: string; onClose: () => void }) {
+  const router = useRouter();
+  const action = useApiAction();
+  const [typed, setTyped] = useState("");
+  const remove = () =>
+    action.run(
+      () => deleteRegionAction(name),
+      () => router.push("/admin/regions"),
+    );
+  return (
+    <PanelDialog
+      open
+      title={`Delete ${name}?`}
+      onClose={onClose}
+      footer={
+        <>
+          <OutlineButton onClick={onClose}>Cancel</OutlineButton>
+          <OrangeButton disabled={typed !== name || action.pending} onClick={remove}>
+            Delete
+          </OrangeButton>
+        </>
+      }
+    >
+      <p className="mb-3">
+        Delete {name} permanently? This removes its registration from VWS and does not change the Proxmox cluster. This
+        action cannot be undone.
+      </p>
+      <ApiErrorAlert error={action.error} title="The region could not be deleted" />
+      <FieldLabel>To confirm deletion, enter the region name in the text input field.</FieldLabel>
+      <input
+        autoFocus
+        className="field"
+        aria-label="Confirm deletion"
+        value={typed}
+        onChange={(event) => setTyped(event.target.value)}
+      />
+    </PanelDialog>
   );
 }

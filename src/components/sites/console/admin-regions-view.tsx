@@ -1,19 +1,21 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { CircleCheck, CircleMinus } from "lucide-react";
 import { ADMIN_REGIONS_ACTION, adminNav } from "@/lib/console-data";
 import type { AdminRegionHealth, ApiError } from "@/lib/vws-api/adapter";
 import { cn } from "@/lib/utils";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { RefreshIconButton } from "@/components/sites/console/ebs-form-parts";
+import { RefreshIconButton, primaryPill } from "@/components/sites/console/ebs-form-parts";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { DetailLink } from "@/components/sites/console/resource-detail";
 import { ResourceTable, type Column } from "@/components/sites/console/resource-table";
 import { Shell } from "@/components/sites/console/shell";
-import { dash } from "@/components/sites/console/ui";
+import { dash, orangeLinkClass } from "@/components/sites/console/ui";
 
 export const adminCrumb = { label: "Administration", href: "/admin/regions" };
+export const regionHref = (name: string) => `/admin/regions/${encodeURIComponent(name)}`;
 
 /** One list row: a registered Proxmox cluster, or a region an AWS account may use. AWS has no health reading. */
 export type RegionRow = {
@@ -81,12 +83,7 @@ const columns: Column<RegionRow>[] = [
     header: "Region name",
     minWidth: 180,
     sortValue: (row) => row.name,
-    cell: (row) =>
-      row.type === "Proxmox" ? (
-        <DetailLink href={`/admin/regions/${encodeURIComponent(row.name)}`} id={row.name} />
-      ) : (
-        row.name
-      ),
+    cell: (row) => (row.type === "Proxmox" ? <DetailLink href={regionHref(row.name)} id={row.name} /> : row.name),
   },
   textColumn("type", "Type"),
   ...healthColumns.slice(0, 4),
@@ -113,7 +110,14 @@ export function AdminRegionsView({
         crumbs={[adminCrumb, { label: "Regions" }]}
         count={failed ? undefined : rows.length}
         info="Regions are the Proxmox clusters and the AWS account regions registered with this console."
-        actions={<RefreshIconButton label="Refresh regions" onClick={action.refresh} />}
+        actions={
+          <>
+            <RefreshIconButton label="Refresh regions" onClick={action.refresh} />
+            <Link href="/admin/regions/register" className={`${orangeLinkClass} ${primaryPill}`}>
+              Register region
+            </Link>
+          </>
+        }
       />
       <ApiErrorAlert error={regionsError} title="Proxmox regions could not be loaded" />
       <ApiErrorAlert error={accountsError} title="AWS account regions could not be loaded" />

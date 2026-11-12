@@ -1,9 +1,13 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import ListPage from "./page";
 import DetailPage from "./[name]/page";
+import EditPage from "./[name]/edit/page";
+import RegisterPage from "./register/page";
+
+const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
 
 vi.mock("@/app/actions/auth", () => ({ logoutAction: vi.fn() }));
 vi.mock("@/lib/vws-api/session", () => ({ currentSession: async () => ({ session: "sess-1", csrf: "csrf-1" }) }));
@@ -11,7 +15,7 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("next/server", () => ({ connection: async () => undefined }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/admin/regions",
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  useRouter: () => router,
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -38,17 +42,28 @@ const accounts = {
 };
 const failure = (code: string, message: string) => ({ error: { code, message }, requestId: "req-7" });
 
-/** The mocked admin API: one [status, body] per path under /api/v1/admin; any other path is not registered. */
-function adminApi(replies: Record<string, [number, unknown]>) {
-  vi.stubGlobal("fetch", async (url: string) => {
+type Reply = [number, unknown, HeadersInit?];
+const calls: { method: string; path: string; ifMatch?: string; body: unknown }[] = [];
+
+/** The mocked admin API: one [status, body, headers] per "METHOD path" or per path; requests are recorded in calls. */
+function adminApi(replies: Record<string, Reply>) {
+  vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => {
     const path = new URL(url).pathname.replace("/api/v1/admin", "");
-    const [status, body] = replies[path] ?? [404, failure("NotFound", "registration not found")];
-    return new Response(JSON.stringify(body), { status });
+    const method = init.method ?? "GET";
+    const ifMatch = (init.headers as Record<string, string>)["if-match"];
+    calls.push({ method, path, ifMatch, body: init.body ? JSON.parse(String(init.body)) : null });
+    const missing: Reply = [404, failure("NotFound", "registration not found")];
+    const [status, body, headers] = replies[`${method} ${path}`] ?? replies[path] ?? missing;
+    return new Response(JSON.stringify(body), { status, headers });
   });
 }
 
 const show = async (page: Promise<ReactElement>) => render(<ConsoleProvider>{await page}</ConsoleProvider>);
 const detail = (name = "pve-lab-1") => show(DetailPage({ params: Promise.resolve({ name }) }));
+const edit = () => EditPage({ params: Promise.resolve({ name: "pve-lab-1" }) });
+const saved: Reply = [200, region, { etag: '"3"' }];
+const fill = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+const click = (name: string) => fireEvent.click(screen.getByRole("button", { name }));
 const field = (label: string) => screen.getByText(label, { selector: "dt" }).nextElementSibling?.textContent;
 const cells = (name: string) =>
   within(screen.getByText(name).closest("tr")!)
@@ -67,6 +82,8 @@ describe("admin Regions pages on a mocked admin API", () => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    vi.resetAllMocks();
+    calls.length = 0;
   });
 
   it("lists Proxmox clusters with their health and AWS account regions with dashes", async () => {
@@ -154,6 +171,58 @@ describe("admin Regions pages on a mocked admin API", () => {
     const view = await detail();
     expect(field("API token secret")).toBe(label);
     expect(view.container.textContent).not.toContain(SECRET);
+  });
+
+  it("tests an unsaved form and shows each step as console-api reports it", async () => {
+    const steps = [
+      { name: "tls", result: "PASS", message: "PVE TLS certificate verified" },
+      { name: "version", result: "FAIL", message: "PVE version read failed" },
+      { name: "cluster_name", result: "SKIPPED", message: "previous step failed" },
+    ];
+    adminApi({ "/regions": [200, { items: [] }], "POST /regions/test": [200, { steps }] });
+    await show(RegisterPage());
+    fill("Region name", "pve-lab-2");
+    fill("API token secret", SECRET);
+    click("Test connection");
+    await screen.findByRole("table", { name: "Connection test steps" });
+    expect(steps.map((step) => cells(step.name))).toEqual(steps.map((step) => Object.values(step).join("|")));
+    const body = { name: "pve-lab-2", clusterName: "", zones: [], tokenSecret: SECRET };
+    expect(calls.at(-1)).toMatchObject({ method: "POST", path: "/regions/test", body });
+  });
+
+  it("opens the edit form with an empty secret input beside the fingerprint, and sends a secret only when typed", async () => {
+    adminApi({ "/regions/pve-lab-1": saved, "POST /regions/pve-lab-1/test": [200, { steps: [] }] });
+    const view = await show(edit());
+    expect(screen.getByLabelText("API token secret")).toHaveValue("");
+    expect(screen.getByText("Stored secret: Set · 3f9a2c1d")).toBeTruthy();
+    expect(view.container.innerHTML).not.toContain(SECRET);
+    click("Test connection");
+    await screen.findByRole("table", { name: "Connection test steps" });
+    expect(calls.at(-1)).toEqual({ method: "POST", path: "/regions/pve-lab-1/test", ifMatch: undefined, body: {} });
+    fill("API token secret", "typed-secret");
+    click("Save changes");
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/admin/regions/pve-lab-1"));
+    const body = { name: "pve-lab-1", clusterName: "lab", zones: region.zones, tokenSecret: "typed-secret" };
+    expect(calls.at(-1)).toMatchObject({ method: "PATCH", path: "/regions/pve-lab-1", ifMatch: '"3"', body });
+    expect(screen.getByLabelText("API token secret")).toHaveValue("");
+  });
+
+  it("shows the conflict alert for a 409 and reloads the region with its new ETag", async () => {
+    const conflict: Reply = [409, failure("Conflict", "registration already exists or changed")];
+    const api: Record<string, Reply> = { "/regions/pve-lab-1": saved, "PATCH /regions/pve-lab-1": conflict };
+    adminApi(api);
+    const view = await show(edit());
+    router.refresh.mockImplementation(async () => view.rerender(<ConsoleProvider>{await edit()}</ConsoleProvider>));
+    api["/regions/pve-lab-1"] = [200, { ...region, clusterName: "lab-renamed" }, { etag: '"4"' }];
+    fill("Cluster name", "mine");
+    click("Save changes");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The region could not be savedpve-lab-1 was changed since you opened it. The form now shows the latest saved values. Review them and save again.Conflict · Request ID req-7",
+    );
+    await waitFor(() => expect(screen.getByLabelText("Cluster name")).toHaveValue("lab-renamed"));
+    click("Save changes");
+    const sent = () => calls.filter((call) => call.method === "PATCH").map((call) => call.ifMatch);
+    await waitFor(() => expect(sent()).toEqual(['"3"', '"4"']));
   });
 
   it("says a region is not registered, and shows a failed read, instead of a blank page", async () => {

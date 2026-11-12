@@ -29,6 +29,7 @@ export function ResourceDetail({
   items,
   info = `A single ${kind} in the current region, read from the VWS API.`,
   missing = `${id} is not in this region.`,
+  actions,
   children,
 }: {
   tree: NavTree;
@@ -42,11 +43,12 @@ export function ResourceDetail({
   info?: string;
   /** The line under "<Kind> not found". */
   missing?: string;
+  actions?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <Shell tree={tree}>
-      <PageHeader crumbs={[...crumbs, { label: id }]} info={info} />
+      <PageHeader crumbs={[...crumbs, { label: id }]} info={info} actions={actions} />
       <ApiErrorAlert error={loadError} title={`The ${kind} could not be loaded`} />
       {!loadError && !found ? (
         <div className="px-4 py-6 text-[13px]">
