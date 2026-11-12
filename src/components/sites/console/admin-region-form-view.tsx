@@ -23,7 +23,7 @@ const TEXT_KEYS = ["name", "clusterName", "pveApiUrl", "regionEndpoint", "caPem"
 type Props = { name?: string; region: Versioned<AdminRegion> | null; loadError: ApiError | null };
 const STEP_OK: Record<string, boolean> = { PASS: true, FAIL: false };
 const inputClass = "field max-w-[783px]";
-const nameHint = "pve-, a location and a number, such as pve-seoul-1. It cannot be changed later.";
+const nameHint = "Lowercase: pve, a location and a number, joined by hyphens. It cannot be changed later.";
 const pemClass = "w-full max-w-[783px] rounded-lg border border-[#aab7b8] px-2.5 py-2 font-mono text-[13px]";
 
 /** The save state lives here, outside the keyed form, so the conflict alert survives the reload that remounts it. */
