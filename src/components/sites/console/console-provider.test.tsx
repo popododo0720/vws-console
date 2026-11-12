@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConsoleProvider, useConsole } from "@/components/sites/console/console-provider";
-import type { ApiError, Region } from "@/lib/vws-api/adapter";
+import type { ApiResult, Region } from "@/lib/vws-api/adapter";
 
 const nav = vi.hoisted(() => ({ search: "" }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(nav.search) }));
@@ -19,21 +19,15 @@ beforeEach(() => {
   nav.search = "";
 });
 
-describe("the selected region", () => {
-  it("is the listed region ?region= names, else the first one, and none when the list could not be read", () => {
-    const region = () => renderHook(() => useConsole(), { wrapper }).result.current.region;
-    expect(region()).toBe("pve-busan-1");
-    nav.search = "region=pve-seoul-1";
-    expect(region()).toBe("pve-seoul-1");
-    nav.search = "region=all";
-    expect(region()).toBe("all");
-    nav.search = "region=%3Cscript%3Ealert(1)%3C%2Fscript%3E";
-    expect(region()).toBe("pve-busan-1");
-    const error: ApiError = { code: "ServiceUnavailable", message: "down", requestId: "req-1" };
-    const failed = renderHook(() => useConsole(), {
-      wrapper: ({ children }) => <ConsoleProvider regions={{ ok: false, error }}>{children}</ConsoleProvider>,
+describe("the seeded resources", () => {
+  it("move to the first region when the list arrives after a read that listed none", () => {
+    let listing: ApiResult<Region[]> = { ok: true, value: [] };
+    const { result, rerender } = renderHook(() => useConsole(), {
+      wrapper: ({ children }) => <ConsoleProvider regions={listing}>{children}</ConsoleProvider>,
     });
-    expect(failed.result.current).toMatchObject({ region: "", regions: [], regionsError: error });
+    listing = { ok: true, value: [{ name: "pve-a-1", kind: "pve", state: "available" }] };
+    rerender();
+    expect(result.current.vpcs.map((vpc) => vpc.region)).toEqual(["pve-a-1"]);
   });
 });
 

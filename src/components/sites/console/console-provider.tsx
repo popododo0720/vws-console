@@ -112,6 +112,21 @@ export function ConsoleProvider({
   const home = regions[0]?.name ?? "";
   const [mode, setMode] = useState<Mode>("empty");
   const [data, setData] = useState<Dataset>(() => createEmptyAccount(home));
+  // The list can arrive after the first render (a failed read, then Try again): what was seeded follows it.
+  const [seeded, setSeeded] = useState(home);
+  if (seeded !== home) {
+    const move = <T extends { region: string }>(items: T[]) =>
+      items.map((item) => (item.region === seeded ? { ...item, region: home } : item));
+    setSeeded(home);
+    setData((prev) => ({
+      ...prev,
+      vpcs: move(prev.vpcs),
+      subnets: move(prev.subnets),
+      routeTables: move(prev.routeTables),
+      internetGateways: move(prev.internetGateways),
+      natGateways: move(prev.natGateways),
+    }));
+  }
   const [density, setDensity] = useState<Density>("comfortable");
   const [flash, setFlash] = useState<ConsoleFlash | null>(null);
 
