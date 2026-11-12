@@ -1,13 +1,22 @@
 // A deterministic console-api for the OTel e2e (run with `node`, which strips the types).
 // IAM is on: GET /auth/session answers 401 without the session cookie. The first GET /vpcs answers 503 so the
 // console retries it, POST /vpcs is accepted as a 202 operation that the console polls, and GET /snapshots never
-// answers so the console times out. Every other list is empty.
+// answers so the console times out. Every other list is empty. It lists one region whose capability document serves
+// every action: with no document the console refuses every write and never offers Create VPC.
+import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
 const port = Number(process.env.FAKE_API_PORT ?? 43320);
 const session = process.env.FAKE_API_SESSION ?? "sess-e2e";
 const csrf = process.env.FAKE_API_CSRF ?? "csrf-e2e";
 let vpcGets = 0;
+
+/** The AWS document of the capability fixtures, the one the admin e2e fake serves too. */
+const REGION = "ap-northeast-2";
+const documents: Record<string, unknown> = JSON.parse(
+  readFileSync(new URL("../e2e-admin/testdata/capabilities.json", import.meta.url), "utf8"),
+);
+if (!(REGION in documents)) throw new Error(`e2e-admin/testdata/capabilities.json has no ${REGION} document`);
 
 function send(
   response: ServerResponse,
@@ -46,6 +55,10 @@ const server = createServer((request, response) => {
     return send(response, 200, { loginEnabled: true, principal: "root", account: "123456789012", root: true });
   }
   if (!signedIn(request)) return send(response, 401, { error: { code: "Unauthenticated", message: "Sign in." } });
+  if (route === "GET /regions") {
+    return send(response, 200, { items: [{ name: REGION, kind: "aws", state: "available" }] });
+  }
+  if (route === `GET /regions/${REGION}/capabilities`) return send(response, 200, documents[REGION]);
   if (route === "GET /vpcs") {
     vpcGets += 1;
     if (vpcGets === 1) return send(response, 503, { error: { code: "ServiceUnavailable", message: "Busy." } });
