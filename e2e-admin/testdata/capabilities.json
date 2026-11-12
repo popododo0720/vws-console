@@ -398,7 +398,8 @@
       "linkedClones": false,
       "snapshotScope": "vm",
       "privateIpMode": "",
-      "liveTests": true
+      "liveTests": true,
+      "terminatedVisible": false
     }
   }
 }

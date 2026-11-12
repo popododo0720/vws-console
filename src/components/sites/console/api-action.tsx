@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ApiError } from "@/lib/vws-api/adapter";
+import { cn } from "@/lib/utils";
 
 export const UNREACHABLE: ApiError = {
   code: "Unavailable",
@@ -10,11 +11,18 @@ export const UNREACHABLE: ApiError = {
   requestId: null,
 };
 
+/** What a view says about the operation it starts: while it runs, and once it has succeeded. */
+export type OperationText = { running: string; succeeded?: string };
+
 export function useApiAction() {
   const router = useRouter();
   const [error, setError] = useState<ApiError | null>(null);
+  const [label, setLabel] = useState<OperationText | null>(null);
   const [pending, startTransition] = useTransition();
-  const run = (action: () => Promise<ApiError | null>, onDone?: () => void) =>
+  const run = (action: () => Promise<ApiError | null>, onDone?: () => void, text: OperationText | null = null) => {
+    // Outside the transition, where React would hold them back until the action has finished.
+    setLabel(text);
+    setError(null);
     startTransition(async () => {
       const failure = await action().catch(() => UNREACHABLE);
       setError(failure);
@@ -23,8 +31,35 @@ export function useApiAction() {
         router.refresh();
       }
     });
+  };
   const clear = () => setError(null);
-  return { error, pending, run, clear, refresh: () => router.refresh() };
+  // A server action returns only when console-api's Operation has left "running", so pending is that state.
+  const shown = error ? undefined : pending ? label?.running : label?.succeeded;
+  const operation = shown ? ({ state: pending ? "running" : "succeeded", text: shown } as const) : null;
+  return { error, pending, run, clear, refresh: () => router.refresh(), operation };
+}
+
+/**
+ * The state of the operation a view started. The wrapper is always rendered, so a screen reader announces the text
+ * when it appears. A failed operation is the view's ApiErrorAlert.
+ */
+export function OperationStatus({ operation }: { operation: ReturnType<typeof useApiAction>["operation"] }) {
+  return (
+    <div role="status">
+      {operation ? (
+        <p
+          className={cn(
+            "mx-4 my-2 rounded-lg border px-3 py-2 text-[13px]",
+            operation.state === "running"
+              ? "border-[#006ce0] bg-[#f2f8fd] text-[#16191f]"
+              : "border-[#037f0c] bg-[#f2fcf3] text-[#037f0c]",
+          )}
+        >
+          {operation.text}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 export function ApiErrorAlert({ error, title }: { error: ApiError | null; title: string }) {

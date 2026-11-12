@@ -721,6 +721,9 @@ export async function instanceBatch(action: "start" | "stop" | "terminate", ids:
   return { ok: true, value: undefined };
 }
 
+/** Reboots one instance. console-api has no batch route for RebootInstances, unlike start, stop and terminate. */
+export const rebootInstance = (id: string) => mutate(route("/instances/{id}/reboot", { id }));
+
 /** Adds or overwrites tags on one instance; tags not named stay. */
 export const createInstanceTags = (id: string, tags: Record<string, string>) =>
   mutate(route("/instances/{id}/tags", { id }), { tags });

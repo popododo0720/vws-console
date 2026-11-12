@@ -28,6 +28,8 @@ type ConsoleApi = {
   denied: (action: string) => string | null;
   /** The reason of a `partial` action whose reasonCode is `code`, for the one form input that code turns off. */
   limited: (action: string, code: string) => string | null;
+  /** False in a region that keeps no terminated instance: its lists then show none. True without a document. */
+  terminatedVisible: boolean;
   mode: Mode;
   showEmpty: () => void;
   showSample: () => void;
@@ -172,6 +174,7 @@ export function ConsoleProvider({
         const got = capabilities && mutationCapability(capabilities, action);
         return got && got.state === "partial" && got.reasonCode === code ? got.reason : null;
       },
+      terminatedVisible: capabilities?.features.terminatedVisible ?? true,
       mode,
       density,
       setDensity,

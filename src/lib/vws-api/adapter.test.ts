@@ -544,6 +544,14 @@ describe("parseCapabilities", () => {
     );
   });
 
+  it("hides terminated instances only for a document that says terminatedVisible false", () => {
+    expect(parseCapabilities(pveLiveBox).features.terminatedVisible).toBe(false);
+    expect(parseCapabilities(awsRegion).features.terminatedVisible).toBe(true);
+    for (const features of [undefined, null, "no", {}, { terminatedVisible: "false" }, { terminatedVisible: 0 }]) {
+      expect(parseCapabilities({ region: "r-1", features }).features.terminatedVisible).toBe(true);
+    }
+  });
+
   it("keeps the documents of the e2e fake console-api equal to these fixtures", () => {
     const shipped: unknown = JSON.parse(readFileSync("e2e-admin/testdata/capabilities.json", "utf8"));
     expect(shipped).toEqual({ [awsRegion.region]: awsRegion, [pveLiveBox.region]: pveLiveBox });
