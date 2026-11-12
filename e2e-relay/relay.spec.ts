@@ -263,7 +263,11 @@ test("an unreachable upstream gives 502 and a safe structured log", async () => 
       level: "warn",
     });
   } finally {
+    const deadline = setTimeout(() => child.kill("SIGKILL"), 5000);
     child.kill("SIGTERM");
-    await exited;
+    const [code, signal] = await exited;
+    clearTimeout(deadline);
+    expect({ code, signal }).toEqual({ code: 0, signal: null });
+    expect(logs.match(/"event":"server.shutdown"/g)).toHaveLength(1);
   }
 });

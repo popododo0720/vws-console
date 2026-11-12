@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
+import type { Socket } from "node:net";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { NextConfig } from "next";
@@ -29,11 +30,39 @@ const { requestHandler } = await getRequestHandlers({
   onDevServerCleanup: undefined,
 });
 const server = createServer((request, response) => {
-  void requestHandler(request, response).catch(() => {
+  void requestHandler(request, response).catch((error: unknown) => {
+    // eslint-disable-next-line no-console -- fixed diagnostics keep request values out of error messages
+    console.error(
+      JSON.stringify({
+        level: "error",
+        service: "vws-console",
+        event: "server.request_error",
+        name: error instanceof TypeError ? "TypeError" : "Error",
+        message: "Request handler failed",
+      }),
+    );
     if (!response.headersSent) response.writeHead(500);
     response.end();
   });
 });
+const sockets = new Set<Socket>();
+server.on("connection", (socket) => {
+  sockets.add(socket);
+  socket.once("close", () => sockets.delete(socket));
+});
+let stopping = false;
+const shutdown = () => {
+  if (stopping) return;
+  stopping = true;
+  // eslint-disable-next-line no-console -- one fixed lifecycle event for both termination signals
+  console.info(JSON.stringify({ level: "info", service: "vws-console", event: "server.shutdown" }));
+  server.close();
+  for (const socket of sockets) socket.destroy();
+  // Leave room for instrumentation's two-second SIGTERM flush, then bound PID 1's exit.
+  setTimeout(() => process.exit(0), 2500);
+};
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
 server.on("upgrade", relayUpgrade);
 server.listen(port, hostname, () => {
   // eslint-disable-next-line no-console -- bounded startup event for operators and process supervisors
