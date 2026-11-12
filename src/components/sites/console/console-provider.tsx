@@ -101,7 +101,6 @@ export function ConsoleProvider({
   signIn?: boolean;
   accountBuckets?: readonly AccountBucket[];
   adminActions?: readonly string[];
-  /** The answer of GET /regions, or null where it was not asked for. */
   regions?: ApiResult<Region[]> | null;
 }) {
   const regions = listing?.ok ? listing.value : NO_REGIONS;
@@ -140,7 +139,6 @@ export function ConsoleProvider({
     const routeTables = here(data.routeTables);
     const internetGateways = here(data.internetGateways);
     const natGateways = here(data.natGateways);
-    /** A resource made under All regions goes to the first listed region. */
     const target = region === ALL_REGIONS ? home : region;
 
     return {

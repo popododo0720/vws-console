@@ -81,13 +81,7 @@ export function BucketsView({ buckets, loadError }: { buckets: readonly AccountB
         </Link>
       ),
     },
-    {
-      key: "region",
-      header: "VWS Region",
-      minWidth: 160,
-      sortValue: (row) => row.region ?? "",
-      cell: (row) => row.region,
-    },
+    { key: "region", header: "VWS Region", minWidth: 160, sortValue: () => "—", cell: () => "—" },
     {
       key: "created",
       header: "Creation date",

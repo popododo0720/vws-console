@@ -32,7 +32,6 @@ declare const brand: unique symbol;
 
 export type BucketName = string & { readonly [brand]: "BucketName" };
 
-/** `region` is set when console-api names the region the bucket is in. */
 export type AccountBucket = { name: BucketName; ownerId: string; created: string; region?: string };
 
 /** One stored object as console-api describes it, without its bytes. */
@@ -101,7 +100,6 @@ export function nextPageToken(page: unknown): string {
 const REGION_NAME = /^[a-z0-9-]{1,63}$/;
 const REGION_STATES = ["available", "degraded", "unavailable"] as const;
 
-/** A state the console does not know is shown as unavailable. */
 export function parseRegions(page: unknown): Region[] {
   return list(page).flatMap((item) => {
     const name = str(item.name);

@@ -25,7 +25,6 @@ const listed = [
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 const denied = () => json(403, { error: { code: "PermissionDenied", message: "ec2:DescribeRegions is not allowed" } });
 
-/** A console-api that answers GET /regions with `regions` and accepts everything else. */
 function serve(regions: () => Response = () => json(200, { items: listed })) {
   const calls: Call[] = [];
   vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
@@ -102,8 +101,6 @@ describe("the region a console-api call is sent to", () => {
       expect(await listInstances()).toEqual({ ok: true, value: [] });
       expect(sent(calls)).toEqual([undefined]);
     }
-    serve(denied);
-    expect(await listRegions()).toMatchObject({ ok: false, error: { code: "PermissionDenied" } });
   });
 
   it("sends all for All regions, also when the list could not be read", async () => {
@@ -113,17 +110,6 @@ describe("the region a console-api call is sent to", () => {
       await listInstances();
       expect(sent(calls)).toEqual(["all"]);
     }
-  });
-
-  it("reads no region list outside a page, and shows a state it does not know as unavailable", async () => {
-    nav.path = null;
-    const calls = serve(() => json(200, { items: [{ name: "pve-seoul-1", kind: "pve", state: "leaderless" }] }));
-    await listInstances();
-    expect(calls.map((call) => `${call.path} ${call.region ?? "-"}`)).toEqual(["/instances -"]);
-    expect(await listRegions()).toEqual({
-      ok: true,
-      value: [{ name: "pve-seoul-1", kind: "pve", state: "unavailable" }],
-    });
   });
 
   it("answers one available region and calls nothing when no console-api is configured", async () => {

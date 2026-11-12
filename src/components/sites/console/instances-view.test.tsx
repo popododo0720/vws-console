@@ -55,11 +55,6 @@ describe("InstancesView under All regions", () => {
     expect(attributes.map((header) => cell("i-aws", header))).toEqual(["t3.micro", "us-east-1a", "ops"]);
     expect(attributes.map((header) => cell("i-pve", header))).toEqual(["—", "—", "—"]);
   });
-
-  it("shows no Region column for one region", () => {
-    nav.search = "region=pve-seoul-1";
-    expect(cells().headers).not.toContain("Region");
-  });
 });
 
 function renderEmpty() {

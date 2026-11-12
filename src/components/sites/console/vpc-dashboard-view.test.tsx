@@ -18,10 +18,7 @@ vi.mock("next/navigation", () => ({
 const sample = createSampleAccount("pve-busan-1");
 const listed: ApiResult<Region[]> = {
   ok: true,
-  value: [
-    { name: "pve-busan-1", kind: "pve", state: "available" },
-    { name: "pve-seoul-1", kind: "pve", state: "available" },
-  ],
+  value: ["pve-busan-1", "pve-seoul-1"].map((name) => ({ name, kind: "pve", state: "available" })),
 };
 const vpcs: Vpc[] = sample.vpcs.map((item) => ({ ...item, region: "vws-1" }));
 const subnets: Subnet[] = sample.subnets.map((item) => ({ ...item, region: "vws-1" }));

@@ -76,11 +76,8 @@ export type MenuEntry = {
   onSelect?: () => void;
   disabled?: boolean;
   checked?: boolean;
-  /** A status dot before the label, as a CSS colour. */
   dot?: string;
-  /** Muted text at the end of the row. */
   hint?: string;
-  /** Follows `href` with a full page load, for a link that must not keep the page's client state. */
   reload?: boolean;
 };
 

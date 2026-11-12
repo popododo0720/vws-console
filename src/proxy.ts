@@ -73,10 +73,8 @@ function withInheritedRegion(request: NextRequest): URL | null {
 
 /**
  * Passes the request on with the page path, which the server reads for the sign-in return and the region.
- *
- * The answer is marked no-store. Next redirects an RSC request that lacks its _rsc to the same URL with one, and
- * that redirect has no cache headers: a browser stores it under the page's own URL and replays it on Back, which
- * leaves _rsc in the address bar. The redirect above sends an RSC request exactly there.
+ * no-store: Next answers an RSC request that lacks its _rsc with a redirect that has no cache headers, and a
+ * browser replays that on Back for the page itself, leaving _rsc in the address bar.
  */
 function forward(request: NextRequest) {
   const headers = new Headers(request.headers);

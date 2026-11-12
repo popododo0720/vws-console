@@ -83,7 +83,6 @@ describe("console-api client", () => {
 
   function serve(...replies: Response[]) {
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
-      // No region is listed here, so no call names one; client-region.test.ts covers the region header.
       if (url.endsWith("/api/v1/regions")) return respond(200, { items: [] });
       calls.push({ url, init });
       const next = replies.shift();
@@ -484,7 +483,6 @@ describe("console-api client", () => {
 
   describe("retries, timeouts and logs", () => {
     beforeEach(() => {
-      // These tests count every request, so they run outside a page, where no region list is read.
       nav.path = null;
       vi.useFakeTimers({ toFake: ["setTimeout"] });
     });

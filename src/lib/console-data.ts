@@ -221,7 +221,6 @@ function defaultVpc(region: string): Vpc {
   };
 }
 
-/** The browser-only resources of an account that has only its default VPC, in `region`. */
 export function createEmptyAccount(region: string): Dataset {
   return {
     instances: [],

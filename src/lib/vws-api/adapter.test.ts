@@ -427,7 +427,7 @@ describe("account buckets", () => {
     nextPageToken: "ignored",
   };
 
-  it("maps creationDate onto created, keeps the region and drops fields the list does not own", () => {
+  it("maps creationDate onto created and drops fields the list does not own", () => {
     expect(parseAccountBuckets({ items: [wire], nextPageToken: "later" })).toEqual([
       { name: "logs-1", ownerId: "123", created: "2026-08-02T00:00:00Z", region: "vws-1" },
     ]);

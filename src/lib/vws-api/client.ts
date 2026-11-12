@@ -191,7 +191,6 @@ type PostOptions = {
   bodyText?: string;
   ifMatch?: string;
   timeoutMs?: number;
-  /** The X-Vws-Region value a caller already worked out, so an operation and its polls go to one region. */
   region?: string | null;
 };
 

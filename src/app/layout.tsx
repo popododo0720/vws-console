@@ -22,7 +22,6 @@ export default async function RootLayout({
   const signIn = state === "on";
   const session = await signedInSession();
   const identity = identityFromSession(session, { iam: state !== "off" });
-  // With IAM on and no session there is nobody to ask for; with it off the token asks, or the sample region answers.
   const [listed, adminActions, regions] = session
     ? await Promise.all([listBuckets(), getAdminPermissions(), listRegions()])
     : [null, [], state === "off" ? await listRegions() : null];
