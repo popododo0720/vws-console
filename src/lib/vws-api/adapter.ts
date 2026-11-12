@@ -278,6 +278,9 @@ export function parseOperation(body: unknown): Operation {
   };
 }
 
+/** An instance ID as console-api writes one: i- and 8 to 17 hex digits. */
+export const isInstanceId = (id: unknown): id is string => typeof id === "string" && /^i-[0-9a-f]{8,17}$/.test(id);
+
 const instanceStates: readonly InstanceState[] = [
   "pending",
   "running",

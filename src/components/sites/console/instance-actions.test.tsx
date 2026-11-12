@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
@@ -86,7 +86,7 @@ describe("instance actions gated by the region's capability document", () => {
       ["Reboot instance", false],
       ["Terminate (delete) instance", false],
     ]);
-    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(within(screen.getByRole("menu")).queryByRole("tooltip")).toBeNull();
   });
 
   it("disables Reboot alone when the region refuses only ec2:RebootInstances", () => {

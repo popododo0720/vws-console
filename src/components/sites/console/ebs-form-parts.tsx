@@ -35,6 +35,15 @@ export function CreatePage({
   );
 }
 
+export function Notice({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div role="alert" className="rounded-lg border border-[#d91515] bg-[#fff7f7] px-3 py-2 text-[14px]">
+      <p className="font-semibold text-[#d91515]">{title}</p>
+      {children}
+    </div>
+  );
+}
+
 export function FormCard({ title, info, children }: { title: ReactNode; info?: string; children: ReactNode }) {
   return (
     <section className="rounded-2xl border border-[#c6c6cd] bg-white px-5 pb-5 pt-4 text-[14px]">

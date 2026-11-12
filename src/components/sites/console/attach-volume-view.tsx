@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Instance, Volume } from "@/types/console";
@@ -9,7 +9,7 @@ import { computeNav } from "@/lib/console-data";
 import { DEVICE_NAME } from "@/lib/ebs";
 import { attachVolumeAction } from "@/app/actions/resources";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import { CreatePage, Field, FormCard, primaryPill } from "@/components/sites/console/ebs-form-parts";
+import { CreatePage, Field, FormCard, Notice, primaryPill } from "@/components/sites/console/ebs-form-parts";
 import { Shell } from "@/components/sites/console/shell";
 import { OrangeButton } from "@/components/sites/console/ui";
 
@@ -22,15 +22,6 @@ const DATA_DEVICE_NAMES = Array.from(
 );
 
 const labelled = (id: string, name: string) => (name ? `${id} (${name})` : id);
-
-function Notice({ title, children }: { title: string; children?: ReactNode }) {
-  return (
-    <div role="alert" className="rounded-lg border border-[#d91515] bg-[#fff7f7] px-3 py-2 text-[14px]">
-      <p className="font-semibold text-[#d91515]">{title}</p>
-      {children}
-    </div>
-  );
-}
 
 export function AttachVolumeView({
   id,

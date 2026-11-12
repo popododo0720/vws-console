@@ -14,15 +14,18 @@ import { InstanceStateMenu } from "@/components/sites/console/instance-state-men
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
 import {
+  ActionLink,
   FieldLabel,
   MenuButton,
   OrangeButton,
   OutlineButton,
   PanelDialog,
   blueMenuTriggerClass,
+  menuTriggerClass,
 } from "@/components/sites/console/ui";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
+import { OPEN_CONSOLE, connectHref } from "@/lib/instance-console";
 
 export function InstanceDetailView({
   id,
@@ -97,7 +100,9 @@ export function InstanceDetailView({
             >
               <RefreshCw className="size-3.5" />
             </button>
-            <OutlineButton>Connect</OutlineButton>
+            <ActionLink action={OPEN_CONSOLE} href={connectHref(instance.id)} className={menuTriggerClass()}>
+              Connect
+            </ActionLink>
             <InstanceStateMenu instances={[instance]} action={action} />
             <MenuButton
               className={blueMenuTriggerClass()}

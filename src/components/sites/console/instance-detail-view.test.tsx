@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { InstanceDetailView } from "@/components/sites/console/instance-detail-view";
+import { awsRegion, loaded, pveWritable } from "@/lib/vws-api/testdata/capabilities";
 import type { Instance } from "@/types/console";
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
@@ -55,6 +56,24 @@ describe("InstanceDetailView parity", () => {
     expect(screen.queryByRole("heading", { level: 2, name: "Instance summary" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Refresh instance" }));
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("links Connect to the Connect page where the region opens consoles, and disables it with the reason elsewhere", () => {
+    const view = render(
+      <ConsoleProvider capabilities={loaded(pveWritable)}>
+        <InstanceDetailView id="i-1" instance={instance} loadError={null} />
+      </ConsoleProvider>,
+    );
+    expect(screen.getByRole("link", { name: "Connect" })).toHaveAttribute("href", "/compute/instances/i-1/connect");
+    view.unmount();
+    render(
+      <ConsoleProvider capabilities={loaded(awsRegion)}>
+        <InstanceDetailView id="i-1" instance={instance} loadError={null} />
+      </ConsoleProvider>,
+    );
+    expect(screen.queryByRole("link", { name: "Connect" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Connect" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Connect" })).toHaveAccessibleDescription("use EC2 Instance Connect");
   });
 
   it("shows the load error instead of a blank page", () => {
