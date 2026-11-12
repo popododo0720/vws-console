@@ -17,7 +17,7 @@ export const REGION = "vws-1";
 /** console-api has one Availability Zone and refuses any other (vws-console-api internal/resource/text.go ZoneName). */
 export const ZONES = ["vws-1a"] as const;
 
-export type ApiError = { code: string; message: string; requestId: string | null };
+export type ApiError = { code: string; message: string; requestId: string | null; field?: string };
 
 export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: ApiError };
 
@@ -156,12 +156,13 @@ export function parseAccountBuckets(page: unknown): AccountBucket[] {
   return items.map((item) => toAccountBucket(item));
 }
 
-/** Reads `{"error":{"code","message"},"requestId"}`. Returns null for any other body. */
 export function parseApiError(body: unknown): ApiError | null {
   const error = obj(obj(body).error);
   const code = str(error.code);
   if (!code) return null;
-  return { code, message: str(error.message), requestId: str(obj(body).requestId) || null };
+  const field = str(error.field);
+  const requestId = str(obj(body).requestId) || null;
+  return { code, message: str(error.message), requestId, ...(field ? { field } : {}) };
 }
 
 export function parseOperation(body: unknown): Operation {
@@ -408,12 +409,18 @@ export type AdminRegion = {
   name: string;
   clusterName: string;
   pveApiUrl: string;
-  hasCa: boolean;
+  caPem: string;
   tokenId: string;
   tokenSecret: string;
   regionEndpoint: string;
   zones: { letter: string; nodes: string[] }[];
 };
+
+export type Versioned<T> = T & { etag: string };
+
+export type AdminRegionInput = Omit<AdminRegion, "tokenSecret"> & { tokenSecret?: string };
+
+export type ConnectionStep = { name: string; result: string; message: string };
 
 /** A live reading of GET /admin/regions/{name}/health; "unknown" is the console's status for one it did not get. */
 export type AdminRegionHealth = {
@@ -452,7 +459,7 @@ export function toAdminRegion(item: Json): AdminRegion {
     name,
     clusterName: str(item.clusterName),
     pveApiUrl: str(item.pveApiUrl),
-    hasCa: str(item.caPem) !== "",
+    caPem: str(item.caPem),
     tokenId: str(item.tokenId),
     tokenSecret: secretLabel(item.tokenSecret),
     regionEndpoint: str(item.regionEndpoint),
@@ -478,6 +485,29 @@ export function toAdminRegionHealth(item: Json): AdminRegionHealth {
 export function unknownHealth(error: ApiError): AdminRegionHealth {
   const message = `${error.message} (${error.code} · Request ID ${error.requestId ?? "—"})`;
   return { status: "unknown", quorate: false, leader: "", nodes: [], lastError: { time: "", message }, checkedAt: "" };
+}
+
+/** A server action can be called with any JSON, so only the region fields pass, each read as text. */
+export function toAdminRegionInput(form: unknown, secret: unknown): AdminRegionInput {
+  const text = (key: string) => str(obj(form)[key]).trim();
+  const names = (value: unknown) => str(value).match(/[^\s,]+/g) ?? [];
+  const tokenSecret = str(secret);
+  return {
+    name: text("name"),
+    clusterName: text("clusterName"),
+    pveApiUrl: text("pveApiUrl"),
+    caPem: text("caPem"),
+    tokenId: text("tokenId"),
+    regionEndpoint: text("regionEndpoint"),
+    zones: objects(obj(form).zones).map((zone) => ({ letter: str(zone.letter).trim(), nodes: names(zone.nodes) })),
+    ...(tokenSecret ? { tokenSecret } : {}),
+  };
+}
+
+export function parseConnectionSteps(body: unknown): ConnectionStep[] {
+  const steps = obj(body).steps;
+  if (!Array.isArray(steps)) throw new Error("expected steps");
+  return steps.map(obj).map((step) => ({ name: str(step.name), result: str(step.result), message: str(step.message) }));
 }
 
 export const parseAdminRegions = (page: unknown) => list(page).map(toAdminRegion);

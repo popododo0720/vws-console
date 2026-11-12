@@ -19,6 +19,7 @@ import {
   parseSecurityGroups,
   parseSnapshots,
   toAccountBucket,
+  toAdminRegionInput,
   toIngressPermission,
   toInstance,
   toStoredKeyPair,
@@ -516,5 +517,16 @@ describe("parseVolumes", () => {
     });
     expect(gp3).toMatchObject({ iops: 3000, throughput: "125" });
     expect(gp2).toMatchObject({ iops: null, throughput: "" });
+  });
+});
+
+describe("toAdminRegionInput", () => {
+  it("lets only the region fields through, each as text, and takes the secret only from its own argument", () => {
+    const empty = { name: "", clusterName: "", pveApiUrl: "", caPem: "", tokenId: "", regionEndpoint: "", zones: [] };
+    const zones = [{ letter: "a ", nodes: "pve1, pve2 ,,", extra: 1 }];
+    const forged = { name: " pve-lab-1 ", clusterName: 7, pveApiUrl: ["x"], zones, admin: true, tokenSecret: "form" };
+    const expected = { ...empty, name: "pve-lab-1", zones: [{ letter: "a", nodes: ["pve1", "pve2"] }] };
+    expect(toAdminRegionInput(forged, { not: "text" })).toEqual(expected);
+    expect(toAdminRegionInput({ zones: "junk" }, " typed ")).toEqual({ ...empty, tokenSecret: " typed " });
   });
 });

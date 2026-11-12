@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ApiError } from "@/lib/vws-api/adapter";
 
-const UNREACHABLE: ApiError = {
+export const UNREACHABLE: ApiError = {
   code: "Unavailable",
   message: "The request did not reach the server. Check your connection and try again.",
   requestId: null,
