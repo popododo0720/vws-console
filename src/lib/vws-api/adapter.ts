@@ -17,7 +17,6 @@ export const REGION = "vws-1";
 /** console-api has one Availability Zone and refuses any other (vws-console-api internal/resource/text.go ZoneName). */
 export const ZONES = ["vws-1a"] as const;
 
-/** `field` is the input console-api refused, when it named one. */
 export type ApiError = { code: string; message: string; requestId: string | null; field?: string };
 
 export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: ApiError };
@@ -157,7 +156,6 @@ export function parseAccountBuckets(page: unknown): AccountBucket[] {
   return items.map((item) => toAccountBucket(item));
 }
 
-/** Reads `{"error":{"code","message","field"},"requestId"}`. Returns null for any other body. */
 export function parseApiError(body: unknown): ApiError | null {
   const error = obj(obj(body).error);
   const code = str(error.code);
@@ -418,13 +416,10 @@ export type AdminRegion = {
   zones: { letter: string; nodes: string[] }[];
 };
 
-/** A registration read on its own, with the ETag the PATCH that saves an edit of it sends back as If-Match. */
 export type Versioned<T> = T & { etag: string };
 
-/** What console-api takes to register, change or test a region. tokenSecret is there only when one was typed. */
 export type AdminRegionInput = Omit<AdminRegion, "tokenSecret"> & { tokenSecret?: string };
 
-/** One ordered check of a region connection test. console-api reports the result as PASS, FAIL or SKIPPED. */
 export type ConnectionStep = { name: string; result: string; message: string };
 
 /** A live reading of GET /admin/regions/{name}/health; "unknown" is the console's status for one it did not get. */
@@ -492,10 +487,7 @@ export function unknownHealth(error: ApiError): AdminRegionHealth {
   return { status: "unknown", quorate: false, leader: "", nodes: [], lastError: { time: "", message }, checkedAt: "" };
 }
 
-/**
- * The body of a region write or test, from a form a server action received. Only these fields pass, each as text
- * (a zone's nodes as one comma-separated text), so no other JSON reaches console-api. The secret is sent as typed.
- */
+/** A server action can be called with any JSON, so only the region fields pass, each read as text. */
 export function toAdminRegionInput(form: unknown, secret: unknown): AdminRegionInput {
   const text = (key: string) => str(obj(form)[key]).trim();
   const names = (value: unknown) => str(value).match(/[^\s,]+/g) ?? [];

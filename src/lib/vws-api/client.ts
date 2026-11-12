@@ -529,7 +529,7 @@ export async function deleteBucket(name: BucketName): Promise<ApiResult<void>> {
   return { ok: true, value: undefined };
 }
 
-/** Reads one resource; a 404 is a missing resource, not an error. `map` also gets the ETag console-api sent. */
+/** Reads one resource; a 404 is a missing resource, not an error. */
 async function getOne<T>(
   path: ApiRoute,
   map: (item: Record<string, unknown>, etag: string) => T,
@@ -782,7 +782,6 @@ export const getAdminRegion = (name: string): Promise<ApiResult<Versioned<AdminR
 /** console-api gives a region push and a connection test 15 s each, so these calls wait at least 20 s. */
 const adminWait = () => ({ timeoutMs: Math.max(timeoutMs(), 20_000) });
 
-/** Registers a region, or with the ETag of the read being edited saves it only if nobody changed it since. */
 export async function saveAdminRegion(input: AdminRegionInput, etag: string | null): Promise<ApiResult<void>> {
   const item = route("/admin/regions/{name}", { name: input.name });
   const result =
@@ -792,14 +791,13 @@ export async function saveAdminRegion(input: AdminRegionInput, etag: string | nu
   return result.ok ? { ok: true, value: undefined } : { ok: false, error: result.error };
 }
 
-/** A region that is already gone counts as deleted, so a repeated delete succeeds. */
 export async function deleteAdminRegion(name: string): Promise<ApiResult<void>> {
   const result = await request("DELETE", route("/admin/regions/{name}", { name }));
   if (result.ok || result.error.code === "NotFound") return { ok: true, value: undefined };
   return { ok: false, error: result.error };
 }
 
-/** Tests the saved region with the secret typed for it, if any; an unsaved one with every value of its form. */
+/** console-api's saved test takes tokenSecret alone and answers 400 to any other field. */
 export async function testAdminRegion(input: AdminRegionInput, saved: boolean): Promise<ApiResult<ConnectionStep[]>> {
   const path = saved ? route("/admin/regions/{name}/test", { name: input.name }) : route("/admin/regions/test");
   const body = saved ? { tokenSecret: input.tokenSecret } : input;

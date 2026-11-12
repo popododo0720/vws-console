@@ -6,13 +6,9 @@ import { deleteAdminRegion, saveAdminRegion, testAdminRegion } from "@/lib/vws-a
 
 const invalid = (message: string): ApiError => ({ code: "InvalidArgument", message, requestId: null });
 
-/** console-api's ETag for a registration: its version in quotes. */
+/** Checked because a server action is a public endpoint and this value becomes the If-Match header. */
 const ETAG = /^"[0-9]+"$/;
 
-/**
- * Registers a region (etag null) or saves an edit of the one the form names. The secret is its own argument, sent
- * on only when one was typed, and nothing returned here repeats it.
- */
 export async function saveRegionAction(form: unknown, secret: unknown, etag: unknown): Promise<ApiError | null> {
   return withActionSpan("saveRegionAction", async () => {
     if (etag !== null && (typeof etag !== "string" || !ETAG.test(etag))) {
@@ -31,7 +27,6 @@ export async function deleteRegionAction(name: unknown): Promise<ApiError | null
   });
 }
 
-/** Tests the saved region the form names, or with saved false the form's own values without saving them. */
 export async function testRegionAction(
   form: unknown,
   secret: unknown,

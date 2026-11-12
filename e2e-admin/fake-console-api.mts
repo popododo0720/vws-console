@@ -1,8 +1,6 @@
 // A deterministic console-api for the admin e2e (run with `node`, which strips the types). IAM is on and the session
 // cookie names the caller: "root" is the administrator with nothing registered yet, and any other signed-in caller
-// gets console-api's 403 answers on the admin routes. Regions live in memory as console-api keeps them: a version per
-// record (ETag, If-Match), its field errors, and a secret only as the first 8 hex digits of its SHA-256. POST /__reset
-// empties the registry.
+// gets console-api's 403 answers on the admin routes.
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 
@@ -15,7 +13,7 @@ const failure = (code: string, message: string, field?: string) => ({
 });
 const invalid = (field: string, message: string) => failure("InvalidArgument", message, field);
 
-/** The checks of console-api's validateRegion that the e2e trips. */
+/** A partial copy of validateRegion (vws-console-api internal/surface/console/admin_regions.go). */
 function refused(region: Json, secret: unknown, create: boolean) {
   const name = /^pve-[a-z0-9]+(-[a-z0-9]+)*-[0-9]+$/.test(String(region.name));
   if (!name) return invalid("name", "invalid Proxmox region name");
@@ -33,7 +31,7 @@ const PASSED = {
   regionapi: "regionapi mTLS status read succeeded",
 };
 
-/** console-api's steps: no secret skips the PVE checks, and a host named "unreachable" fails TLS and skips the rest. */
+/** console-api's step names, order and messages. "unreachable" in the URL is this fake's own switch for a failure. */
 function connectionSteps(region: Json, secret: unknown) {
   const down = secret !== undefined && String(region.pveApiUrl).includes("unreachable");
   return Object.entries(PASSED).map(([name, message], index) => {

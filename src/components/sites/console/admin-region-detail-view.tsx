@@ -137,7 +137,6 @@ export function AdminRegionDetailView({
   );
 }
 
-/** Mount it to open it. Delete stays disabled until the region name is typed. */
 function DeleteRegionDialog({ name, onClose }: { name: string; onClose: () => void }) {
   const router = useRouter();
   const action = useApiAction();

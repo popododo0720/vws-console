@@ -27,7 +27,6 @@ async function openServices(page: Page, baseURL: string | undefined, user: strin
   await expect(page.getByRole("menuitem", { name: "Instances", exact: true })).toBeVisible();
 }
 
-/** Signs the administrator in and fills the register form with `values`. */
 async function fillRegister(page: Page, baseURL: string | undefined, values = lab) {
   await signIn(page, baseURL, "root");
   await page.goto("/admin/regions/register");

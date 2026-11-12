@@ -26,7 +26,7 @@ const inputClass = "field max-w-[783px]";
 const nameHint = "pve-, a location and a number, such as pve-seoul-1. It cannot be changed later.";
 const pemClass = "w-full max-w-[783px] rounded-lg border border-[#aab7b8] px-2.5 py-2 font-mono text-[13px]";
 
-/** Registers a region, or edits the one called `name`. The save state lives here so its alert survives a reload. */
+/** The save state lives here, outside the keyed form, so the conflict alert survives the reload that remounts it. */
 export function AdminRegionFormView({ name, region, loadError }: Props) {
   const save = useApiAction();
   const title = name ? `Edit ${name}` : "Register region";

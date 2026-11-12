@@ -45,7 +45,6 @@ const failure = (code: string, message: string) => ({ error: { code, message }, 
 type Reply = [number, unknown, HeadersInit?];
 const calls: { method: string; path: string; ifMatch?: string; body: unknown }[] = [];
 
-/** The mocked admin API: one [status, body, headers] per "METHOD path" or per path; requests are recorded in calls. */
 function adminApi(replies: Record<string, Reply>) {
   vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => {
     const path = new URL(url).pathname.replace("/api/v1/admin", "");
