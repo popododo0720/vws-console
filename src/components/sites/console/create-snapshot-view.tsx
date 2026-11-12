@@ -8,7 +8,7 @@ import type { ApiError } from "@/lib/vws-api/adapter";
 import { computeNav } from "@/lib/console-data";
 import { parseCreateSnapshot, SNAPSHOT_DESCRIPTION_MAX } from "@/lib/ebs";
 import { createSnapshotAction } from "@/app/actions/resources";
-import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { ApiErrorAlert, OperationStatus, useApiAction } from "@/components/sites/console/api-action";
 import {
   CreatePage,
   Field,
@@ -92,6 +92,7 @@ export function CreateSnapshotView({
         idempotency.settle();
         router.push("/storage/snapshots");
       },
+      { running: `Creating a snapshot of ${parsed.volumeId}…` },
     );
   };
 
@@ -176,6 +177,7 @@ export function CreateSnapshotView({
           </p>
         ) : null}
         <ApiErrorAlert error={action.error} title="The snapshot could not be created" />
+        <OperationStatus operation={action.operation} />
         <div className="flex items-center justify-end gap-6">
           <Link href="/storage/snapshots" className="text-[14px] font-bold text-[#006ce0] hover:underline">
             Cancel

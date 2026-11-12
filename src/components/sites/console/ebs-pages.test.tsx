@@ -177,6 +177,16 @@ describe("Create snapshot", () => {
     );
   });
 
+  it("sends one request for a double click and shows the operation running", () => {
+    vi.mocked(createSnapshotAction).mockReturnValue(new Promise(() => {}));
+    wrap(<CreateSnapshotView volumes={[volume]} volumesError={null} initialVolumeId={volume.id} />);
+    const create = screen.getByRole("button", { name: "Create snapshot" });
+    fireEvent.click(create);
+    fireEvent.click(create);
+    expect(screen.getByRole("status")).toHaveTextContent(`Creating a snapshot of ${volume.id}…`);
+    expect(createSnapshotAction).toHaveBeenCalledTimes(1);
+  });
+
   it("ignores a volume ID from the link that is not in the list", () => {
     wrap(<CreateSnapshotView volumes={[volume]} volumesError={null} initialVolumeId="vol-<script>" />);
     expect(screen.getByLabelText("Volume ID")).toHaveValue("");

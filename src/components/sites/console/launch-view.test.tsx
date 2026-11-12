@@ -236,6 +236,18 @@ describe("launch wizard parity", () => {
     expect(await screen.findByRole("button", { name: "Launch instance" })).toBeEnabled();
   });
 
+  it("sends one launch for a double click and says it is launching", () => {
+    launchInstancesAction.mockReset();
+    launchInstancesAction.mockReturnValue(new Promise(() => {}));
+    renderWizard();
+    chooseKey("web");
+    const launch = screen.getByRole("button", { name: "Launch instance" });
+    fireEvent.click(launch);
+    fireEvent.click(launch);
+    expect(launch).toHaveTextContent("Launching…");
+    expect(launchInstancesAction).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps added tags visible when Add additional tags is clicked again", () => {
     renderWizard();
     const add = screen.getByRole("button", { name: "Add additional tags" });
