@@ -13,6 +13,7 @@ import {
   terminateInstancesAction,
 } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
+import { useConsole } from "@/components/sites/console/console-provider";
 import { DetailDock } from "@/components/sites/console/detail-dock";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
@@ -41,14 +42,16 @@ function StatusCell({ row }: { row: Instance }) {
   );
 }
 
-export function InstancesView({ instances, loadError }: { instances: Instance[]; loadError: ApiError | null }) {
+export function InstancesView({ instances: loaded, loadError }: { instances: Instance[]; loadError: ApiError | null }) {
   const action = useApiAction();
+  const { terminatedVisible } = useConsole();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dock, setDock] = useState(300);
   const [connectOpen, setConnectOpen] = useState(false);
   const [panel, setPanel] = useState("details");
-  const [loads, setLoads] = useState({ instances, count: 0 });
-  if (loads.instances !== instances) setLoads({ instances, count: loads.count + 1 });
+  const [loads, setLoads] = useState({ instances: loaded, count: 0 });
+  if (loads.instances !== loaded) setLoads({ instances: loaded, count: loads.count + 1 });
+  const instances = terminatedVisible ? loaded : loaded.filter((item) => item.state !== "terminated");
   const selected = instances.filter((item) => selectedIds.includes(item.id));
   const one = selected.length === 1 ? selected[0] : null;
 

@@ -134,6 +134,8 @@ export type RegionCapabilities = {
   actions: Record<string, ActionCapability>;
   zones: RegionZone[];
   instanceTypes: InstanceType[];
+  /** terminatedVisible is false in a region that keeps no record of a terminated instance, so it never lists one. */
+  features: { terminatedVisible: boolean };
 };
 
 const ACTION_STATES = ["supported", "partial", "unsupported", "empty"] as const;
@@ -157,7 +159,7 @@ function optionalList(value: unknown): Json[] {
  * document. An action whose state this console does not know is left out, which makes it unsupported.
  */
 export function parseCapabilities(doc: unknown): RegionCapabilities {
-  const { region, actions, zones, instanceTypes } = obj(doc);
+  const { region, actions, zones, instanceTypes, features } = obj(doc);
   const actionsOk =
     actions === null || actions === undefined || (typeof actions === "object" && !Array.isArray(actions));
   if (typeof region !== "string" || region === "" || !actionsOk) throw new Error("expected a capability document");
@@ -172,6 +174,8 @@ export function parseCapabilities(doc: unknown): RegionCapabilities {
     ),
     zones: optionalList(zones).map((zone) => ({ name: str(zone.zoneName), state: str(zone.state) })),
     instanceTypes: optionalList(instanceTypes).map(toInstanceType),
+    // Only an explicit false hides a row: a region that does not send the flag lists them, as AWS does.
+    features: { terminatedVisible: obj(features).terminatedVisible !== false },
   };
 }
 

@@ -13,6 +13,7 @@ import {
 } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import type { Instance } from "@/types/console";
+import { useConsole } from "@/components/sites/console/console-provider";
 import { InstanceDetails, InstanceTab, instanceTabs } from "@/components/sites/console/instance-detail";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
@@ -37,6 +38,7 @@ export function InstanceDetailView({
   loadError: ApiError | null;
 }) {
   const action = useApiAction();
+  const { terminatedVisible } = useConsole();
   const [tab, setTab] = useState("details");
   const [renameOpen, setRenameOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -56,7 +58,8 @@ export function InstanceDetailView({
     );
   }
 
-  if (!instance) {
+  // A region that keeps no terminated instance answers NotFound for one; a record it still sent is treated alike.
+  if (!instance || (instance.state === "terminated" && !terminatedVisible)) {
     return (
       <Shell tree={computeNav}>
         <PageHeader

@@ -73,7 +73,14 @@ export const pveLiveBox = {
   },
   instanceTypes: [small, medium],
   limits,
-  features: { userData: false, linkedClones: false, snapshotScope: "vm", privateIpMode: "", liveTests: true },
+  features: {
+    userData: false,
+    linkedClones: false,
+    snapshotScope: "vm",
+    privateIpMode: "",
+    liveTests: true,
+    terminatedVisible: false,
+  },
 };
 
 /** A Proxmox region that takes writes, with the partial and unsupported entries of design.md 3.2.4. */
