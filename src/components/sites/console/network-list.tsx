@@ -24,7 +24,7 @@ type Tab = { id: string; label: string };
 /** Set when rows come from the VWS API instead of the local data set. */
 type Live = { vpcs: Vpc[]; banner: ReactNode; onRefresh: () => void; failed: boolean };
 
-export function NetworkList<T>({
+export function NetworkList<T extends { region: string }>({
   title,
   info,
   rows,
@@ -113,6 +113,7 @@ export function NetworkList<T>({
       {live?.banner}
       <ResourceTable
         rows={visible}
+        region={(row) => row.region}
         getId={getId}
         columns={columns}
         selectedIds={selected.map(getId)}

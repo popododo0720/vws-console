@@ -13,7 +13,6 @@ import type {
   Vpc,
 } from "@/types/console";
 
-export const REGION = "vws-1";
 /** console-api has one Availability Zone and refuses any other (vws-console-api internal/resource/text.go ZoneName). */
 export const ZONES = ["vws-1a"] as const;
 
@@ -33,7 +32,8 @@ declare const brand: unique symbol;
 
 export type BucketName = string & { readonly [brand]: "BucketName" };
 
-export type AccountBucket = { name: BucketName; ownerId: string; created: string };
+/** `region` is set when console-api names the region the bucket is in. */
+export type AccountBucket = { name: BucketName; ownerId: string; created: string; region?: string };
 
 /** One stored object as console-api describes it, without its bytes. */
 export type StoredObject = {
@@ -149,7 +149,13 @@ export function toAccountBucket(item: unknown, expected?: BucketName): AccountBu
   if (expected !== undefined && name !== expected) throw new Error("unexpected bucket name");
   const created = record.creationDate;
   if (typeof created !== "string" || created.length === 0) throw new Error("invalid creationDate");
-  return { name, ownerId: typeof record.ownerId === "string" ? record.ownerId : "", created };
+  const region = str(record.region);
+  return {
+    name,
+    ownerId: typeof record.ownerId === "string" ? record.ownerId : "",
+    created,
+    ...(region && { region }),
+  };
 }
 
 /** A flat character class, not a repeated group: a grouped pattern overflows the regex stack on a 4 MiB body. */
@@ -242,7 +248,7 @@ export function toInstance(item: Json): Instance {
     elasticIp: str(item.publicIpAllocationId) ? str(item.publicIpAddress) : "",
     publicIpAllocationId: str(item.publicIpAllocationId),
     ipv6: "",
-    region: REGION,
+    region: str(item.region),
     vpcId: str(item.vpcId),
     subnetId: str(item.subnetId),
     keyPair: str(item.keyName),
@@ -266,7 +272,7 @@ export function toVolume(item: Json): Volume {
     sourceVolumeId: "",
     created: str(item.createTime),
     availabilityZone: str(item.availabilityZone),
-    region: REGION,
+    region: str(item.region),
     attachment: instanceId ? { instanceId, device: str(item.device) } : null,
   };
 }
@@ -284,7 +290,7 @@ export function toVpc(item: Json): Vpc {
     owner: str(item.ownerId),
     isDefault: bool(item.isDefault),
     tags: tags(item.tags),
-    region: REGION,
+    region: str(item.region),
   };
 }
 
@@ -301,7 +307,7 @@ export function toSubnet(item: Json): Subnet {
     autoAssignPublicIp: bool(item.mapPublicIpOnLaunch),
     blockPublicAccess: "",
     tags: tags(item.tags),
-    region: REGION,
+    region: str(item.region),
   };
 }
 
@@ -356,7 +362,7 @@ export function toSecurityGroup(item: Json): SecurityGroup {
     vpcId: str(item.vpcId),
     description: "",
     owner: str(item.ownerId),
-    region: REGION,
+    region: str(item.region),
     rules: permissions.map(toIngressRule),
   };
 }
@@ -390,7 +396,7 @@ export function toAddress(item: Json): ElasticIp {
     instanceId: str(item.instanceId),
     privateIp: "",
     owner: str(item.ownerId),
-    region: REGION,
+    region: str(item.region),
   };
 }
 
@@ -404,7 +410,7 @@ export function toSnapshot(item: Json): Snapshot {
     state: str(item.state),
     started: "",
     owner: str(item.ownerId),
-    region: REGION,
+    region: str(item.region),
   };
 }
 
@@ -423,6 +429,7 @@ export function toStoredKeyPair(item: Record<string, unknown>): StoredKeyPair {
     type: str(item.keyType),
     ownerId: str(item.ownerId),
     created: str(item.createTime),
+    ...(str(item.region) && { region: str(item.region) }),
   };
 }
 

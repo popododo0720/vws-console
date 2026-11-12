@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteObjectAction } from "@/app/actions/resources";
-import { REGION, type AccountBucket, type ApiError, type StoredObject } from "@/lib/vws-api/adapter";
+import { ALL_REGIONS, type AccountBucket, type ApiError, type StoredObject } from "@/lib/vws-api/adapter";
 import { copyToClipboard } from "@/lib/clipboard";
 import { formatBucketCreationDate } from "@/lib/bucket-display";
 import { formatBytes } from "@/lib/bucket-objects";
@@ -12,6 +12,7 @@ import { storageNav } from "@/lib/console-data";
 import { download } from "@/lib/download";
 import { objectArn, objectDownloadHref, objectFileName, objectType, s3Uri } from "@/lib/object-detail";
 import { ApiErrorAlert } from "@/components/sites/console/api-action";
+import { useConsole } from "@/components/sites/console/console-provider";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
 import {
@@ -40,6 +41,7 @@ const UNAVAILABLE = "Not returned for this object.";
 
 export function ObjectDetailView({ name, objectKey, bucket, object, loadError }: ObjectDetailProps) {
   const router = useRouter();
+  const { region } = useConsole();
   const [error, setError] = useState<ApiError | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState<"idle" | "copied" | "failed">("idle");
@@ -157,7 +159,7 @@ export function ObjectDetailView({ name, objectKey, bucket, object, loadError }:
           <DetailGrid
             items={[
               ["Owner", dash(bucket.ownerId)],
-              ["Region", REGION],
+              ["Region", dash(bucket.region ?? (region === ALL_REGIONS ? "" : region))],
               ["Last modified", object.lastModified ? formatBucketCreationDate(object.lastModified) : "—"],
               ["Size", formatBytes(object.size)],
               ["Type", objectType(object.key)],

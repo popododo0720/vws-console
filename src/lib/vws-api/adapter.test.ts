@@ -39,6 +39,7 @@ const instance = {
   availabilityZone: "vws-1a",
   launchTime: "2026-10-14T06:00:32Z",
   privateIpAddress: "10.0.0.2",
+  region: "pve-seoul-1",
   tags: { Name: "web" },
 };
 
@@ -54,7 +55,7 @@ describe("console-api adapter", () => {
       privateIpv4: "10.0.0.2",
       subnetId: "subnet-27c341ab7a6719423",
       imageId: "ami-0123456789abcdef0",
-      region: "vws-1",
+      region: "pve-seoul-1",
       vpcId: "vpc-9",
       launchedAt: "2026-10-14T06:00:32Z",
       publicIpv4: "",
@@ -273,7 +274,7 @@ describe("console-api adapter", () => {
         instanceId: "",
         privateIp: "",
         owner: "1",
-        region: "vws-1",
+        region: "",
       },
     ]);
     expect(
@@ -299,7 +300,7 @@ describe("console-api adapter", () => {
         state: "completed",
         started: "",
         owner: "1",
-        region: "vws-1",
+        region: "",
       },
     ]);
     expect(parseAddresses({ items: [] })).toEqual([]);
@@ -426,9 +427,9 @@ describe("account buckets", () => {
     nextPageToken: "ignored",
   };
 
-  it("maps creationDate onto created and drops fields the list does not own", () => {
+  it("maps creationDate onto created, keeps the region and drops fields the list does not own", () => {
     expect(parseAccountBuckets({ items: [wire], nextPageToken: "later" })).toEqual([
-      { name: "logs-1", ownerId: "123", created: "2026-08-02T00:00:00Z" },
+      { name: "logs-1", ownerId: "123", created: "2026-08-02T00:00:00Z", region: "vws-1" },
     ]);
   });
 

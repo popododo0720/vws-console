@@ -228,6 +228,7 @@ export function SecurityGroupsView({
       />
       <ResourceTable
         rows={securityGroups}
+        region={(row) => row.region}
         getId={(row) => row.id}
         columns={columns}
         selectedIds={selected.map((item) => item.id)}
