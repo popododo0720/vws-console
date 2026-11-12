@@ -1,8 +1,8 @@
 import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
 
 // The fake console-api (fake-console-api.mts) opens consoles in "pve-lab-2" and refuses them in the AWS region, as
-// console-api does. Nothing serves the console websocket in this build (the console's relay is a separate change), so
-// each test is its server through page.routeWebSocket. Each case runs at a desktop and a phone width.
+// console-api does. It serves no console websocket, so each test is its server through page.routeWebSocket. Each case
+// runs at a desktop and a phone width.
 const pve = { region: "pve-lab-2", id: "i-10000001" };
 const aws = { region: "ap-northeast-2", id: "i-20000001" };
 const connectPage = ({ region, id }: typeof pve) => `/compute/instances/${id}/connect?region=${region}`;
@@ -71,7 +71,7 @@ function vncServer(ws: WebSocketRoute, received: Buffer[]) {
  * they are copied down; a browser's own WebSocket needs nothing.
  */
 async function routeVnc(page: Page, serve: (ws: WebSocketRoute) => void) {
-  await page.routeWebSocket(`${SOCKETS}vnc`, serve);
+  await page.routeWebSocket(`${SOCKETS}vnc&region=${pve.region}`, serve);
   await page.addInitScript(() => {
     const own = WebSocket.prototype;
     const parent = Object.getPrototypeOf(own);
@@ -137,7 +137,7 @@ for (const width of [1440, 390]) {
 
     test("the serial tab shows the bytes the server sends and sends the keys typed", async ({ page }) => {
       const received: Buffer[] = [];
-      await page.routeWebSocket(`${SOCKETS}serial`, (ws) => {
+      await page.routeWebSocket(`${SOCKETS}serial&region=${pve.region}`, (ws) => {
         ws.send(Buffer.from("hello from serial0\r\n"));
         ws.send("a text frame\r\n");
         ws.onMessage((message) => received.push(Buffer.from(message)));
@@ -196,14 +196,14 @@ for (const width of [1440, 390]) {
       expect(opened).toBe(2);
     });
 
-    test("with nothing answering the websocket, as in this build, Connect gives up after its timeout", async ({
-      page,
-    }) => {
+    test("with a websocket that never answers, Connect gives up after its timeout", async ({ page }) => {
+      let routed = () => {};
+      const opened = new Promise<void>((resolve) => (routed = resolve));
+      await routeVnc(page, () => routed());
       await page.clock.install();
       await page.goto(connectPage(pve));
-      const socket = page.waitForEvent("websocket");
       await connect(page).click();
-      await socket;
+      await opened;
       await expect(status(page)).toHaveText("Connecting…");
       await page.clock.fastForward(15_000);
       const alert = page.getByRole("alert").filter({ hasText: "The console connection ended" });
