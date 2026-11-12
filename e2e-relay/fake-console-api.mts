@@ -3,7 +3,8 @@ import { createServer } from "node:http";
 import type { Duplex } from "node:stream";
 
 let dials = 0;
-let seen: { path: string; cookie: string | undefined; origin: string | undefined }[] = [];
+type Seen = { path: string; cookie?: string; origin?: string; region?: string | string[] };
+let seen: Seen[] = [];
 const sockets = new Set<Duplex>();
 const server = createServer((request, response) => {
   if (request.url === "/__reset") {
@@ -16,7 +17,12 @@ const server = createServer((request, response) => {
 });
 server.on("upgrade", (request, socket, head) => {
   dials++;
-  seen.push({ path: request.url ?? "", cookie: request.headers.cookie, origin: request.headers.origin });
+  seen.push({
+    path: request.url ?? "",
+    cookie: request.headers.cookie,
+    origin: request.headers.origin,
+    region: request.headers["x-vws-region"],
+  });
   sockets.add(socket);
   socket.on("close", () => sockets.delete(socket));
   socket.on("error", () => socket.destroy());

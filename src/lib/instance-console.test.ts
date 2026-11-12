@@ -3,15 +3,30 @@ import { FakeWebSocket } from "../../test/fake-websocket";
 import { CONNECT_TIMEOUT_MS, connectHref, consoleSocketUrl, openConsoleSocket } from "./instance-console";
 
 const ID = "i-0123456789abcdef0";
-const https = { protocol: "https:", host: "console.example" };
+const https = { protocol: "https:", host: "console.example", search: "" };
 
 describe("consoleSocketUrl", () => {
   it("is console-api's console path on the page's own host, wss for an https page and ws for an http one", () => {
     expect(consoleSocketUrl(https, ID, "vnc")).toBe(`wss://console.example/api/v1/instances/${ID}/console?kind=vnc`);
-    expect(consoleSocketUrl({ protocol: "http:", host: "127.0.0.1:3000" }, ID, "serial")).toBe(
+    expect(consoleSocketUrl({ protocol: "http:", host: "127.0.0.1:3000", search: "" }, ID, "serial")).toBe(
       `ws://127.0.0.1:3000/api/v1/instances/${ID}/console?kind=serial`,
     );
   });
+
+  it("carries the page's one valid region after kind", () => {
+    expect(consoleSocketUrl({ ...https, search: "?tab=1&region=pve-seoul" }, ID, "vnc")).toBe(
+      `wss://console.example/api/v1/instances/${ID}/console?kind=vnc&region=pve-seoul`,
+    );
+  });
+
+  it.each(["?tab=1", "?region=", "?region=US-EAST", "?region=a%26kind%3Dserial", "?region=a&region=b"])(
+    "names no region for the page search %j",
+    (search) => {
+      expect(consoleSocketUrl({ ...https, search }, ID, "vnc")).toBe(
+        `wss://console.example/api/v1/instances/${ID}/console?kind=vnc`,
+      );
+    },
+  );
 
   it.each([
     "",

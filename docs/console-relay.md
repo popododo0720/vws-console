@@ -19,8 +19,9 @@ The Dockerfile runs `node server/console-server.mts`. Its runner contains:
   `.next/required-server-files.json`.
 - `.next/static` at `.next/static`, and `public` at `public`.
 - `server` at `server`.
-- `src/lib/instance-id.ts` and `src/lib/vws-api/session-cookies.ts` at their
-  original relative paths, shared with the application.
+- `src/lib/instance-id.ts`, `src/lib/region-name.ts` and
+  `src/lib/vws-api/session-cookies.ts` at their original relative paths, shared
+  with the application.
 
 Next does not trace custom entries automatically. The Dockerfile explicitly
 copies the entry and its local imports. The entry loads the build's serialized
@@ -58,6 +59,14 @@ Only an instance ID matching `^i-[0-9a-f]{8,17}$` and the canonical query
 missing or multiple Origins, duplicate session cookies and session values above
 4096 bytes are refused. No session returns 401 before an upstream connection.
 Other upgrade routes return 404. The proxy does not follow redirects.
+
+A Connect page opened with `?region=<name>` adds `&region=<name>` to the
+websocket URL. The relay removes that key and sends it to console-api as one
+`X-Vws-Region` header; the upstream query is still only `kind`. The name must
+match `^[a-z0-9-]{1,63}$` (`src/lib/region-name.ts`) and appear at most once,
+unencoded; an empty, invalid, encoded or repeated region returns 400 before an
+upstream connection. Without the key no header is sent and console-api uses the
+default region.
 
 An ingress in front of the console must support HTTP/1.1 websocket upgrades and
 forward the Cookie, Origin, Connection, Upgrade and Sec-WebSocket-* headers.

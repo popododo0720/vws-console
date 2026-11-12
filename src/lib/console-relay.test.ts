@@ -38,6 +38,14 @@ describe("console upgrade boundary", () => {
       },
     });
   });
+  it.each(["kind=vnc&region=pve-seoul", "region=pve-seoul&kind=vnc"])(
+    "takes the region of %s as X-Vws-Region",
+    (query) => {
+      const result = validateUpgrade(request(`/api/v1/instances/i-1234abcd/console?${query}`));
+      expect(result).toHaveProperty("path", "/api/v1/instances/i-1234abcd/console?kind=vnc");
+      expect(result).toHaveProperty("headers.x-vws-region", "pve-seoul");
+    },
+  );
   it.each(["i-12345678", "i-1234567890abcdef", "i-1234567890abcdef0"])("accepts %s", (id) => {
     const result = validateUpgrade(request(`/api/v1/instances/${id}/console?kind=serial`));
     expect(result).toHaveProperty("path", `/api/v1/instances/${id}/console?kind=serial`);
@@ -48,12 +56,13 @@ describe("console upgrade boundary", () => {
       expect(validateUpgrade(request(`/api/v1/instances/${id}/console?kind=vnc`))).toEqual({ status: 400 });
     },
   );
-  it.each(["", "kind=x", "kind=vnc&kind=vnc", "kind=vnc&extra=x", "kind=serial?", "kind=vnc&", "kind=%76nc"])(
-    "refuses query %s",
-    (query) => {
-      expect(validateUpgrade(request(`/api/v1/instances/i-1234abcd/console?${query}`))).toEqual({ status: 400 });
-    },
-  );
+  it.each([
+    ...["", "kind=x", "kind=vnc&kind=vnc", "kind=vnc&extra=x", "kind=serial?", "kind=vnc&", "kind=%76nc"],
+    ...["kind=vnc&region=", "kind=vnc&region=US-EAST", "kind=vnc&region=%61", `kind=vnc&region=${"a".repeat(64)}`],
+    ...["region=a&region=a", "kind=vnc&region=a&region=b", "region=a", "kind=vnc&region=a&"],
+  ])("refuses query %s", (query) => {
+    expect(validateUpgrade(request(`/api/v1/instances/i-1234abcd/console?${query}`))).toEqual({ status: 400 });
+  });
   it("refuses other routes", () => {
     expect(validateUpgrade(request("/_next/webpack-hmr"))).toEqual({ status: 404 });
   });

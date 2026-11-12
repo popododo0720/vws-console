@@ -188,6 +188,18 @@ describe("Connect to instance", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("opens the websocket in the page's region", async () => {
+    const page = window.location.href;
+    window.history.replaceState(null, "", `/compute/instances/${ID}/connect?region=pve-seoul`);
+    try {
+      show(pveWritable);
+      const socket = await start();
+      expect(socket.url).toBe(`ws://localhost:3000/api/v1/instances/${ID}/console?kind=vnc&region=pve-seoul`);
+    } finally {
+      window.history.replaceState(null, "", page);
+    }
+  });
+
   it.each([
     ["credentialsrequired", { types: ["password"] }, "asked for a password"],
     ["securityfailure", { status: 1, reason: "Too many attempts" }, "refused the connection: Too many attempts"],

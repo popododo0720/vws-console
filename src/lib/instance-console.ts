@@ -1,3 +1,4 @@
+import { isRegionName } from "@/lib/region-name";
 import { isInstanceId } from "@/lib/vws-api/adapter";
 import { route, withQuery } from "@/lib/vws-api/route";
 
@@ -11,16 +12,19 @@ export const connectHref = (id: string) => `/compute/instances/${encodeURICompon
 /**
  * The websocket of one console of an instance: console-api's path on the console's own origin, so the URL holds no
  * credential. Null for an ID that breaks the instance ID rule, which therefore never reaches a URL. console-api
- * refuses any query but the one `kind`.
+ * refuses any query but the one `kind`; the page's one valid `region` goes along as well, and the relay turns it
+ * into X-Vws-Region.
  */
 export function consoleSocketUrl(
-  origin: Pick<Location, "protocol" | "host">,
+  origin: Pick<Location, "protocol" | "host" | "search">,
   id: string,
   kind: ConsoleKind,
 ): string | null {
   if (!isInstanceId(id)) return null;
   const scheme = origin.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${origin.host}/api/v1${withQuery(route("/instances/{id}/console", { id }), { kind }).path}`;
+  const regions = new URLSearchParams(origin.search).getAll("region");
+  const region = regions.length === 1 && isRegionName(regions[0]) ? regions[0] : undefined;
+  return `${scheme}://${origin.host}/api/v1${withQuery(route("/instances/{id}/console", { id }), { kind, region }).path}`;
 }
 
 /** How long a console may take from opening its websocket to being usable. */

@@ -2,16 +2,31 @@ import { request as httpRequest, STATUS_CODES, type IncomingMessage, type Outgoi
 import { request as httpsRequest } from "node:https";
 import type { Duplex } from "node:stream";
 import { isInstanceId } from "../src/lib/instance-id.ts";
+import { isRegionName } from "../src/lib/region-name.ts";
 import { API_SESSION_COOKIE, SESSION_COOKIE } from "../src/lib/vws-api/session-cookies.ts";
 
 type Handshake = { path: string; headers: OutgoingHttpHeaders };
 type Validation = { status: number } | Handshake;
 
+/** `kind` exactly once and `region` at most once, in either order, each pair literal; null for anything else. */
+function consoleQuery(query: string): { kind: string; region?: string } | null {
+  let kind: string | undefined;
+  let region: string | undefined;
+  for (const pair of query.split("&")) {
+    const named = /^kind=(vnc|serial)$/.exec(pair);
+    if (named && kind === undefined) kind = named[1];
+    else if (pair.startsWith("region=") && region === undefined && isRegionName(pair.slice(7))) region = pair.slice(7);
+    else return null;
+  }
+  return kind === undefined ? null : { kind, region };
+}
+
 export function validateUpgrade(request: Pick<IncomingMessage, "url" | "headers" | "rawHeaders">): Validation {
   const [path, query, ...extra] = (request.url ?? "").split("?");
   const match = /^\/api\/v1\/instances\/([^/]+)\/console$/.exec(path);
   if (!match) return { status: 404 };
-  if (!isInstanceId(match[1]) || extra.length || !/^kind=(vnc|serial)$/.test(query ?? "")) return { status: 400 };
+  const parsed = consoleQuery(query ?? "");
+  if (!isInstanceId(match[1]) || extra.length || !parsed) return { status: 400 };
   const sessions = (request.headers.cookie ?? "")
     .split(";")
     .map((pair) => pair.trim())
@@ -43,7 +58,8 @@ export function validateUpgrade(request: Pick<IncomingMessage, "url" | "headers"
     const value = request.headers[name];
     if (value !== undefined) headers[name] = value;
   }
-  return { path: `${path}?${query}`, headers };
+  if (parsed.region !== undefined) headers["x-vws-region"] = parsed.region;
+  return { path: `${path}?kind=${parsed.kind}`, headers };
 }
 
 export function relayUpgrade(request: IncomingMessage, browser: Duplex, head: Buffer): void {

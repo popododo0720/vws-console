@@ -103,6 +103,7 @@ COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/server ./server
 COPY --from=builder --chown=node:node /app/src/lib/instance-id.ts ./src/lib/instance-id.ts
+COPY --from=builder --chown=node:node /app/src/lib/region-name.ts ./src/lib/region-name.ts
 COPY --from=builder --chown=node:node /app/src/lib/vws-api/session-cookies.ts ./src/lib/vws-api/session-cookies.ts
 
 # If you want to persist the fetch cache generated during the build so that
