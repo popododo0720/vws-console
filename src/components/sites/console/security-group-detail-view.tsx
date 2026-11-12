@@ -101,9 +101,10 @@ export function SecurityGroupDetailView({
               </>
             }
             items={[
-              { label: "Edit inbound rules", onSelect: editInbound },
+              { label: "Edit inbound rules", action: "ec2:AuthorizeSecurityGroupIngress", onSelect: editInbound },
               {
                 label: "Copy to new security group",
+                action: "ec2:CreateSecurityGroup",
                 onSelect: () => router.push(copyHref(group.id)),
               },
               {
@@ -112,6 +113,7 @@ export function SecurityGroupDetailView({
               },
               {
                 label: "Delete security groups",
+                action: "ec2:DeleteSecurityGroup",
                 disabled: isDefault,
                 onSelect: () => setDeleting(true),
               },

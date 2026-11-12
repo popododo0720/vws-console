@@ -112,16 +112,19 @@ export function InstanceDetailView({
               items={[
                 {
                   label: "Start",
+                  action: "ec2:StartInstances",
                   disabled: action.pending || instance.state !== "stopped",
                   onSelect: () => action.run(() => startInstancesAction([instance.id])),
                 },
                 {
                   label: "Stop",
+                  action: "ec2:StopInstances",
                   disabled: action.pending || instance.state !== "running",
                   onSelect: () => action.run(() => stopInstancesAction([instance.id])),
                 },
                 {
                   label: "Terminate",
+                  action: "ec2:TerminateInstances",
                   disabled: action.pending || instance.state === "terminated",
                   onSelect: () => action.run(() => terminateInstancesAction([instance.id])),
                 },
@@ -140,6 +143,7 @@ export function InstanceDetailView({
               items={[
                 {
                   label: "Edit Name tag",
+                  action: "ec2:CreateTags",
                   onSelect: () => {
                     setNewName(instance.name);
                     setRenameOpen(true);

@@ -103,21 +103,25 @@ export function ElasticIpsView({
       actions={[
         {
           label: "Associate Elastic IP address",
+          action: "ec2:AssociateAddress",
           disabled: (rows) => action.pending || rows.length !== 1 || Boolean(rows[0].instanceId),
           onSelect: (rows) => open({ kind: "associate", eip: rows[0] }),
         },
         {
           label: "Disassociate Elastic IP address",
+          action: "ec2:DisassociateAddress",
           disabled: (rows) => action.pending || rows.length !== 1 || !rows[0].instanceId,
           onSelect: (rows) => action.run(() => disassociateAddressesAction([rows[0].allocationId])),
         },
         {
           label: "Release Elastic IP addresses",
+          action: "ec2:ReleaseAddress",
           disabled: (rows) => action.pending || rows.length === 0 || rows.some((row) => row.instanceId),
           onSelect: (rows) => action.run(() => releaseAddressesAction(rows.map((row) => row.allocationId))),
         },
       ]}
       createLabel="Allocate Elastic IP address"
+      createAction="ec2:AllocateAddress"
       onCreate={() => open({ kind: "allocate" })}
       emptyLine="No Elastic IP addresses found in this Region"
       filterPlaceholder="Find elastic IP addresses by attribute or tag"

@@ -58,15 +58,17 @@ export function KeyPairsView({ keyPairs, loadError }: { keyPairs: StoredKeyPair[
           <ListActions
             onRefresh={() => router.refresh()}
             items={[
-              { label: "Import key pair", href: "/network/key-pairs/import" },
+              { label: "Import key pair", href: "/network/key-pairs/import", action: "ec2:CreateKeyPair" },
               { label: "Manage tags", disabled: true },
               {
                 label: "Delete",
+                action: "ec2:DeleteKeyPair",
                 disabled: action.pending || selected.length === 0,
                 onSelect: () => setConfirmDelete(true),
               },
             ]}
             createLabel="Create key pair"
+            createAction="ec2:CreateKeyPair"
             onCreate={() => router.push("/network/key-pairs/create")}
           />
         }

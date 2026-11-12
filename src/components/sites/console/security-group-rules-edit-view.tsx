@@ -144,6 +144,7 @@ function InboundRulesForm({ crumbs, group }: { crumbs: { label: string; href?: s
             Preview changes
           </OutlineButton>
           <OrangeButton
+            action="ec2:AuthorizeSecurityGroupIngress"
             disabled={action.pending || (changes !== null && changeCount === 0)}
             onClick={() => {
               setTouched(true);

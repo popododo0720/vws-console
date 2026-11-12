@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { attachVolumeAction } from "@/app/actions/resources";
 import { AttachVolumeView } from "@/components/sites/console/attach-volume-view";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
+import { supported } from "@/lib/vws-api/testdata/capabilities";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import type { Instance, Volume } from "@/types/console";
 
@@ -43,7 +44,7 @@ const apiError: ApiError = { code: "Conflict", message: "Volume vol-1 is already
 
 function renderAttach(props: Partial<React.ComponentProps<typeof AttachVolumeView>> = {}) {
   render(
-    <ConsoleProvider>
+    <ConsoleProvider capabilities={supported}>
       <AttachVolumeView
         id="vol-1"
         volume={volume}

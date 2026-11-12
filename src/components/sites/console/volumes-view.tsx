@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import type { Volume } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
@@ -26,6 +25,7 @@ import {
   dash,
   menuTriggerClass,
   orangeLinkClass,
+  ActionLink,
 } from "@/components/sites/console/ui";
 
 function volumeState(row: Volume) {
@@ -172,6 +172,7 @@ export function VolumesView({
               items={[
                 {
                   label: "Modify volume",
+                  action: "ec2:ModifyVolume",
                   disabled: !one,
                   onSelect: () => {
                     if (!one) return;
@@ -182,12 +183,14 @@ export function VolumesView({
                 },
                 {
                   label: "Create snapshot",
+                  action: "ec2:CreateSnapshot",
                   disabled: !one,
                   href: one ? `/storage/snapshots/create?volumeId=${one.id}` : undefined,
                 },
                 { label: "Create snapshot lifecycle policy", disabled: true },
                 {
                   label: "Delete volume",
+                  action: "ec2:DeleteVolume",
                   disabled: action.pending || selected.length === 0,
                   onSelect: () => {
                     action.clear();
@@ -196,16 +199,19 @@ export function VolumesView({
                 },
                 {
                   label: "Attach volume",
+                  action: "ec2:AttachVolume",
                   disabled: !one || one.state !== "available",
                   href: one ? `/storage/volumes/${one.id}/attach` : undefined,
                 },
                 {
                   label: "Detach volume",
+                  action: "ec2:DetachVolume",
                   disabled: action.pending || !one || one.state !== "in-use",
                   onSelect: () => setDetachMode("detach"),
                 },
                 {
                   label: "Force detach volume",
+                  action: "ec2:DetachVolume",
                   disabled: action.pending || !one || one.state !== "in-use",
                   onSelect: () => setDetachMode("force"),
                 },
@@ -213,9 +219,13 @@ export function VolumesView({
                 { label: "Manage tags", disabled: true },
               ]}
             />
-            <Link href="/storage/volumes/create" className={`${orangeLinkClass} ${primaryPill}`}>
+            <ActionLink
+              action="ec2:CreateVolume"
+              href="/storage/volumes/create"
+              className={`${orangeLinkClass} ${primaryPill}`}
+            >
               Create volume
-            </Link>
+            </ActionLink>
           </>
         }
       />

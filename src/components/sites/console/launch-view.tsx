@@ -579,7 +579,12 @@ export function LaunchView({
                   >
                     Cancel
                   </button>
-                  <OrangeButton className="rounded-full px-5" disabled={!ready} onClick={launch}>
+                  <OrangeButton
+                    className="rounded-full px-5"
+                    action="ec2:RunInstances"
+                    disabled={!ready}
+                    onClick={launch}
+                  >
                     {action.pending ? "Launching…" : "Launch instance"}
                   </OrangeButton>
                 </div>

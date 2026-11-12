@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
+import { supported } from "@/lib/vws-api/testdata/capabilities";
 import { KeyPairCreateView } from "@/components/sites/console/key-pair-create";
 import { KeyPairsView } from "@/components/sites/console/key-pairs-view";
 import type { KeyPairId, KeyPairName, StoredKeyPair } from "@/lib/key-pair";
@@ -39,7 +40,7 @@ const laptop: StoredKeyPair = {
 
 function renderPairs(keyPairs: StoredKeyPair[] = []) {
   return render(
-    <ConsoleProvider>
+    <ConsoleProvider capabilities={supported}>
       <KeyPairsView keyPairs={keyPairs} loadError={null} />
     </ConsoleProvider>,
   );
@@ -47,7 +48,7 @@ function renderPairs(keyPairs: StoredKeyPair[] = []) {
 
 function renderCreate(mode: "generate" | "import") {
   return render(
-    <ConsoleProvider>
+    <ConsoleProvider capabilities={supported}>
       <KeyPairCreateView mode={mode} />
     </ConsoleProvider>,
   );

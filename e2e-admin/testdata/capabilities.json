@@ -1,0 +1,404 @@
+{
+  "ap-northeast-2": {
+    "region": "ap-northeast-2",
+    "kind": "aws",
+    "zones": [],
+    "actions": {
+      "vws:OpenConsole": {
+        "state": "supported"
+      },
+      "ec2:RunInstances": {
+        "state": "supported"
+      },
+      "ec2:StartInstances": {
+        "state": "supported"
+      },
+      "ec2:StopInstances": {
+        "state": "supported"
+      },
+      "ec2:RebootInstances": {
+        "state": "supported"
+      },
+      "ec2:TerminateInstances": {
+        "state": "supported"
+      },
+      "ec2:CreateTags": {
+        "state": "supported"
+      },
+      "ec2:DeleteTags": {
+        "state": "supported"
+      },
+      "ec2:CreateVolume": {
+        "state": "supported"
+      },
+      "ec2:AttachVolume": {
+        "state": "supported"
+      },
+      "ec2:DetachVolume": {
+        "state": "supported"
+      },
+      "ec2:DeleteVolume": {
+        "state": "supported"
+      },
+      "ec2:ModifyVolume": {
+        "state": "supported"
+      },
+      "ec2:CreateSnapshot": {
+        "state": "supported"
+      },
+      "ec2:DeleteSnapshot": {
+        "state": "supported"
+      },
+      "ec2:CreateKeyPair": {
+        "state": "supported"
+      },
+      "ec2:DeleteKeyPair": {
+        "state": "supported"
+      },
+      "ec2:CreateVpc": {
+        "state": "supported"
+      },
+      "ec2:DeleteVpc": {
+        "state": "supported"
+      },
+      "ec2:CreateSubnet": {
+        "state": "supported"
+      },
+      "ec2:DeleteSubnet": {
+        "state": "supported"
+      },
+      "ec2:CreateSecurityGroup": {
+        "state": "supported"
+      },
+      "ec2:DeleteSecurityGroup": {
+        "state": "supported"
+      },
+      "ec2:AuthorizeSecurityGroupIngress": {
+        "state": "supported"
+      },
+      "ec2:RevokeSecurityGroupIngress": {
+        "state": "supported"
+      },
+      "ec2:AllocateAddress": {
+        "state": "supported"
+      },
+      "ec2:ReleaseAddress": {
+        "state": "supported"
+      },
+      "ec2:AssociateAddress": {
+        "state": "supported"
+      },
+      "ec2:DisassociateAddress": {
+        "state": "supported"
+      },
+      "ec2:RegisterImage": {
+        "state": "supported"
+      },
+      "ec2:DescribeInstances": {
+        "state": "supported"
+      },
+      "ec2:DescribeImages": {
+        "state": "empty",
+        "reasonCode": "InventoryNotImplemented",
+        "reason": "AWS read is not implemented"
+      },
+      "ec2:DescribeVolumes": {
+        "state": "empty",
+        "reasonCode": "InventoryNotImplemented",
+        "reason": "AWS read is not implemented"
+      },
+      "ec2:DescribeSnapshots": {
+        "state": "empty",
+        "reasonCode": "InventoryNotImplemented",
+        "reason": "AWS read is not implemented"
+      },
+      "ec2:DescribeKeyPairs": {
+        "state": "empty",
+        "reasonCode": "InventoryNotImplemented",
+        "reason": "AWS read is not implemented"
+      },
+      "ec2:DescribeVpcs": {
+        "state": "empty",
+        "reasonCode": "InventoryNotImplemented",
+        "reason": "AWS read is not implemented"
+      },
+      "ec2:DescribeSubnets": {
+        "state": "empty",
+        "reasonCode": "InventoryNotImplemented",
+        "reason": "AWS read is not implemented"
+      },
+      "ec2:DescribeSecurityGroups": {
+        "state": "empty",
+        "reasonCode": "InventoryNotImplemented",
+        "reason": "AWS read is not implemented"
+      },
+      "ec2:DescribeAddresses": {
+        "state": "empty",
+        "reasonCode": "InventoryNotImplemented",
+        "reason": "AWS read is not implemented"
+      }
+    },
+    "instanceTypes": [
+      {
+        "instanceType": "vws.small",
+        "vcpus": 1,
+        "memoryMiB": 1024
+      },
+      {
+        "instanceType": "vws.medium",
+        "vcpus": 2,
+        "memoryMiB": 4096
+      },
+      {
+        "instanceType": "vws.large",
+        "vcpus": 4,
+        "memoryMiB": 8192
+      },
+      {
+        "instanceType": "vws.xlarge",
+        "vcpus": 8,
+        "memoryMiB": 16384
+      }
+    ],
+    "limits": {
+      "maxInstancesPerRun": 0,
+      "maxTagsPerResource": 0,
+      "maxUserDataBytes": 0,
+      "maxVolumesPerInstance": 0
+    },
+    "features": {
+      "userData": false,
+      "linkedClones": false,
+      "snapshotScope": "",
+      "privateIpMode": "",
+      "liveTests": false
+    }
+  },
+  "pve-lab-1": {
+    "region": "pve-lab-1",
+    "kind": "proxmox",
+    "cluster": {
+      "name": "lab",
+      "pveRelease": "",
+      "quorate": false,
+      "leader": ""
+    },
+    "zones": [
+      {
+        "zoneName": "pve-lab-1a",
+        "zoneId": "pve-lab-1a",
+        "state": "available",
+        "nodes": ["pve"]
+      }
+    ],
+    "actions": {
+      "ec2:RunInstances": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:StartInstances": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:StopInstances": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:RebootInstances": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:TerminateInstances": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:CreateTags": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:DeleteTags": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:CreateVolume": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:AttachVolume": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:DetachVolume": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:DeleteVolume": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:ModifyVolume": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:CreateSnapshot": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:DeleteSnapshot": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:CreateKeyPair": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:DeleteKeyPair": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:CreateVpc": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:DeleteVpc": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:CreateSubnet": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:DeleteSubnet": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:CreateSecurityGroup": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:DeleteSecurityGroup": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:AuthorizeSecurityGroupIngress": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:RevokeSecurityGroupIngress": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:AllocateAddress": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:ReleaseAddress": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:AssociateAddress": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:DisassociateAddress": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:RegisterImage": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
+      "ec2:DescribeInstances": {
+        "state": "supported"
+      },
+      "ec2:DescribeImages": {
+        "state": "empty"
+      },
+      "ec2:DescribeVolumes": {
+        "state": "supported"
+      },
+      "ec2:DescribeSnapshots": {
+        "state": "supported"
+      },
+      "ec2:DescribeKeyPairs": {
+        "state": "empty"
+      },
+      "ec2:DescribeVpcs": {
+        "state": "partial",
+        "reasonCode": "BridgeInventory",
+        "reason": "bridge inventory; SDN inventory is not yet served"
+      },
+      "ec2:DescribeSubnets": {
+        "state": "partial",
+        "reasonCode": "BridgeInventory",
+        "reason": "bridge inventory; SDN inventory is not yet served"
+      },
+      "ec2:DescribeSecurityGroups": {
+        "state": "empty"
+      },
+      "ec2:DescribeAddresses": {
+        "state": "empty"
+      },
+      "ec2:DescribeTags": {
+        "state": "supported"
+      },
+      "ec2:DescribeRouteTables": {
+        "state": "empty"
+      }
+    },
+    "instanceTypes": [
+      {
+        "instanceType": "vws.small",
+        "vcpus": 1,
+        "memoryMiB": 1024
+      },
+      {
+        "instanceType": "vws.medium",
+        "vcpus": 2,
+        "memoryMiB": 4096
+      }
+    ],
+    "limits": {
+      "maxInstancesPerRun": 0,
+      "maxTagsPerResource": 0,
+      "maxUserDataBytes": 0,
+      "maxVolumesPerInstance": 0
+    },
+    "features": {
+      "userData": false,
+      "linkedClones": false,
+      "snapshotScope": "vm",
+      "privateIpMode": "",
+      "liveTests": true
+    }
+  }
+}

@@ -180,7 +180,7 @@ export function CreateSnapshotView({
           <Link href="/storage/snapshots" className="text-[14px] font-bold text-[#006ce0] hover:underline">
             Cancel
           </Link>
-          <OrangeButton className={primaryPill} disabled={action.pending} onClick={submit}>
+          <OrangeButton className={primaryPill} action="ec2:CreateSnapshot" disabled={action.pending} onClick={submit}>
             Create snapshot
           </OrangeButton>
         </div>

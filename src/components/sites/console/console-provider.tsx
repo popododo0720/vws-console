@@ -4,8 +4,8 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import { useSearchParams } from "next/navigation";
 import { createEmptyAccount, createSampleAccount } from "@/lib/console-data";
 import type { Dataset, Instance, InternetGateway, NatGateway, RouteTable, Subnet, Volume, Vpc } from "@/types/console";
-import { ALL_REGIONS, pickRegion } from "@/lib/vws-api/adapter";
-import type { AccountBucket, ApiError, ApiResult, Identity, Region } from "@/lib/vws-api/adapter";
+import { ALL_REGIONS, mutationCapability, pickRegion } from "@/lib/vws-api/adapter";
+import type { AccountBucket, ApiError, ApiResult, Identity, Region, RegionCapabilities } from "@/lib/vws-api/adapter";
 
 type Mode = "empty" | "sample";
 
@@ -22,6 +22,12 @@ type ConsoleApi = {
   regionsError: ApiError | null;
   /** The selected region name, "all" for All regions, or "" when no region is listed. */
   region: string;
+  /** Why the selected region's capability document could not be read; every action is refused while it is set. */
+  capabilitiesError: ApiError | null;
+  /** Why the selected region refuses `action` ("ec2:RunInstances"), or null when its document serves it. */
+  denied: (action: string) => string | null;
+  /** The reason of a `partial` action whose reasonCode is `code`, for the one form input that code turns off. */
+  limited: (action: string, code: string) => string | null;
   mode: Mode;
   showEmpty: () => void;
   showSample: () => void;
@@ -85,6 +91,11 @@ function isCidr(value: string) {
   return match.slice(1, 5).every((part) => Number(part) <= 255) && Number(match[5]) <= 32;
 }
 
+/** The reasons for a refused action when no capability document gives one. Without a document nothing is supported. */
+const NO_DOCUMENT = "Choose a region to use this action.";
+const UNREAD = "The capabilities of this region could not be read.";
+const NO_REASON = "This region does not support this action.";
+
 const UNKNOWN: Identity = { userName: "—", accountId: "—" };
 const NO_REGIONS: readonly Region[] = [];
 
@@ -95,6 +106,7 @@ export function ConsoleProvider({
   accountBuckets = [],
   adminActions = [],
   regions: listing = null,
+  capabilities: read = null,
 }: {
   children: ReactNode;
   identity?: Identity;
@@ -102,7 +114,10 @@ export function ConsoleProvider({
   accountBuckets?: readonly AccountBucket[];
   adminActions?: readonly string[];
   regions?: ApiResult<Region[]> | null;
+  capabilities?: ApiResult<RegionCapabilities | null> | null;
 }) {
+  const capabilities = read?.ok ? read.value : null;
+  const capabilitiesError = read && !read.ok ? read.error : null;
   const regions = listing?.ok ? listing.value : NO_REGIONS;
   const regionsError = listing && !listing.ok ? listing.error : null;
   // Read from the URL like the server does, so the menu never names a region the requests did not go to.
@@ -147,6 +162,16 @@ export function ConsoleProvider({
       regions,
       regionsError,
       region,
+      capabilitiesError,
+      denied: (action) => {
+        if (!capabilities) return capabilitiesError ? UNREAD : NO_DOCUMENT;
+        const { state, reason } = mutationCapability(capabilities, action);
+        return state === "supported" || state === "partial" ? null : reason || NO_REASON;
+      },
+      limited: (action, code) => {
+        const got = capabilities && mutationCapability(capabilities, action);
+        return got && got.state === "partial" && got.reasonCode === code ? got.reason : null;
+      },
       mode,
       density,
       setDensity,
@@ -310,6 +335,8 @@ export function ConsoleProvider({
   }, [
     accountBuckets,
     adminActions,
+    capabilities,
+    capabilitiesError,
     data,
     density,
     flash,
@@ -324,6 +351,16 @@ export function ConsoleProvider({
   ]);
 
   return <ConsoleContext.Provider value={api}>{children}</ConsoleContext.Provider>;
+}
+
+/** Looks up why the selected region refuses an action; null for a served action or a control that starts none. */
+export function useDenied(): (action: string | undefined) => string | null {
+  const api = useContext(ConsoleContext);
+  return (action) => {
+    if (action === undefined) return null;
+    if (!api) throw new Error("useDenied must be used inside ConsoleProvider");
+    return api.denied(action);
+  };
 }
 
 export function useConsole() {
