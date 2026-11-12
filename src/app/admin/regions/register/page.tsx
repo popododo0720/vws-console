@@ -10,5 +10,5 @@ export default async function Page() {
   await connection();
   const regions = await listAdminRegions();
   if (!regions.ok && regions.error.code === "PermissionDenied") return <AdminAccessDenied error={regions.error} />;
-  return <AdminRegionFormView region={null} loadError={null} />;
+  return <AdminRegionFormView region={null} loadError={regions.ok ? null : regions.error} />;
 }

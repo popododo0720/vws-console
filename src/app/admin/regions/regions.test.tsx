@@ -236,4 +236,14 @@ describe("admin Regions pages on a mocked admin API", () => {
       "The region could not be loadedinvalid Proxmox region nameInvalidArgument · Request ID req-7",
     );
   });
+
+  it.each<[string, Reply]>([
+    ["Unavailable", [503, failure("Unavailable", "admin registry unavailable")]],
+    ["MalformedResponse", [200, { items: "junk" }]],
+  ])("shows a failed registry read (%s) on the register page in place of the form", async (code, reply) => {
+    adminApi({ "/regions": reply });
+    await show(RegisterPage());
+    expect(screen.getByRole("alert")).toHaveTextContent(`${code} · Request ID`);
+    expect(screen.queryByRole("button", { name: "Register region" })).toBeNull();
+  });
 });

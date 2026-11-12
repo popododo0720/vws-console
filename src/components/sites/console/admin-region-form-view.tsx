@@ -31,6 +31,7 @@ export function AdminRegionFormView({ name, region, loadError }: Props) {
   const save = useApiAction();
   const title = name ? `Edit ${name}` : "Register region";
   const here = name ? [{ label: name, href: regionHref(name) }, { label: "Edit" }] : [{ label: title }];
+  const loadFailed = name ? "The region could not be loaded" : "Proxmox regions could not be loaded";
   return (
     <Shell tree={adminNav} navMode="overlay-only">
       <CreatePage
@@ -39,7 +40,7 @@ export function AdminRegionFormView({ name, region, loadError }: Props) {
         info="A region is one Proxmox cluster. The VWS admin API stores its registration."
         lead={name ? undefined : "Register a Proxmox cluster so that this console can manage it as a region."}
       >
-        <ApiErrorAlert error={loadError} title="The region could not be loaded" />
+        <ApiErrorAlert error={loadError} title={loadFailed} />
         {loadError ? null : <RegionForm key={region?.etag} region={region} save={save} />}
       </CreatePage>
     </Shell>
