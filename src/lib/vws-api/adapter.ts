@@ -21,6 +21,12 @@ export type ApiError = { code: string; message: string; requestId: string | null
 
 export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: ApiError };
 
+/** The X-Vws-Region value that reads every registered region at once. */
+export const ALL_REGIONS = "all";
+
+/** One region as GET /regions lists it. `kind` is "pve" or "aws"; the console decides nothing by it. */
+export type Region = { name: string; kind: string; state: "available" | "degraded" | "unavailable" };
+
 declare const brand: unique symbol;
 
 export type BucketName = string & { readonly [brand]: "BucketName" };
@@ -87,6 +93,30 @@ function list(page: unknown): Json[] {
 
 export function nextPageToken(page: unknown): string {
   return str(obj(page).nextPageToken);
+}
+
+/** console-api's own rule for a region name, so a listed name that breaks it never reaches a request header. */
+const REGION_NAME = /^[a-z0-9-]{1,63}$/;
+const REGION_STATES = ["available", "degraded", "unavailable"] as const;
+
+/** A state the console does not know is shown as unavailable. */
+export function parseRegions(page: unknown): Region[] {
+  return list(page).flatMap((item) => {
+    const name = str(item.name);
+    if (!REGION_NAME.test(name) || name === ALL_REGIONS) return [];
+    return [
+      { name, kind: str(item.kind), state: REGION_STATES.find((state) => state === item.state) ?? "unavailable" },
+    ];
+  });
+}
+
+/**
+ * The region a page works in: its ?region= when that is All regions or a listed name, else the first listed one.
+ * The server and the browser both decide with this, so the menu names the region the requests were sent to.
+ */
+export function pickRegion(regions: readonly Region[], choice: string | null): string | null {
+  if (choice === ALL_REGIONS || regions.some((region) => region.name === choice)) return choice;
+  return regions[0]?.name ?? null;
 }
 
 const BUCKET_NAME = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;

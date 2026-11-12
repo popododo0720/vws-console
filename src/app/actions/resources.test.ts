@@ -66,6 +66,7 @@ describe("bucket actions", () => {
 
   function serve(...replies: Response[]) {
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      if (url.endsWith("/api/v1/regions")) return respond(200, { items: [] });
       calls.push({ url, init });
       const next = replies.shift();
       if (!next) throw new Error("unexpected request");

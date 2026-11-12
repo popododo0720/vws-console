@@ -1,5 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import { cache } from "react";
 import { headers as requestHeaders } from "next/headers";
 import { redirect } from "next/navigation";
 import { currentSession } from "./session";
@@ -43,9 +44,11 @@ import {
   type InstanceType,
   parseInstances,
   parseOperation,
+  parseRegions,
   parseSubnets,
   parseVolumes,
   parseVpcs,
+  pickRegion,
   toInstance,
   toStoredKeyPair,
   toVolume,
@@ -68,6 +71,7 @@ import {
   type Image,
   type LaunchRequest,
   type Operation,
+  type Region,
 } from "./adapter";
 import {
   parseIdempotencyKey,
@@ -182,7 +186,26 @@ function rawBody(value: unknown): RawBody | null {
   return { bytes, contentType };
 }
 
-type PostOptions = { idempotencyKey?: string; bodyText?: string; ifMatch?: string; timeoutMs?: number };
+type PostOptions = {
+  idempotencyKey?: string;
+  bodyText?: string;
+  ifMatch?: string;
+  timeoutMs?: number;
+  /** The X-Vws-Region value a caller already worked out, so an operation and its polls go to one region. */
+  region?: string | null;
+};
+
+/**
+ * The X-Vws-Region value for the page being served: its ?region= when console-api lists that name, else the first
+ * region it lists. Null when it lists none, or outside a page; console-api then uses its own default region.
+ */
+async function regionHeader(): Promise<string | null> {
+  const path = (await requestHeaders()).get(PATH_HEADER);
+  if (path === null) return null;
+  const regions = await listRegions();
+  const query = path.includes("?") ? path.slice(path.indexOf("?") + 1) : "";
+  return pickRegion(regions.ok ? regions.value : [], new URLSearchParams(query).get("region"));
+}
 
 async function request(
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
@@ -217,6 +240,8 @@ async function request(
     if (typeof token !== "string") return { ok: false, status: null, error: token };
     headers.authorization = `Bearer ${token}`;
   }
+  const region = post?.region === undefined ? await regionHeader() : post.region;
+  if (region) headers["x-vws-region"] = region;
   if (method === "POST") {
     headers["idempotency-key"] = post?.idempotencyKey ?? randomUUID();
     headers["content-type"] = "application/json";
@@ -273,8 +298,9 @@ function malformed(path: string): ApiError {
 async function listAll<T>(path: ApiRoute, parse: (page: unknown) => T[], pageSize?: number): Promise<ApiResult<T[]>> {
   const out: T[] = [];
   let token = "";
+  const region = await regionHeader();
   do {
-    const result = await request("GET", withQuery(path, { pageSize, pageToken: token }));
+    const result = await request("GET", withQuery(path, { pageSize, pageToken: token }), undefined, { region });
     if (!result.ok) return { ok: false, error: result.error };
     try {
       out.push(...parse(result.value.json));
@@ -292,14 +318,14 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Reads GET /operations/{id} every 500 ms until the operation leaves "running" or 60 s pass. A "running"
  * operation back means the deadline passed; callers decide what that means for them.
  */
-async function pollOperation(op: Operation): Promise<ApiResult<Operation>> {
+async function pollOperation(op: Operation, region: string | null): Promise<ApiResult<Operation>> {
   const started = performance.now();
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   try {
     while (op.state === "running") {
       if (Date.now() > deadline) return { ok: true, value: op };
       await sleep(POLL_INTERVAL_MS);
-      const polled = await request("GET", route("/operations/{id}", { id: op.id }));
+      const polled = await request("GET", route("/operations/{id}", { id: op.id }), undefined, { region });
       if (!polled.ok) return { ok: false, error: polled.error };
       try {
         op = parseOperation(polled.value.json);
@@ -325,7 +351,8 @@ async function mutateReturning(
   body?: unknown,
   idempotencyKey?: IdempotencyKey,
 ): Promise<ApiResult<unknown>> {
-  const sent = await request("POST", path, body, { idempotencyKey });
+  const region = await regionHeader();
+  const sent = await request("POST", path, body, { idempotencyKey, region });
   if (!sent.ok) return { ok: false, error: sent.error };
   if (sent.value.status !== 202) return { ok: true, value: sent.value.json };
   let accepted;
@@ -334,7 +361,7 @@ async function mutateReturning(
   } catch {
     return { ok: false, error: malformed(path.path) };
   }
-  const polled = await pollOperation(accepted);
+  const polled = await pollOperation(accepted, region);
   if (!polled.ok) return polled;
   const op = polled.value;
   if (op.state === "running") {
@@ -351,6 +378,22 @@ async function mutateReturning(
   }
   return { ok: true, value: sent.value.json };
 }
+
+/** With no console-api the console runs on its sample data, in the one region console-api's own fake backend lists. */
+const sampleRegions: Region[] = [{ name: "vws-1", kind: "pve", state: "available" }];
+
+/** Read once for a page render. A server action reads it again for each operation it starts. */
+export const listRegions = cache(async (): Promise<ApiResult<Region[]>> => {
+  if (typeof apiBase() !== "string") return { ok: true, value: sampleRegions };
+  const path = route("/regions");
+  const result = await request("GET", path, undefined, { region: null });
+  if (!result.ok) return { ok: false, error: result.error };
+  try {
+    return { ok: true, value: parseRegions(result.value.json) };
+  } catch {
+    return { ok: false, error: malformed(path.path) };
+  }
+});
 
 export const listImages = (): Promise<ApiResult<Image[]>> => listAll(route("/images"), parseImages);
 export const listInstances = (): Promise<ApiResult<Instance[]>> => listAll(route("/instances"), parseInstances);
@@ -604,7 +647,12 @@ export async function createKeyPair(attempt: CreateAttempt): Promise<KeyPairCrea
   }
   const draft = readAttempt({ idempotencyKey, body: attempt.body });
   if ("code" in draft) return failedCreate(draft, null);
-  const sent = await request("POST", route("/key-pairs"), undefined, { idempotencyKey, bodyText: attempt.body });
+  const region = await regionHeader();
+  const sent = await request("POST", route("/key-pairs"), undefined, {
+    idempotencyKey,
+    bodyText: attempt.body,
+    region,
+  });
   if (!sent.ok) return failedCreate(sent.error, null);
   const read = readCreateItem(sent.value.json);
   if (!read || (draft.mode === "generate" && read.material === "")) return failedCreate(malformed("/key-pairs"), null);
@@ -620,7 +668,7 @@ export async function createKeyPair(attempt: CreateAttempt): Promise<KeyPairCrea
   } catch {
     return failedCreate(malformed("/key-pairs"), issued);
   }
-  const polled = await pollOperation(accepted);
+  const polled = await pollOperation(accepted, region);
   if (!polled.ok) return failedCreate(polled.error, issued);
   const op = polled.value;
   if (op.state === "running") return { status: "ready", issued: { ...issued, settlement: "still-running" } };
