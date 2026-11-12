@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSnapshotAction, createVolumeAction, deleteSnapshotsAction } from "@/app/actions/resources";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
+import { supported } from "@/lib/vws-api/testdata/capabilities";
 import { CreateSnapshotView } from "@/components/sites/console/create-snapshot-view";
 import { CreateVolumeView } from "@/components/sites/console/create-volume-view";
 import { SnapshotsView } from "@/components/sites/console/snapshots-view";
@@ -49,7 +50,7 @@ const volume: Volume = {
   attachment: null,
 };
 
-const wrap = (ui: React.ReactNode) => render(<ConsoleProvider>{ui}</ConsoleProvider>);
+const wrap = (ui: React.ReactNode) => render(<ConsoleProvider capabilities={supported}>{ui}</ConsoleProvider>);
 
 beforeEach(() => {
   vi.clearAllMocks();

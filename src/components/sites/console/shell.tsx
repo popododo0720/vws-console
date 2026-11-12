@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { NavTree } from "@/types/console";
+import { ApiErrorAlert } from "@/components/sites/console/api-action";
+import { useConsole } from "@/components/sites/console/console-provider";
 import { TOGGLE_NAV_EVENT } from "@/components/sites/console/page-header";
 import { SideNav } from "@/components/sites/console/side-nav";
 import { TopBar } from "@/components/sites/console/top-bar";
@@ -32,6 +34,7 @@ export function Shell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const { capabilitiesError } = useConsole();
   useEffect(() => {
     const toggle = () => {
       if (window.matchMedia("(min-width: 1024px)").matches) setCollapsed((value) => !value);
@@ -71,7 +74,10 @@ export function Shell({
             <ChevronRight className="size-3.5" />
           </button>
         ) : null}
-        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <ApiErrorAlert error={capabilitiesError} title="This region's capabilities could not be loaded" />
+          {children}
+        </div>
       </div>
       <footer className="flex h-7 shrink-0 items-center justify-between gap-3 bg-[#161d26] px-3 text-[12px] text-[#d5dbdb]">
         <div className="flex items-center gap-4">

@@ -15,6 +15,7 @@ import { VpcFilter, useVpcFilter } from "@/components/sites/console/vpc-filter";
 
 type ListAction<T> = {
   label: string;
+  action?: string;
   disabled?: (selected: T[]) => boolean;
   onSelect: (selected: T[]) => void;
 };
@@ -32,6 +33,7 @@ export function NetworkList<T extends { region: string }>({
   columns,
   actions,
   createLabel,
+  createAction,
   onCreate,
   emptyLine,
   filterPlaceholder,
@@ -53,6 +55,7 @@ export function NetworkList<T extends { region: string }>({
   columns: Column<T>[];
   actions: ListAction<T>[];
   createLabel: string;
+  createAction?: string;
   onCreate: () => void;
   emptyLine: string;
   filterPlaceholder: string;
@@ -78,6 +81,7 @@ export function NetworkList<T extends { region: string }>({
   const one = selected.length === 1 ? selected[0] : null;
   const items: MenuEntry[] = actions.map((action) => ({
     label: action.label,
+    action: action.action,
     disabled: action.disabled ? action.disabled(selected) : selected.length === 0,
     onSelect: () => {
       action.onSelect(selected);
@@ -105,6 +109,7 @@ export function NetworkList<T extends { region: string }>({
               onRefresh={live ? live.onRefresh : () => undefined}
               items={items}
               createLabel={createLabel}
+              createAction={createAction}
               onCreate={onCreate}
             />
           </>

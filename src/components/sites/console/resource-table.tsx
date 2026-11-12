@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { ChevronDown, ChevronUp, RefreshCw, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ALL_REGIONS } from "@/lib/vws-api/adapter";
 import { useConsole } from "@/components/sites/console/console-provider";
-import { MenuButton, MenuChevron } from "@/components/sites/console/ui";
+import { ActionButton, ActionLink, MenuButton, MenuChevron } from "@/components/sites/console/ui";
 
 export type Column<T> = {
   key: string;
@@ -53,7 +52,7 @@ export function ResourceTable<T>({
   onSelectedIds: (ids: string[]) => void;
   emptyTitle: string;
   emptyMessage: string;
-  emptyAction?: { label: string; href?: string; onClick?: () => void };
+  emptyAction?: { label: string; href?: string; onClick?: () => void; action?: string };
   presets?: Preset<T>[];
   /** Shows the preset select even with no presets, as a fixed scope such as "Owned by me". */
   presetLabel?: string;
@@ -321,9 +320,9 @@ export function ResourceTable<T>({
             </p>
             {rows.length === 0 && emptyAction ? (
               emptyAction.href ? (
-                <Link href={emptyAction.href} className={emptyActionClass}>
+                <ActionLink action={emptyAction.action} href={emptyAction.href} className={emptyActionClass}>
                   {emptyAction.label}
-                </Link>
+                </ActionLink>
               ) : (
                 <button type="button" className={emptyActionClass} onClick={emptyAction.onClick}>
                   {emptyAction.label}
@@ -373,10 +372,10 @@ export function NameCell({ value, onRename }: { value: string; onRename?: (name:
   return (
     <span className="inline-flex items-center gap-1">
       <span>{value.trim() ? value : "—"}</span>
-      <button
-        type="button"
+      <ActionButton
+        action="ec2:CreateTags"
         aria-label="Edit name"
-        className="rounded p-0.5 text-[#5f6b7a] hover:bg-[#f4f5f6] hover:text-[#16191f]"
+        className="rounded p-0.5 text-[#5f6b7a] hover:bg-[#f4f5f6] hover:text-[#16191f] disabled:opacity-50"
         onClick={(event) => {
           event.stopPropagation();
           setText(value);
@@ -384,7 +383,7 @@ export function NameCell({ value, onRename }: { value: string; onRename?: (name:
         }}
       >
         <PencilIcon />
-      </button>
+      </ActionButton>
     </span>
   );
 }

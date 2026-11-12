@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteVolumesAction, detachVolumeAction, modifyVolumeAction } from "@/app/actions/resources";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
+import { supported } from "@/lib/vws-api/testdata/capabilities";
 import { VolumesView } from "@/components/sites/console/volumes-view";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import type { Volume } from "@/types/console";
@@ -41,7 +42,7 @@ function volume(id: string, state: string, attachment: Volume["attachment"]): Vo
 
 function renderVolumes(rows: Volume[]) {
   render(
-    <ConsoleProvider>
+    <ConsoleProvider capabilities={supported}>
       <VolumesView volumes={rows} loadError={null} loadedAt="2026-11-05T08:26:38.000Z" />
     </ConsoleProvider>,
   );

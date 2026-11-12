@@ -311,7 +311,7 @@ export function useKeyPairCreator(options: {
         footer={
           <>
             <OutlineButton onClick={flow.close}>Cancel</OutlineButton>
-            <OrangeButton onClick={flow.submit}>
+            <OrangeButton action="ec2:CreateKeyPair" onClick={flow.submit}>
               {form?.mode === "import" ? "Import key pair" : "Create key pair"}
             </OrangeButton>
           </>
@@ -402,7 +402,7 @@ export function KeyPairCreateView({ mode }: { mode: CreateMode }) {
           <button type="button" className="text-[14px] font-bold text-[#006ce0] hover:underline" onClick={flow.close}>
             Cancel
           </button>
-          <OrangeButton className={primaryPill} disabled={!editing} onClick={flow.submit}>
+          <OrangeButton className={primaryPill} action="ec2:CreateKeyPair" disabled={!editing} onClick={flow.submit}>
             {title}
           </OrangeButton>
         </div>

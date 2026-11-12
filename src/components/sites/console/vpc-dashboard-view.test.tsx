@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConsoleProvider, useConsole } from "@/components/sites/console/console-provider";
+import { supported } from "@/lib/vws-api/testdata/capabilities";
 import { VpcDashboardView } from "@/components/sites/console/vpc-dashboard-view";
 import { createSampleAccount } from "@/lib/console-data";
 import type { ApiError, ApiResult, Region } from "@/lib/vws-api/adapter";
@@ -47,7 +48,7 @@ function UseSample() {
 
 function renderDashboard(props: Partial<Parameters<typeof VpcDashboardView>[0]> = {}) {
   render(
-    <ConsoleProvider regions={listed}>
+    <ConsoleProvider regions={listed} capabilities={supported}>
       <UseSample />
       <VpcDashboardView
         vpcs={vpcs}

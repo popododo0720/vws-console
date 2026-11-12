@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import type { Snapshot } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
@@ -25,6 +24,7 @@ import {
   dash,
   menuTriggerClass,
   orangeLinkClass,
+  ActionLink,
 } from "@/components/sites/console/ui";
 
 function snapshotState(row: Snapshot) {
@@ -140,6 +140,7 @@ export function SnapshotsView({ snapshots, loadError }: { snapshots: Snapshot[];
               items={[
                 {
                   label: "Create volume from snapshot",
+                  action: "ec2:CreateVolume",
                   disabled: !one || one.state !== "completed",
                   href: one ? `/storage/volumes/create?snapshotId=${one.id}` : undefined,
                 },
@@ -147,6 +148,7 @@ export function SnapshotsView({ snapshots, loadError }: { snapshots: Snapshot[];
                 { label: "Copy snapshot", disabled: true },
                 {
                   label: "Delete snapshot",
+                  action: "ec2:DeleteSnapshot",
                   disabled: action.pending || selected.length === 0,
                   onSelect: () => {
                     action.clear();
@@ -156,9 +158,13 @@ export function SnapshotsView({ snapshots, loadError }: { snapshots: Snapshot[];
                 { label: "Manage tags", disabled: true },
               ]}
             />
-            <Link href="/storage/snapshots/create" className={`${orangeLinkClass} ${primaryPill}`}>
+            <ActionLink
+              action="ec2:CreateSnapshot"
+              href="/storage/snapshots/create"
+              className={`${orangeLinkClass} ${primaryPill}`}
+            >
               Create snapshot
-            </Link>
+            </ActionLink>
           </>
         }
       />

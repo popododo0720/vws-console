@@ -49,7 +49,7 @@ const READS = [
 const every = (names: string[], capability: Record<string, string>) =>
   Object.fromEntries(names.map((name) => [`ec2:${name}`, capability]));
 
-const supported = { state: "supported" };
+const served = { state: "supported" };
 const limits = { maxInstancesPerRun: 0, maxTagsPerResource: 0, maxUserDataBytes: 0, maxVolumesPerInstance: 0 };
 const small = { instanceType: "vws.small", vcpus: 1, memoryMiB: 1024 };
 const medium = { instanceType: "vws.medium", vcpus: 2, memoryMiB: 4096 };
@@ -63,7 +63,7 @@ export const pveLiveBox = {
   actions: {
     ...every(MUTATIONS, { state: "unsupported", reasonCode: "ReadOnly", reason: "read-only" }),
     ...every(READS, { state: "empty" }),
-    ...every(["DescribeInstances", "DescribeVolumes", "DescribeSnapshots", "DescribeTags"], supported),
+    ...every(["DescribeInstances", "DescribeVolumes", "DescribeSnapshots", "DescribeTags"], served),
     ...every(["DescribeVpcs", "DescribeSubnets"], {
       state: "partial",
       reasonCode: "BridgeInventory",
@@ -81,7 +81,7 @@ export const pveWritable = {
   ...pveLiveBox,
   actions: {
     ...pveLiveBox.actions,
-    ...every(MUTATIONS, supported),
+    ...every(MUTATIONS, served),
     "ec2:CreateVolume": {
       state: "partial",
       reasonCode: "NoSnapshotSource",
@@ -101,10 +101,10 @@ export const awsRegion = {
   kind: "aws",
   zones: [],
   actions: {
-    "vws:OpenConsole": supported,
-    ...every(MUTATIONS, supported),
+    "vws:OpenConsole": served,
+    ...every(MUTATIONS, served),
     ...every(READS, { state: "empty", reasonCode: "InventoryNotImplemented", reason: "AWS read is not implemented" }),
-    "ec2:DescribeInstances": supported,
+    "ec2:DescribeInstances": served,
   },
   instanceTypes: [
     small,
@@ -118,3 +118,6 @@ export const awsRegion = {
 
 /** The document as the root layout hands it to ConsoleProvider. */
 export const loaded = (doc: unknown) => ({ ok: true as const, value: parseCapabilities(doc) });
+
+/** A region that serves every action, for tests that are not about capabilities. */
+export const supported = loaded(awsRegion);

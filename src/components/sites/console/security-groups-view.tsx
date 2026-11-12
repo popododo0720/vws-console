@@ -179,16 +179,19 @@ export function SecurityGroupsView({
                 },
                 {
                   label: "Edit inbound rules",
+                  action: "ec2:AuthorizeSecurityGroupIngress",
                   disabled: !one,
                   onSelect: () => one && router.push(`/network/security-groups/${one.id}/edit/inbound`),
                 },
                 {
                   label: "Copy to new security group",
+                  action: "ec2:CreateSecurityGroup",
                   disabled: !one,
                   onSelect: () => one && router.push(copyHref(one.id)),
                 },
                 {
                   label: "Delete security groups",
+                  action: "ec2:DeleteSecurityGroup",
                   disabled: selected.length === 0 || selected.some((item) => item.groupName === "default"),
                   onSelect: () => setDeleting(true),
                 },
@@ -213,7 +216,10 @@ export function SecurityGroupsView({
                 ]}
               />
             </div>
-            <OrangeButton onClick={() => router.push("/network/security-groups/create")}>
+            <OrangeButton
+              action="ec2:CreateSecurityGroup"
+              onClick={() => router.push("/network/security-groups/create")}
+            >
               Create security group
             </OrangeButton>
           </>

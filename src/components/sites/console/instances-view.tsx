@@ -2,7 +2,6 @@
 
 import { copyToClipboard } from "@/lib/clipboard";
 import { useEffect, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { CircleCheck, ExternalLink, RefreshCw } from "lucide-react";
 import type { Instance } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
@@ -27,6 +26,7 @@ import {
   dash,
   blueMenuTriggerClass,
   orangeLinkClass,
+  ActionLink,
 } from "@/components/sites/console/ui";
 
 function StatusCell({ row }: { row: Instance }) {
@@ -180,16 +180,19 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
               items={[
                 {
                   label: "Start",
+                  action: "ec2:StartInstances",
                   disabled: action.pending || selected.every((item) => item.state !== "stopped"),
                   onSelect: () => action.run(() => startInstancesAction(selected.map((item) => item.id))),
                 },
                 {
                   label: "Stop",
+                  action: "ec2:StopInstances",
                   disabled: action.pending || selected.every((item) => item.state !== "running"),
                   onSelect: () => action.run(() => stopInstancesAction(selected.map((item) => item.id))),
                 },
                 {
                   label: "Terminate",
+                  action: "ec2:TerminateInstances",
                   disabled: action.pending || selected.length === 0,
                   onSelect: () =>
                     action.run(
@@ -225,9 +228,13 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
               ]}
             />
             <div className="flex">
-              <Link href="/compute/launch" className={`${orangeLinkClass} rounded-r-none`}>
+              <ActionLink
+                action="ec2:RunInstances"
+                href="/compute/launch"
+                className={`${orangeLinkClass} rounded-r-none`}
+              >
                 Launch instances
-              </Link>
+              </ActionLink>
               <MenuButton
                 align="right"
                 className="inline-flex h-8 items-center rounded-r-lg border-l border-[#16191f]/30 bg-[#ff9900] px-2 text-[#16191f] hover:bg-[#ec7211]"
@@ -237,7 +244,7 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
                   </span>
                 }
                 items={[
-                  { label: "Launch instances", href: "/compute/launch" },
+                  { label: "Launch instances", href: "/compute/launch", action: "ec2:RunInstances" },
                   { label: "Launch instance from template", disabled: true },
                 ]}
               />
@@ -257,7 +264,7 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
         onSelectedIds={setSelectedIds}
         emptyTitle="No instances"
         emptyMessage="You do not have any instances in this region"
-        emptyAction={{ label: "Launch instances", href: "/compute/launch" }}
+        emptyAction={{ label: "Launch instances", href: "/compute/launch", action: "ec2:RunInstances" }}
         filterPlaceholder="Filter Instance by attribute or tag (case-sensitive)"
         presets={[
           { id: "running", label: "Running", match: (row) => row.state === "running" },

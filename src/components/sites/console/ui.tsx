@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useDenied } from "@/components/sites/console/console-provider";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 
@@ -13,9 +14,82 @@ export function Mark({ className, width = 32, height = 19 }: { className?: strin
   return <Image src="/images/vws-logo.svg" alt="VWS" width={width} height={height} className={className} />;
 }
 
-export function OrangeButton({ className, ...props }: React.ComponentProps<typeof Button>) {
+type ExplainedProps = { id: string; reason: string; className?: string; children: ReactNode };
+
+/** A disabled control and the reason, shown on hover, focus or tap as the AWS console explains a disabled action. */
+function Explained({ id, reason, className, children }: ExplainedProps) {
+  const [right, setRight] = useState(false);
+  const place = (event: { currentTarget: HTMLElement }) =>
+    setRight(event.currentTarget.getBoundingClientRect().left + 272 > window.innerWidth);
   return (
-    <Button
+    <span
+      tabIndex={0}
+      className={cn("group/why relative inline-flex cursor-not-allowed [&>button]:pointer-events-none", className)}
+      onMouseEnter={place}
+      onFocus={place}
+    >
+      {children}
+      <span
+        id={id}
+        role="tooltip"
+        className={cn(
+          "pointer-events-none absolute top-full z-50 mt-1 hidden w-max max-w-64 rounded-md border border-[#e6e8eb] bg-white p-2 text-left text-[12px] font-normal leading-5 text-[#16191f] shadow-lg group-hover/why:block group-focus/why:block",
+          right ? "right-0" : "left-0",
+        )}
+      >
+        {reason}
+      </span>
+    </span>
+  );
+}
+
+type Gated = {
+  /** The capability action ("ec2:RunInstances") the control starts. A region that refuses it disables the control. */
+  action?: string;
+};
+
+function GatedButton({ action, ...props }: React.ComponentProps<typeof Button> & Gated) {
+  const why = useDenied()(action);
+  const id = useId();
+  if (why === null) return <Button {...props} />;
+  return (
+    <Explained id={id} reason={why}>
+      <Button {...props} disabled aria-describedby={id} />
+    </Explained>
+  );
+}
+
+/** A plain button that starts `action`, for the controls that are not one of the console's styled buttons. */
+export function ActionButton({ action, ...props }: React.ComponentProps<"button"> & Gated) {
+  const why = useDenied()(action);
+  const id = useId();
+  if (why === null) return <button type="button" {...props} />;
+  return (
+    <Explained id={id} reason={why}>
+      <button type="button" {...props} disabled aria-describedby={id} />
+    </Explained>
+  );
+}
+
+type ActionLinkProps = Gated & { href: string; className?: string; children: ReactNode };
+
+/** A link that starts `action`; a region that refuses it gets a disabled button of the same look, with the reason. */
+export function ActionLink({ action, ...link }: ActionLinkProps) {
+  const why = useDenied()(action);
+  const id = useId();
+  if (why === null) return <Link {...link} />;
+  return (
+    <Explained id={id} reason={why}>
+      <button type="button" disabled aria-describedby={id} className={cn(link.className, "opacity-50")}>
+        {link.children}
+      </button>
+    </Explained>
+  );
+}
+
+export function OrangeButton({ className, ...props }: React.ComponentProps<typeof GatedButton>) {
+  return (
+    <GatedButton
       {...props}
       className={cn(
         "h-8 rounded-lg border-transparent bg-[#ff9900] px-3 text-[13px] font-semibold text-[#16191f] shadow-none hover:bg-[#ec7211]",
@@ -25,9 +99,9 @@ export function OrangeButton({ className, ...props }: React.ComponentProps<typeo
   );
 }
 
-export function OutlineButton({ className, ...props }: React.ComponentProps<typeof Button>) {
+export function OutlineButton({ className, ...props }: React.ComponentProps<typeof GatedButton>) {
   return (
-    <Button
+    <GatedButton
       variant="outline"
       {...props}
       className={cn(
@@ -70,7 +144,7 @@ export function InfoTip({ text }: { text: string }) {
   );
 }
 
-export type MenuEntry = {
+export type MenuEntry = Gated & {
   label: string;
   href?: string;
   onSelect?: () => void;
@@ -94,6 +168,8 @@ export function MenuButton({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const denied = useDenied();
+  const menuId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -129,7 +205,9 @@ export function MenuButton({
           )}
           role="menu"
         >
-          {items.map((item) => {
+          {items.map((item, index) => {
+            const why = denied(item.action);
+            const whyId = `${menuId}-${index}`;
             const content = (
               <span className={cn("flex items-center gap-2", item.hint && "whitespace-nowrap")}>
                 <Check className={cn("size-3.5", item.checked ? "opacity-100" : "opacity-0")} />
@@ -140,7 +218,7 @@ export function MenuButton({
                 {item.hint ? <span className="ml-auto pl-4 text-[12px] text-[#5f6b7a]">{item.hint}</span> : null}
               </span>
             );
-            if (item.href && !item.disabled) {
+            if (item.href && !item.disabled && why === null) {
               const Anchor = item.reload ? "a" : Link;
               return (
                 <Anchor
@@ -154,12 +232,13 @@ export function MenuButton({
                 </Anchor>
               );
             }
-            return (
+            const entry = (
               <button
                 key={item.label}
                 type="button"
                 role="menuitem"
-                disabled={item.disabled}
+                disabled={item.disabled || why !== null}
+                aria-describedby={why === null ? undefined : whyId}
                 className="block w-full px-3 py-1.5 text-left hover:bg-[#f2f8fd] disabled:cursor-not-allowed disabled:text-[#8d9aa8] disabled:hover:bg-transparent"
                 onClick={() => {
                   item.onSelect?.();
@@ -168,6 +247,12 @@ export function MenuButton({
               >
                 {content}
               </button>
+            );
+            if (why === null) return entry;
+            return (
+              <Explained key={item.label} id={whyId} reason={why} className="flex">
+                {entry}
+              </Explained>
             );
           })}
         </div>

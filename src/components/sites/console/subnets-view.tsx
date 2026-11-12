@@ -131,11 +131,13 @@ export function SubnetsView({
       actions={[
         {
           label: "Delete subnet",
+          action: "ec2:DeleteSubnet",
           disabled: (rows) => action.pending || rows.length === 0,
           onSelect: (rows) => action.run(() => deleteSubnetsAction(rows.map((row) => row.id))),
         },
       ]}
       createLabel="Create subnet"
+      createAction="ec2:CreateSubnet"
       onCreate={openCreate}
       emptyLine="No subnets found"
       filterPlaceholder="Find subnets by attribute or tag"

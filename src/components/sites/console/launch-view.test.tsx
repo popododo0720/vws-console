@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
+import { supported } from "@/lib/vws-api/testdata/capabilities";
 import { LaunchView } from "@/components/sites/console/launch-view";
 import type { KeyPairId, KeyPairName, StoredKeyPair } from "@/lib/key-pair";
 import type { Subnet, Vpc } from "@/types/console";
@@ -59,7 +60,7 @@ const web: StoredKeyPair = {
 
 function renderLaunch() {
   return render(
-    <ConsoleProvider>
+    <ConsoleProvider capabilities={supported}>
       <LaunchView
         images={[{ id: "ami-1", name: "Amazon Linux", state: "available", owner: "amazon" }]}
         instanceTypes={[{ id: "vws.small", vcpus: 1, memoryMiB: 1024 }]}
@@ -116,7 +117,7 @@ describe("launch key pair selection", () => {
       created: "",
     };
     render(
-      <ConsoleProvider>
+      <ConsoleProvider capabilities={supported}>
         <LaunchView
           images={[{ id: "ami-1", name: "Amazon Linux", state: "available", owner: "amazon" }]}
           instanceTypes={[{ id: "vws.small", vcpus: 1, memoryMiB: 1024 }]}
@@ -150,7 +151,7 @@ const otherSubnet: Subnet = { ...subnet, id: "subnet-2", vpcId: "vpc-2", autoAss
 
 function renderWizard() {
   return render(
-    <ConsoleProvider>
+    <ConsoleProvider capabilities={supported}>
       <LaunchView
         images={[
           { id: "ami-1", name: "Amazon Linux", state: "available", owner: "amazon" },

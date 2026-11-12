@@ -113,6 +113,7 @@ export function SecurityGroupCreateView({
         <div className="flex justify-end gap-2">
           <OutlineButton onClick={() => router.push("/network/security-groups")}>Cancel</OutlineButton>
           <OrangeButton
+            action="ec2:CreateSecurityGroup"
             disabled={action.pending}
             onClick={() => {
               setTouched(true);

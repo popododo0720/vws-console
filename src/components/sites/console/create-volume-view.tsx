@@ -9,6 +9,7 @@ import { computeNav } from "@/lib/console-data";
 import { parseCreateVolume, VOLUME_TYPES, volumeTypeSpec, type VolumeTypeName } from "@/lib/ebs";
 import { createVolumeAction } from "@/app/actions/resources";
 import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
+import { useConsole } from "@/components/sites/console/console-provider";
 import {
   CreatePage,
   Field,
@@ -52,6 +53,7 @@ export function CreateVolumeView({
   const [zone, setZone] = useState(zones[0] ?? "");
   const [snapshotId, setSnapshotId] = useState(initialSnapshot?.id ?? NO_SNAPSHOT);
   const [problem, setProblem] = useState<string | null>(null);
+  const noSnapshot = useConsole().limited("ec2:CreateVolume", "NoSnapshotSource");
   const spec = volumeTypeSpec(volumeType) ?? VOLUME_TYPES[0];
   const sizeNumber = Number(size);
 
@@ -61,7 +63,7 @@ export function CreateVolumeView({
     iops: spec.iops ? toNumber(iops) : null,
     throughput: spec.throughput ? toNumber(throughput) : null,
     availabilityZone: zone,
-    snapshotId: snapshotId === NO_SNAPSHOT ? null : snapshotId,
+    snapshotId: snapshotId === NO_SNAPSHOT || noSnapshot !== null ? null : snapshotId,
   };
 
   const submit = () => {
@@ -196,12 +198,14 @@ export function CreateVolumeView({
             label={optional("Snapshot ID")}
             htmlFor="volume-snapshot"
             info="Restore the volume from a snapshot. Leave it empty for a blank volume."
+            hint={noSnapshot ?? undefined}
           >
             <div className="flex max-w-[783px] items-center gap-5">
               <select
                 id="volume-snapshot"
-                className="field max-w-[703px]"
-                value={snapshotId}
+                className="field max-w-[703px] disabled:bg-[#f4f4f4] disabled:text-[#5f6b7a]"
+                disabled={noSnapshot !== null}
+                value={noSnapshot === null ? snapshotId : NO_SNAPSHOT}
                 onChange={(event) => {
                   setSnapshotId(event.target.value);
                   const chosen = snapshots.find((item) => item.id === event.target.value);
@@ -246,7 +250,12 @@ export function CreateVolumeView({
           <Link href="/storage/volumes" className="text-[14px] font-bold text-[#006ce0] hover:underline">
             Cancel
           </Link>
-          <OrangeButton className={primaryPill} disabled={action.pending || zones.length === 0} onClick={submit}>
+          <OrangeButton
+            action="ec2:CreateVolume"
+            className={primaryPill}
+            disabled={action.pending || zones.length === 0}
+            onClick={submit}
+          >
             Create volume
           </OrangeButton>
         </div>

@@ -2,6 +2,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Instance } from "@/types/console";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
+import { supported } from "@/lib/vws-api/testdata/capabilities";
 import { InstancesView, elapsedLabel } from "@/components/sites/console/instances-view";
 
 vi.mock("@/app/actions/auth", () => ({ logoutAction: vi.fn() }));
@@ -59,7 +60,7 @@ describe("InstancesView under All regions", () => {
 
 function renderEmpty() {
   render(
-    <ConsoleProvider>
+    <ConsoleProvider capabilities={supported}>
       <InstancesView instances={[]} loadError={null} />
     </ConsoleProvider>,
   );

@@ -9,12 +9,14 @@ export function ListActions({
   onRefresh,
   items,
   createLabel,
+  createAction,
   onCreate,
 }: {
   showLastUpdated?: boolean;
   onRefresh: () => void;
   items: MenuEntry[];
   createLabel: string;
+  createAction?: string;
   onCreate: () => void;
 }) {
   return (
@@ -39,7 +41,7 @@ export function ListActions({
         }
         items={items}
       />
-      <OrangeButton className={primaryPill} onClick={onCreate}>
+      <OrangeButton className={primaryPill} action={createAction} onClick={onCreate}>
         {createLabel}
       </OrangeButton>
     </>

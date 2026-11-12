@@ -12,7 +12,7 @@ import { useConsole } from "@/components/sites/console/console-provider";
 import { primaryPill, secondaryPill } from "@/components/sites/console/ebs-form-parts";
 import { BreadcrumbBar } from "@/components/sites/console/page-header";
 import { Shell } from "@/components/sites/console/shell";
-import { orangeLinkClass } from "@/components/sites/console/ui";
+import { ActionLink, orangeLinkClass } from "@/components/sites/console/ui";
 import { VpcFilter, useVpcFilter } from "@/components/sites/console/vpc-filter";
 
 export type DashboardLoadError = { label: string; error: ApiError };
@@ -148,12 +148,20 @@ export function VpcDashboardView({
       <div className="grid min-h-0 flex-1 gap-5 overflow-auto px-4 py-4 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <Link href="/network/vpcs?create=1" className={`${orangeLinkClass} ${primaryPill}`}>
+            <ActionLink
+              action="ec2:CreateVpc"
+              href="/network/vpcs?create=1"
+              className={`${orangeLinkClass} ${primaryPill}`}
+            >
               Create VPC
-            </Link>
-            <Link href="/compute/launch" className={`${secondaryPill} inline-flex items-center`}>
+            </ActionLink>
+            <ActionLink
+              action="ec2:RunInstances"
+              href="/compute/launch"
+              className={`${secondaryPill} inline-flex items-center`}
+            >
               Launch EC2 Instances
-            </Link>
+            </ActionLink>
           </div>
           {api.region && api.region !== ALL_REGIONS ? (
             <p className="mt-1 text-[11px] text-[#5f6b7a]">

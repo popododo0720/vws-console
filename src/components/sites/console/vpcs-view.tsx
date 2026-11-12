@@ -129,6 +129,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
             items={[
               {
                 label: "Delete",
+                action: "ec2:DeleteVpc",
                 disabled: action.pending || selected.length === 0,
                 onSelect: () =>
                   action.run(
@@ -138,6 +139,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
               },
             ]}
             createLabel="Create VPC"
+            createAction="ec2:CreateVpc"
             onCreate={() => setCreateOpen(true)}
           />
         }
@@ -222,6 +224,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
           <>
             <OutlineButton onClick={closeCreate}>Cancel</OutlineButton>
             <OrangeButton
+              action="ec2:CreateVpc"
               disabled={action.pending}
               onClick={() => action.run(() => createVpcAction(cidr, newName), closeCreate)}
             >

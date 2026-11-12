@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
+import { supported } from "@/lib/vws-api/testdata/capabilities";
 import { SecurityGroupDetailView } from "@/components/sites/console/security-group-detail-view";
 import { SecurityGroupRulesEditView } from "@/components/sites/console/security-group-rules-edit-view";
 import { SecurityGroupCreateView } from "@/components/sites/console/security-group-create-view";
@@ -34,7 +35,7 @@ const group: SecurityGroup = toSecurityGroup({
   ],
 });
 
-const wrap = (node: React.ReactNode) => render(<ConsoleProvider>{node}</ConsoleProvider>);
+const wrap = (node: React.ReactNode) => render(<ConsoleProvider capabilities={supported}>{node}</ConsoleProvider>);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -123,7 +124,7 @@ describe("Edit inbound rules", () => {
 
     const afterRevoke = { ...group, rules: group.rules.slice(1) };
     rerender(
-      <ConsoleProvider>
+      <ConsoleProvider capabilities={supported}>
         <SecurityGroupRulesEditView id={GROUP_ID} direction="in" group={afterRevoke} loadError={null} />
       </ConsoleProvider>,
     );
@@ -233,7 +234,7 @@ describe("Save success flash", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
     });
-    view.rerender(<ConsoleProvider>{detail}</ConsoleProvider>);
+    view.rerender(<ConsoleProvider capabilities={supported}>{detail}</ConsoleProvider>);
     return view;
   }
 
@@ -247,8 +248,8 @@ describe("Save success flash", () => {
   it("does not come back when the group page mounts again, as on Back or Forward", async () => {
     const view = await saveThenOpenDetail();
     expect(screen.getByText(FLASH)).toBeTruthy();
-    view.rerender(<ConsoleProvider>{null}</ConsoleProvider>);
-    view.rerender(<ConsoleProvider>{detail}</ConsoleProvider>);
+    view.rerender(<ConsoleProvider capabilities={supported}>{null}</ConsoleProvider>);
+    view.rerender(<ConsoleProvider capabilities={supported}>{detail}</ConsoleProvider>);
     expect(screen.queryByText(FLASH)).toBeNull();
   });
 
@@ -261,7 +262,7 @@ describe("Save success flash", () => {
     });
     const other = { ...group, id: "sg-0fedcba9876543210" };
     view.rerender(
-      <ConsoleProvider>
+      <ConsoleProvider capabilities={supported}>
         <SecurityGroupDetailView id={other.id} group={other} loadError={null} />
       </ConsoleProvider>,
     );

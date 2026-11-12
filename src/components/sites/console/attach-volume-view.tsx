@@ -198,7 +198,12 @@ export function AttachVolumeView({
           <Link href="/storage/volumes" className="text-[14px] font-bold text-[#006ce0] hover:underline">
             Cancel
           </Link>
-          <OrangeButton className={primaryPill} disabled={action.pending || blocked} onClick={submit}>
+          <OrangeButton
+            action="ec2:AttachVolume"
+            className={primaryPill}
+            disabled={action.pending || blocked}
+            onClick={submit}
+          >
             Attach volume
           </OrangeButton>
         </div>
