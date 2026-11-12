@@ -74,6 +74,17 @@ export async function terminateInstancesAction(ids: string[]) {
   });
 }
 
+const isInstanceId = (id: unknown): id is string => typeof id === "string" && /^i-[0-9a-f]{8,17}$/.test(id);
+
+/** One operation per instance, in order; the first failure stops the rest. */
+export async function rebootInstancesAction(ids: unknown): Promise<ApiError | null> {
+  return withActionSpan("rebootInstancesAction", async () => {
+    if (!Array.isArray(ids) || ids.length === 0 || !ids.every(isInstanceId))
+      return invalid("An instance ID is not valid.");
+    return each(ids, vws.rebootInstance);
+  });
+}
+
 /** Renames an instance through its Name tag. console-api has no DeleteTags, so a name cannot be cleared. */
 const NAME_REQUIRED: ApiError = {
   code: "NameRequired",

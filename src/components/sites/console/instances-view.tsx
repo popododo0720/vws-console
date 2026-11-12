@@ -5,16 +5,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CircleCheck, ExternalLink, RefreshCw } from "lucide-react";
 import type { Instance } from "@/types/console";
 import { computeNav } from "@/lib/console-data";
-import { ApiErrorAlert, useApiAction } from "@/components/sites/console/api-action";
-import {
-  renameInstanceAction,
-  startInstancesAction,
-  stopInstancesAction,
-  terminateInstancesAction,
-} from "@/app/actions/resources";
+import { ApiErrorAlert, OperationStatus, useApiAction } from "@/components/sites/console/api-action";
+import { renameInstanceAction } from "@/app/actions/resources";
 import type { ApiError } from "@/lib/vws-api/adapter";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { DetailDock } from "@/components/sites/console/detail-dock";
+import { InstanceStateMenu } from "@/components/sites/console/instance-state-menu";
 import { PageHeader } from "@/components/sites/console/page-header";
 import { Column, NameCell, ResourceTable } from "@/components/sites/console/resource-table";
 import { InstanceLink, InstanceTab, StateDot, instanceTabs } from "@/components/sites/console/instance-detail";
@@ -170,41 +166,7 @@ export function InstancesView({ instances: loaded, loadError }: { instances: Ins
             <OutlineButton disabled={selected.length === 0} onClick={() => setConnectOpen(true)}>
               Connect <ExternalLink className="size-3" />
             </OutlineButton>
-            <MenuButton
-              className={blueMenuTriggerClass()}
-              label={
-                <>
-                  Instance state{" "}
-                  <span aria-hidden className="text-[9px]">
-                    ▼
-                  </span>
-                </>
-              }
-              items={[
-                {
-                  label: "Start",
-                  action: "ec2:StartInstances",
-                  disabled: action.pending || selected.every((item) => item.state !== "stopped"),
-                  onSelect: () => action.run(() => startInstancesAction(selected.map((item) => item.id))),
-                },
-                {
-                  label: "Stop",
-                  action: "ec2:StopInstances",
-                  disabled: action.pending || selected.every((item) => item.state !== "running"),
-                  onSelect: () => action.run(() => stopInstancesAction(selected.map((item) => item.id))),
-                },
-                {
-                  label: "Terminate",
-                  action: "ec2:TerminateInstances",
-                  disabled: action.pending || selected.length === 0,
-                  onSelect: () =>
-                    action.run(
-                      () => terminateInstancesAction(selected.map((item) => item.id)),
-                      () => setSelectedIds([]),
-                    ),
-                },
-              ]}
-            />
+            <InstanceStateMenu instances={selected} action={action} onTerminated={() => setSelectedIds([])} />
             <MenuButton
               className={blueMenuTriggerClass()}
               label={
@@ -257,6 +219,7 @@ export function InstancesView({ instances: loaded, loadError }: { instances: Ins
       />
       <ApiErrorAlert error={loadError} title="Instances could not be loaded" />
       <ApiErrorAlert error={action.error} title="The instance action failed" />
+      <OperationStatus operation={action.operation} />
       <ResourceTable
         hideRefresh
         rows={instances}

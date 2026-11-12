@@ -7,6 +7,7 @@ import { InstancesView, elapsedLabel } from "@/components/sites/console/instance
 
 vi.mock("@/app/actions/auth", () => ({ logoutAction: vi.fn() }));
 vi.mock("@/app/actions/resources", () => ({
+  rebootInstancesAction: vi.fn(),
   renameInstanceAction: vi.fn(),
   startInstancesAction: vi.fn(),
   stopInstancesAction: vi.fn(),

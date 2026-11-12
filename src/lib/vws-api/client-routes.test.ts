@@ -136,6 +136,11 @@ const rows: Row[] = [
     sent: [`POST ${api(`/instances/${action}`)}`],
   })),
   {
+    name: "rebootInstance",
+    run: () => vws.rebootInstance(ID),
+    sent: [`POST ${api(`/instances/${enc(ID)}/reboot`)}`],
+  },
+  {
     name: "createInstanceTags",
     run: () => vws.createInstanceTags(ID, { Name: "x" }),
     sent: [`POST ${api(`/instances/${enc(ID)}/tags`)}`],
