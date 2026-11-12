@@ -76,6 +76,12 @@ export type MenuEntry = {
   onSelect?: () => void;
   disabled?: boolean;
   checked?: boolean;
+  /** A status dot before the label, as a CSS colour. */
+  dot?: string;
+  /** Muted text at the end of the row. */
+  hint?: string;
+  /** Follows `href` with a full page load, for a link that must not keep the page's client state. */
+  reload?: boolean;
 };
 
 export function MenuButton({
@@ -128,14 +134,19 @@ export function MenuButton({
         >
           {items.map((item) => {
             const content = (
-              <span className="flex items-center gap-2">
+              <span className={cn("flex items-center gap-2", item.hint && "whitespace-nowrap")}>
                 <Check className={cn("size-3.5", item.checked ? "opacity-100" : "opacity-0")} />
+                {item.dot ? (
+                  <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: item.dot }} />
+                ) : null}
                 {item.label}
+                {item.hint ? <span className="ml-auto pl-4 text-[12px] text-[#5f6b7a]">{item.hint}</span> : null}
               </span>
             );
             if (item.href && !item.disabled) {
+              const Anchor = item.reload ? "a" : Link;
               return (
-                <Link
+                <Anchor
                   key={item.label}
                   href={item.href}
                   role="menuitem"
@@ -143,7 +154,7 @@ export function MenuButton({
                   onClick={() => setOpen(false)}
                 >
                   {content}
-                </Link>
+                </Anchor>
               );
             }
             return (

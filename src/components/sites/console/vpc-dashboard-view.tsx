@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { networkNav } from "@/lib/console-data";
 import { DASHBOARD_CARDS, type DashboardCard, type DashboardInput } from "@/lib/vpc-dashboard";
-import type { ApiError } from "@/lib/vws-api/adapter";
+import { ALL_REGIONS, regionLabel, type ApiError } from "@/lib/vws-api/adapter";
 import { ApiErrorAlert } from "@/components/sites/console/api-action";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { primaryPill, secondaryPill } from "@/components/sites/console/ebs-form-parts";
@@ -91,7 +91,7 @@ function ResourceCard({
           <span className="font-bold text-[#006ce0] underline">{card.label}</span>
         )}
         <span>
-          {region} <Count card={card} value={card.count(input, region, vpcId)} current />
+          {regionLabel(region)} <Count card={card} value={card.count(input, region, vpcId)} current />
         </span>
       </div>
       <button
@@ -155,9 +155,11 @@ export function VpcDashboardView({
               Launch EC2 Instances
             </Link>
           </div>
-          <p className="mt-1 text-[11px] text-[#5f6b7a]">
-            Note: Your Instances will launch in the {api.region} region.
-          </p>
+          {api.region && api.region !== ALL_REGIONS ? (
+            <p className="mt-1 text-[11px] text-[#5f6b7a]">
+              Note: Your Instances will launch in the {api.region} region.
+            </p>
+          ) : null}
           <div className="mt-6 flex items-end justify-between gap-3 border-b border-[#d5dbdb] pb-1">
             <div>
               <h2 className="text-[20px] font-bold leading-7">Resources by Region</h2>
@@ -179,7 +181,7 @@ export function VpcDashboardView({
                 card={card}
                 input={input}
                 region={api.region}
-                regions={api.regions}
+                regions={api.regions.map((item) => item.name)}
                 vpcId={vpcFilter === "all" ? null : vpcFilter}
               />
             ))}

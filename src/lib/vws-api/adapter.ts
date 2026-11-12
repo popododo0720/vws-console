@@ -24,6 +24,8 @@ export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: ApiError
 /** The X-Vws-Region value that reads every registered region at once. */
 export const ALL_REGIONS = "all";
 
+export const regionLabel = (region: string) => (region === ALL_REGIONS ? "All regions" : region);
+
 /** One region as GET /regions lists it. `kind` is "pve" or "aws"; the console decides nothing by it. */
 export type Region = { name: string; kind: string; state: "available" | "degraded" | "unavailable" };
 

@@ -3,10 +3,10 @@ import { createSampleAccount } from "@/lib/console-data";
 import { DASHBOARD_CARDS, type DashboardInput } from "@/lib/vpc-dashboard";
 import type { ElasticIp, SecurityGroup, Subnet, Vpc } from "@/types/console";
 
-const HOME = "Europe (North)";
-const OTHER = "US East";
+const HOME = "pve-seoul-1";
+const OTHER = "us-east-1";
 
-const sample = createSampleAccount();
+const sample = createSampleAccount(HOME);
 
 function vpc(id: string): Vpc {
   return { ...sample.vpcs[0], id, region: "vws-1" };
@@ -78,6 +78,7 @@ describe("DASHBOARD_CARDS", () => {
   it("counts browser lists only in the region that holds them", () => {
     expect(card("nat-gateways").count(input, HOME, null)).toBe(sample.natGateways.length);
     expect(card("nat-gateways").count(input, OTHER, null)).toBe(0);
+    expect(card("nat-gateways").count(input, "all", null)).toBe(sample.natGateways.length);
     expect(card("route-tables").count(input, OTHER, null)).toBe(0);
     expect(card("internet-gateways").count(input, HOME, null)).toBe(sample.internetGateways.length);
     expect(card("internet-gateways").count(input, OTHER, null)).toBe(0);

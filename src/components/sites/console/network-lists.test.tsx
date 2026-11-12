@@ -32,7 +32,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(search),
 }));
 
-const sample = createSampleAccount();
+const sample = createSampleAccount("pve-seoul-1");
 const vpcs: Vpc[] = sample.vpcs;
 const subnets: Subnet[] = sample.subnets;
 

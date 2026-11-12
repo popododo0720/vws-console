@@ -1,4 +1,5 @@
 import type { ElasticIp, InternetGateway, NatGateway, RouteTable, SecurityGroup, Subnet, Vpc } from "@/types/console";
+import { ALL_REGIONS } from "@/lib/vws-api/adapter";
 
 /**
  * The API lists are null when they failed to load. They belong to one cluster that the region menu does not model,
@@ -33,7 +34,7 @@ const fromApi =
 const fromBrowser =
   (read: (input: DashboardInput) => readonly { vpcId: string; region: string }[]): DashboardCard["count"] =>
   (input, region, vpcId) =>
-    read(input).filter((item) => item.region === region && inVpc(vpcId)(item)).length;
+    read(input).filter((item) => (region === ALL_REGIONS || item.region === region) && inVpc(vpcId)(item)).length;
 
 const notModeled: DashboardCard["count"] = () => 0;
 

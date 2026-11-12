@@ -1,9 +1,11 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { createEmptyAccount, createSampleAccount, HOME_REGION, REGIONS } from "@/lib/console-data";
+import { useSearchParams } from "next/navigation";
+import { createEmptyAccount, createSampleAccount } from "@/lib/console-data";
 import type { Dataset, Instance, InternetGateway, NatGateway, RouteTable, Subnet, Volume, Vpc } from "@/types/console";
-import type { AccountBucket, Identity } from "@/lib/vws-api/adapter";
+import { ALL_REGIONS, pickRegion } from "@/lib/vws-api/adapter";
+import type { AccountBucket, ApiError, ApiResult, Identity, Region } from "@/lib/vws-api/adapter";
 
 type Mode = "empty" | "sample";
 
@@ -15,9 +17,11 @@ type ConsoleApi = {
   /** The signed-in user name and account ID, "—" where unknown. */
   account: { name: string; id: string };
   signIn: boolean;
-  regions: readonly string[];
+  /** The regions console-api lists. Empty with no list; `regionsError` says why when the read failed. */
+  regions: readonly Region[];
+  regionsError: ApiError | null;
+  /** The selected region name, "all" for All regions, or "" when no region is listed. */
   region: string;
-  setRegion: (region: string) => void;
   mode: Mode;
   showEmpty: () => void;
   showSample: () => void;
@@ -82,6 +86,7 @@ function isCidr(value: string) {
 }
 
 const UNKNOWN: Identity = { userName: "—", accountId: "—" };
+const NO_REGIONS: readonly Region[] = [];
 
 export function ConsoleProvider({
   children,
@@ -89,34 +94,46 @@ export function ConsoleProvider({
   signIn = false,
   accountBuckets = [],
   adminActions = [],
+  regions: listing = null,
 }: {
   children: ReactNode;
   identity?: Identity;
   signIn?: boolean;
   accountBuckets?: readonly AccountBucket[];
   adminActions?: readonly string[];
+  /** The answer of GET /regions, or null where it was not asked for. */
+  regions?: ApiResult<Region[]> | null;
 }) {
-  const [region, setRegion] = useState<string>(HOME_REGION);
+  const regions = listing?.ok ? listing.value : NO_REGIONS;
+  const regionsError = listing && !listing.ok ? listing.error : null;
+  // Read from the URL like the server does, so the menu never names a region the requests did not go to.
+  const region = pickRegion(regions, useSearchParams().get("region")) ?? "";
+  /** The browser-only resources live in the first listed region; every other region starts without any. */
+  const home = regions[0]?.name ?? "";
   const [mode, setMode] = useState<Mode>("empty");
-  const [data, setData] = useState<Dataset>(() => createEmptyAccount());
+  const [data, setData] = useState<Dataset>(() => createEmptyAccount(home));
   const [density, setDensity] = useState<Density>("comfortable");
   const [flash, setFlash] = useState<ConsoleFlash | null>(null);
 
   const api = useMemo<ConsoleApi>(() => {
-    const instances = data.instances.filter((item) => item.region === region);
-    const volumes = data.volumes.filter((item) => item.region === region);
-    const vpcs = data.vpcs.filter((item) => item.region === region);
-    const subnets = data.subnets.filter((item) => item.region === region);
-    const routeTables = data.routeTables.filter((item) => item.region === region);
-    const internetGateways = data.internetGateways.filter((item) => item.region === region);
-    const natGateways = data.natGateways.filter((item) => item.region === region);
+    const here = <T extends { region: string }>(items: T[]) =>
+      region === ALL_REGIONS ? items : items.filter((item) => item.region === region);
+    const instances = here(data.instances);
+    const volumes = here(data.volumes);
+    const vpcs = here(data.vpcs);
+    const subnets = here(data.subnets);
+    const routeTables = here(data.routeTables);
+    const internetGateways = here(data.internetGateways);
+    const natGateways = here(data.natGateways);
+    /** A resource made under All regions goes to the first listed region. */
+    const target = region === ALL_REGIONS ? home : region;
 
     return {
       account: { name: identity.userName, id: identity.accountId },
       signIn,
-      regions: REGIONS,
+      regions,
+      regionsError,
       region,
-      setRegion,
       mode,
       density,
       setDensity,
@@ -135,11 +152,11 @@ export function ConsoleProvider({
       clearFlash: () => setFlash(null),
       showEmpty: () => {
         setMode("empty");
-        setData(createEmptyAccount());
+        setData(createEmptyAccount(home));
       },
       showSample: () => {
         setMode("sample");
-        setData(createSampleAccount());
+        setData(createSampleAccount(home));
       },
       createRouteTable: (input) => {
         const vpc = data.vpcs.find((item) => item.id === input.vpcId);
@@ -154,7 +171,7 @@ export function ConsoleProvider({
               main: false,
               subnetIds: [],
               routes: [{ destination: vpc.ipv4Cidr, target: "local", status: "active" }],
-              region,
+              region: target,
             },
             ...prev.routeTables,
           ],
@@ -208,7 +225,7 @@ export function ConsoleProvider({
         setData((prev) => ({
           ...prev,
           internetGateways: [
-            { id: newId("igw"), name, state: "detached", vpcId: "", region },
+            { id: newId("igw"), name, state: "detached", vpcId: "", region: target },
             ...prev.internetGateways,
           ],
         }));
@@ -262,7 +279,7 @@ export function ConsoleProvider({
           subnetId: subnet.id,
           created: new Date().toISOString(),
           deleted: "",
-          region,
+          region: target,
         };
         setData((prev) => ({ ...prev, natGateways: [gateway, ...prev.natGateways] }));
         return null;
@@ -277,7 +294,21 @@ export function ConsoleProvider({
         }));
       },
     };
-  }, [accountBuckets, adminActions, data, density, flash, identity.accountId, identity.userName, mode, region, signIn]);
+  }, [
+    accountBuckets,
+    adminActions,
+    data,
+    density,
+    flash,
+    home,
+    identity.accountId,
+    identity.userName,
+    mode,
+    region,
+    regions,
+    regionsError,
+    signIn,
+  ]);
 
   return <ConsoleContext.Provider value={api}>{children}</ConsoleContext.Provider>;
 }

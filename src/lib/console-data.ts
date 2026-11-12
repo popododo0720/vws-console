@@ -14,10 +14,6 @@ import type {
 /** Owner ID on the sample route tables and gateways only; the account menu shows the signed-in account. */
 const SAMPLE_OWNER_ID = "100200300400";
 
-export const REGIONS = ["Europe (North)", "Europe (Central)", "US East", "US West"] as const;
-
-export const HOME_REGION = REGIONS[0];
-
 const DEFAULT_VPC_ID = "vpc-0d4e5f6a7b8c9012";
 
 export const computeNav: NavTree = {
@@ -208,7 +204,7 @@ export function linksIn(tree: NavTree) {
   return links;
 }
 
-function defaultVpc(): Vpc {
+function defaultVpc(region: string): Vpc {
   return {
     id: DEFAULT_VPC_ID,
     name: "",
@@ -220,18 +216,19 @@ function defaultVpc(): Vpc {
     ipv6Cidr: "",
     owner: SAMPLE_OWNER_ID,
     isDefault: true,
-    region: HOME_REGION,
+    region,
     tags: {},
   };
 }
 
-export function createEmptyAccount(): Dataset {
+/** The browser-only resources of an account that has only its default VPC, in `region`. */
+export function createEmptyAccount(region: string): Dataset {
   return {
     instances: [],
     volumes: [],
     buckets: [],
     objects: [],
-    vpcs: [defaultVpc()],
+    vpcs: [defaultVpc(region)],
     subnets: [],
     routeTables: [],
     internetGateways: [],
@@ -239,8 +236,8 @@ export function createEmptyAccount(): Dataset {
   };
 }
 
-export function createSampleAccount(): Dataset {
-  const base = createEmptyAccount();
+export function createSampleAccount(region: string): Dataset {
+  const base = createEmptyAccount(region);
   const vpcs: Vpc[] = [
     ...base.vpcs,
     {
@@ -254,7 +251,7 @@ export function createSampleAccount(): Dataset {
       ipv6Cidr: "",
       owner: SAMPLE_OWNER_ID,
       isDefault: false,
-      region: HOME_REGION,
+      region,
       tags: {},
     },
   ];
@@ -271,7 +268,7 @@ export function createSampleAccount(): Dataset {
       routeTableId: "rtb-0a1b2c3d4e5f6071",
       autoAssignPublicIp: true,
       blockPublicAccess: "off",
-      region: HOME_REGION,
+      region,
       tags: {},
     },
     {
@@ -285,7 +282,7 @@ export function createSampleAccount(): Dataset {
       routeTableId: "rtb-0a1b2c3d4e5f6071",
       autoAssignPublicIp: true,
       blockPublicAccess: "off",
-      region: HOME_REGION,
+      region,
       tags: {},
     },
     {
@@ -299,7 +296,7 @@ export function createSampleAccount(): Dataset {
       routeTableId: "rtb-0b2c3d4e5f607182",
       autoAssignPublicIp: false,
       blockPublicAccess: "off",
-      region: HOME_REGION,
+      region,
       tags: {},
     },
   ];
@@ -315,7 +312,7 @@ export function createSampleAccount(): Dataset {
         { destination: "172.31.0.0/16", target: "local", status: "active" },
         { destination: "0.0.0.0/0", target: "igw-0a1b2c3d4e5f6071", status: "active" },
       ],
-      region: HOME_REGION,
+      region,
     },
     {
       id: "rtb-0b2c3d4e5f607182",
@@ -324,7 +321,7 @@ export function createSampleAccount(): Dataset {
       main: true,
       subnetIds: ["subnet-0c3d4e5f60718293"],
       routes: [{ destination: "10.20.0.0/16", target: "local", status: "active" }],
-      region: HOME_REGION,
+      region,
     },
   ];
   // MOCK_INTERNET_GATEWAYS: sample-only data.
@@ -334,7 +331,7 @@ export function createSampleAccount(): Dataset {
       name: "sample-igw",
       state: "attached",
       vpcId: DEFAULT_VPC_ID,
-      region: HOME_REGION,
+      region,
     },
   ];
   // MOCK_NAT_GATEWAYS: sample-only data. Public addresses come from 203.0.113.0/24, reserved for documentation.
@@ -354,7 +351,7 @@ export function createSampleAccount(): Dataset {
       subnetId: "subnet-0a1b2c3d4e5f6071",
       created: "2026-09-14T08:30:00.000Z",
       deleted: "",
-      region: HOME_REGION,
+      region,
     },
     {
       id: "nat-0b2c3d4e5f607182",
@@ -371,13 +368,13 @@ export function createSampleAccount(): Dataset {
       subnetId: "subnet-0c3d4e5f60718293",
       created: "2026-09-20T11:05:00.000Z",
       deleted: "",
-      region: HOME_REGION,
+      region,
     },
   ];
   const buckets: Bucket[] = [
     {
       name: "vws-logs",
-      region: HOME_REGION,
+      region,
       created: "Aug 2, 2026",
       kind: "general",
       versioning: false,
@@ -385,7 +382,7 @@ export function createSampleAccount(): Dataset {
     },
     {
       name: "vws-media",
-      region: "US East",
+      region,
       created: "Sep 18, 2026",
       kind: "general",
       versioning: true,

@@ -2,11 +2,13 @@
 
 import { logoutAction } from "@/app/actions/auth";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Bell, CircleQuestionMark, Globe, LayoutGrid, Search, Settings, SquareTerminal } from "lucide-react";
 import { ADMIN_REGIONS_ACTION, adminNav, linksIn, navTrees } from "@/lib/console-data";
+import { ALL_REGIONS, regionLabel, type Region } from "@/lib/vws-api/adapter";
 import { useConsole } from "@/components/sites/console/console-provider";
-import { Mark, MenuButton, MenuChevron, PanelDialog } from "@/components/sites/console/ui";
+import { Mark, MenuButton, MenuChevron, PanelDialog, type MenuEntry } from "@/components/sites/console/ui";
 
 const pageLinks = Array.from(
   new Map(
@@ -17,8 +19,17 @@ const pageLinks = Array.from(
 );
 const adminLinks = linksIn(adminNav);
 
+/** The dot and the word for a region's state, in the colours the lists use for running, warning and stopped. */
+const regionStates: Record<Region["state"], { dot: string; hint: string }> = {
+  available: { dot: "#037f0c", hint: "Available" },
+  degraded: { dot: "#8d6605", hint: "Degraded" },
+  unavailable: { dot: "#d13212", hint: "Unavailable" },
+};
+
 export function TopBar({ onMenu }: { onMenu: () => void }) {
   const consoleApi = useConsole();
+  const router = useRouter();
+  const search = useSearchParams();
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   const links = useMemo(
@@ -51,6 +62,25 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
     ].filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(q));
     return [...pages, ...resources].slice(0, 8);
   }, [consoleApi.accountBuckets, consoleApi.instances, consoleApi.volumes, links, query]);
+
+  /** A plain link, so choosing a region loads the page again and nothing of the old region stays on screen. */
+  const regionEntry = (name: string, state?: Region["state"]): MenuEntry => {
+    const params = new URLSearchParams(search.toString());
+    params.set("region", name);
+    return {
+      label: regionLabel(name),
+      href: `?${params}`,
+      reload: true,
+      checked: name === consoleApi.region,
+      ...(state ? regionStates[state] : {}),
+    };
+  };
+  const regionItems: MenuEntry[] = consoleApi.regionsError
+    ? [
+        { label: "Regions could not be loaded", hint: consoleApi.regionsError.code, disabled: true },
+        { label: "Try again", onSelect: () => router.refresh() },
+      ]
+    : [regionEntry(ALL_REGIONS), ...consoleApi.regions.map((item) => regionEntry(item.name, item.state))];
 
   return (
     <header className="flex h-10 shrink-0 items-center gap-2 bg-[#161d26] px-3 text-white">
@@ -156,15 +186,11 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
           label={
             <>
               <Globe className="size-3.5" />
-              <span className="max-w-32 truncate">{consoleApi.region}</span>
+              <span className="max-w-32 truncate">{consoleApi.region ? regionLabel(consoleApi.region) : "Region"}</span>
               <MenuChevron />
             </>
           }
-          items={consoleApi.regions.map((region) => ({
-            label: region,
-            checked: region === consoleApi.region,
-            onSelect: () => consoleApi.setRegion(region),
-          }))}
+          items={regionItems}
         />
         <MenuButton
           align="right"

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConsoleProvider, useConsole } from "@/components/sites/console/console-provider";
 import { VpcDashboardView } from "@/components/sites/console/vpc-dashboard-view";
 import { createSampleAccount } from "@/lib/console-data";
-import type { ApiError } from "@/lib/vws-api/adapter";
+import type { ApiError, ApiResult, Region } from "@/lib/vws-api/adapter";
 import type { SecurityGroup, Subnet, Vpc } from "@/types/console";
 
 const refresh = vi.fn();
@@ -15,7 +15,14 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const sample = createSampleAccount();
+const sample = createSampleAccount("pve-busan-1");
+const listed: ApiResult<Region[]> = {
+  ok: true,
+  value: [
+    { name: "pve-busan-1", kind: "pve", state: "available" },
+    { name: "pve-seoul-1", kind: "pve", state: "available" },
+  ],
+};
 const vpcs: Vpc[] = sample.vpcs.map((item) => ({ ...item, region: "vws-1" }));
 const subnets: Subnet[] = sample.subnets.map((item) => ({ ...item, region: "vws-1" }));
 const securityGroups: SecurityGroup[] = [
@@ -43,7 +50,7 @@ function UseSample() {
 
 function renderDashboard(props: Partial<Parameters<typeof VpcDashboardView>[0]> = {}) {
   render(
-    <ConsoleProvider>
+    <ConsoleProvider regions={listed}>
       <UseSample />
       <VpcDashboardView
         vpcs={vpcs}
@@ -65,7 +72,7 @@ describe("VpcDashboardView", () => {
   it("shows the region's count in each card and links the label and the count to the list", () => {
     renderDashboard();
     const subnetCard = card("Subnets");
-    expect(subnetCard.getByText(/Europe \(North\)/)).toBeInTheDocument();
+    expect(subnetCard.getByText(/pve-busan-1/)).toBeInTheDocument();
     expect(subnetCard.getByRole("link", { name: "Subnets" })).toHaveAttribute("href", "/network/subnets");
     expect(subnetCard.getByRole("link", { name: "3" })).toHaveAttribute("href", "/network/subnets");
     expect(card("VPCs").getByRole("link", { name: "2" })).toHaveAttribute("href", "/network/vpcs");
@@ -102,7 +109,7 @@ describe("VpcDashboardView", () => {
 
   it("drops the VPC filter once the chosen VPC is gone, so the counts match the select", () => {
     const { rerender } = render(
-      <ConsoleProvider>
+      <ConsoleProvider regions={listed}>
         <VpcDashboardView
           vpcs={vpcs}
           subnets={subnets}
@@ -115,7 +122,7 @@ describe("VpcDashboardView", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by VPC" }), { target: { value: vpcs[1].id } });
     const remaining = vpcs.filter((item) => item.id !== vpcs[1].id);
     rerender(
-      <ConsoleProvider>
+      <ConsoleProvider regions={listed}>
         <VpcDashboardView
           vpcs={remaining}
           subnets={subnets.filter((item) => item.vpcId !== vpcs[1].id)}
@@ -133,13 +140,10 @@ describe("VpcDashboardView", () => {
     renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: "use sample data" }));
     const gateways = card("Internet Gateways");
-    expect(gateways.queryByText("US East")).not.toBeInTheDocument();
+    expect(gateways.queryByText("pve-seoul-1")).not.toBeInTheDocument();
     fireEvent.click(gateways.getByRole("button", { name: /See all regions/ }));
-    for (const name of ["Europe (North)", "Europe (Central)", "US East", "US West"]) {
-      expect(gateways.getAllByText(name).length).toBeGreaterThan(0);
-    }
     const lines = gateways.getAllByRole("listitem").map((item) => item.textContent);
-    expect(lines).toEqual(["Europe (North)1", "Europe (Central)0", "US East0", "US West0"]);
+    expect(lines).toEqual(["pve-busan-11", "pve-seoul-10"]);
   });
 
   it("links only the current region's count under See all regions, since the lists show the current region", () => {
@@ -163,7 +167,7 @@ describe("VpcDashboardView", () => {
     renderDashboard();
     expect(screen.getByRole("link", { name: "Create VPC" })).toHaveAttribute("href", "/network/vpcs?create=1");
     expect(screen.getByRole("link", { name: "Launch EC2 Instances" })).toHaveAttribute("href", "/compute/launch");
-    expect(screen.getByText("Note: Your Instances will launch in the Europe (North) region.")).toBeInTheDocument();
+    expect(screen.getByText("Note: Your Instances will launch in the pve-busan-1 region.")).toBeInTheDocument();
     expect(screen.getByText("You are using the following VWS VPC resources")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Refresh Resources" }));
     expect(refresh).toHaveBeenCalledTimes(1);
