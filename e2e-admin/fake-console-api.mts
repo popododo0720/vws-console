@@ -2,6 +2,7 @@
 // cookie names the caller: "root" is the administrator with nothing registered yet, and any other signed-in caller
 // gets console-api's 403 answers on the admin routes.
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 
 const denied = { error: { code: "PermissionDenied", message: "administrator required" }, requestId: "req-e2e-denied" };
@@ -22,6 +23,19 @@ function refused(region: Json, secret: unknown, create: boolean) {
   const badSecret = secret === undefined ? create : !/^[A-Za-z0-9._-]{1,512}$/.test(String(secret));
   return badSecret ? invalid("tokenSecret", "expected 1-512 token characters") : null;
 }
+
+/**
+ * Capability documents by region name: a read-only Proxmox region and an AWS region, the documents of the unit
+ * fixtures (src/lib/vws-api/testdata). "pve-down-1" is listed too, and its capability read fails.
+ */
+const capabilities: Record<string, Json> = JSON.parse(
+  readFileSync(new URL("./testdata/capabilities.json", import.meta.url), "utf8"),
+);
+const listed = [...Object.keys(capabilities), "pve-down-1"].sort().map((name) => ({
+  name,
+  kind: capabilities[name]?.kind === "aws" ? "aws" : "pve",
+  state: "available",
+}));
 
 const PASSED = {
   tls: "PVE TLS certificate verified",
@@ -59,6 +73,13 @@ createServer(async (request, response) => {
   if (path === "/auth/session") return send(200, { loginEnabled: true, principal, account: "123456789012" });
   if (path === "/admin/permissions") {
     return user === "root" ? send(200, { permissions: ["vws:AdminListRegions"] }) : send(403, { permissions: [] });
+  }
+  if (path === "/regions") return send(200, { items: listed });
+  const region = /^\/regions\/([^/]+)\/capabilities$/.exec(path)?.[1];
+  if (region) {
+    return capabilities[region]
+      ? send(200, capabilities[region])
+      : send(503, failure("Unavailable", "region unavailable"));
   }
   if (path.startsWith("/admin/") && user !== "root") return send(403, denied);
   const [found, name, tail] = /^\/admin\/regions(?:\/([^/]+))?(?:\/(health|test))?$/.exec(path) ?? [];

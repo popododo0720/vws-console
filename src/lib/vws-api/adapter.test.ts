@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   mutationCapability,
@@ -541,6 +542,11 @@ describe("parseCapabilities", () => {
     expect(mutationCapability(parseCapabilities({ region: "r-1", actions: null }), "ec2:RunInstances")).toEqual(
       notDeclared,
     );
+  });
+
+  it("keeps the documents of the e2e fake console-api equal to these fixtures", () => {
+    const shipped: unknown = JSON.parse(readFileSync("e2e-admin/testdata/capabilities.json", "utf8"));
+    expect(shipped).toEqual({ [awsRegion.region]: awsRegion, [pveLiveBox.region]: pveLiveBox });
   });
 
   it.each([
