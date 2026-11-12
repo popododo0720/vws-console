@@ -50,6 +50,7 @@ const every = (names: string[], capability: Record<string, string>) =>
   Object.fromEntries(names.map((name) => [`ec2:${name}`, capability]));
 
 const served = { state: "supported" };
+const readOnly = { state: "unsupported", reasonCode: "ReadOnly", reason: "read-only" };
 const limits = { maxInstancesPerRun: 0, maxTagsPerResource: 0, maxUserDataBytes: 0, maxVolumesPerInstance: 0 };
 const small = { instanceType: "vws.small", vcpus: 1, memoryMiB: 1024 };
 const medium = { instanceType: "vws.medium", vcpus: 2, memoryMiB: 4096 };
@@ -61,7 +62,8 @@ export const pveLiveBox = {
   cluster: { name: "lab", pveRelease: "", quorate: false, leader: "" },
   zones: [{ zoneName: "pve-lab-1a", zoneId: "pve-lab-1a", state: "available", nodes: ["pve"] }],
   actions: {
-    ...every(MUTATIONS, { state: "unsupported", reasonCode: "ReadOnly", reason: "read-only" }),
+    "vws:OpenConsole": readOnly,
+    ...every(MUTATIONS, readOnly),
     ...every(READS, { state: "empty" }),
     ...every(["DescribeInstances", "DescribeVolumes", "DescribeSnapshots", "DescribeTags"], served),
     ...every(["DescribeVpcs", "DescribeSubnets"], {
@@ -88,6 +90,7 @@ export const pveWritable = {
   ...pveLiveBox,
   actions: {
     ...pveLiveBox.actions,
+    "vws:OpenConsole": served,
     ...every(MUTATIONS, served),
     "ec2:CreateVolume": {
       state: "partial",
@@ -102,13 +105,16 @@ export const pveWritable = {
   },
 };
 
-/** An AWS region: console-api declares every action supported and every read but instances empty. */
+/**
+ * An AWS region: console-api declares every EC2 action supported, every read but instances empty, and no VWS
+ * console, because AWS has EC2 Instance Connect (console-api internal/backend/capabilities.go AllSupported).
+ */
 export const awsRegion = {
   region: "ap-northeast-2",
   kind: "aws",
   zones: [],
   actions: {
-    "vws:OpenConsole": served,
+    "vws:OpenConsole": { state: "unsupported", reasonCode: "NoConsole", reason: "use EC2 Instance Connect" },
     ...every(MUTATIONS, served),
     ...every(READS, { state: "empty", reasonCode: "InventoryNotImplemented", reason: "AWS read is not implemented" }),
     "ec2:DescribeInstances": served,
@@ -126,5 +132,5 @@ export const awsRegion = {
 /** The document as the root layout hands it to ConsoleProvider. */
 export const loaded = (doc: unknown) => ({ ok: true as const, value: parseCapabilities(doc) });
 
-/** A region that serves every action, for tests that are not about capabilities. */
+/** A region that serves every EC2 action, for tests that are not about capabilities. */
 export const supported = loaded(awsRegion);

@@ -5,7 +5,9 @@
     "zones": [],
     "actions": {
       "vws:OpenConsole": {
-        "state": "supported"
+        "state": "unsupported",
+        "reasonCode": "NoConsole",
+        "reason": "use EC2 Instance Connect"
       },
       "ec2:RunInstances": {
         "state": "supported"
@@ -192,6 +194,11 @@
       }
     ],
     "actions": {
+      "vws:OpenConsole": {
+        "state": "unsupported",
+        "reasonCode": "ReadOnly",
+        "reason": "read-only"
+      },
       "ec2:RunInstances": {
         "state": "unsupported",
         "reasonCode": "ReadOnly",

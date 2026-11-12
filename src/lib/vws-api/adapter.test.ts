@@ -29,7 +29,7 @@ import {
   identityFromSession,
 } from "./adapter";
 import { makeRule } from "@/lib/security-group-rules";
-import { awsRegion, pveLiveBox } from "./testdata/capabilities";
+import { awsRegion, pveLiveBox, pveWritable } from "./testdata/capabilities";
 
 const instance = {
   instanceId: "i-72a10f87b54bdd869",
@@ -530,6 +530,17 @@ describe("parseCapabilities", () => {
     const aws = parseCapabilities(awsRegion);
     expect(aws.zones).toEqual([]);
     expect(mutationCapability(aws, "ec2:RunInstances")).toEqual({ state: "supported", reasonCode: "", reason: "" });
+  });
+
+  it("reads vws:OpenConsole as console-api declares it: only a Proxmox region that takes writes opens a console", () => {
+    const openConsole = (doc: unknown) => mutationCapability(parseCapabilities(doc), "vws:OpenConsole");
+    expect(openConsole(awsRegion)).toEqual({
+      state: "unsupported",
+      reasonCode: "NoConsole",
+      reason: "use EC2 Instance Connect",
+    });
+    expect(openConsole(pveLiveBox)).toEqual({ state: "unsupported", reasonCode: "ReadOnly", reason: "read-only" });
+    expect(openConsole(pveWritable)).toEqual({ state: "supported", reasonCode: "", reason: "" });
   });
 
   it("makes an action unsupported when the document does not name it or gives it an unknown state", () => {
