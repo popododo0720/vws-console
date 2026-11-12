@@ -77,7 +77,7 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
   };
   const regionItems: MenuEntry[] = consoleApi.regionsError
     ? [
-        { label: "Regions could not be loaded", hint: consoleApi.regionsError.code, disabled: true },
+        { label: `Regions could not be loaded (${consoleApi.regionsError.code})`, disabled: true },
         { label: "Try again", onSelect: () => router.refresh() },
       ]
     : [regionEntry(ALL_REGIONS), ...consoleApi.regions.map((item) => regionEntry(item.name, item.state))];

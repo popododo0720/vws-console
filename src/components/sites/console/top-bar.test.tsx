@@ -60,7 +60,7 @@ describe("TopBar region menu", () => {
     const error = { code: "ServiceUnavailable", message: "The VWS console API did not answer.", requestId: null };
     const [failed, retry] = open({ ok: false, error }, "Region");
     expect(failed).toBeDisabled();
-    expect(failed).toHaveTextContent("Regions could not be loadedServiceUnavailable");
+    expect(failed).toHaveTextContent("Regions could not be loaded (ServiceUnavailable)");
     fireEvent.click(retry);
     expect(nav.refresh).toHaveBeenCalledTimes(1);
   });
