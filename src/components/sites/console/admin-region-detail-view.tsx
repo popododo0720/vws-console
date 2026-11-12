@@ -49,7 +49,7 @@ export function AdminRegionDetailView({
               ["Cluster name", dash(region.clusterName)],
               ["Proxmox API URL", dash(region.pveApiUrl)],
               ["Region endpoint", dash(region.regionEndpoint)],
-              ["CA certificate", region.hasCa ? "Provided" : "—"],
+              ["CA certificate", region.caPem ? "Provided" : "—"],
               ["API token ID", dash(region.tokenId)],
               ["API token secret", region.tokenSecret],
             ]

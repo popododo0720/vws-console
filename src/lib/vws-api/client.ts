@@ -9,7 +9,7 @@ import { recordOperationPoll } from "@/lib/ops/metrics";
 import { withSpan } from "@/lib/ops/span";
 import { objectKeyProblem } from "@/lib/object-upload";
 import { DEVICE_NAME, type CreateSnapshotInput, type CreateVolumeInput } from "@/lib/ebs";
-import { apiFetch, ApiTransportError, type ApiReply } from "./transport";
+import { apiFetch, ApiTransportError, timeoutMs, type ApiReply } from "./transport";
 import { keyPath, route, withQuery, type ApiRoute } from "./route";
 import { API_SESSION_COOKIE, CSRF_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
 import type {
@@ -53,14 +53,18 @@ import {
   parseAdminAwsAccounts,
   parseAdminPermissions,
   parseAdminRegions,
+  parseConnectionSteps,
   toAdminRegion,
   toAdminRegionHealth,
   unknownHealth,
   type AdminAwsAccount,
   type AdminRegion,
   type AdminRegionHealth,
+  type AdminRegionInput,
   type ApiError,
   type ApiResult,
+  type ConnectionStep,
+  type Versioned,
   type Image,
   type LaunchRequest,
   type Operation,
@@ -159,7 +163,7 @@ async function toLogin(reason: "signin" | "expired"): Promise<never> {
 
 /** On a failure, kind is the console-api error kind ("bucket", "object", …), or "" when it sent none. */
 type RequestResult =
-  | { ok: true; value: { status: number; json: unknown } }
+  | { ok: true; value: { status: number; json: unknown; etag: string } }
   | { ok: false; status: number | null; kind?: string; error: ApiError };
 
 type RawBody = { bytes: Uint8Array; contentType: string };
@@ -178,10 +182,10 @@ function rawBody(value: unknown): RawBody | null {
   return { bytes, contentType };
 }
 
-type PostOptions = { idempotencyKey?: string; bodyText?: string };
+type PostOptions = { idempotencyKey?: string; bodyText?: string; ifMatch?: string; timeoutMs?: number };
 
 async function request(
-  method: "GET" | "POST" | "PUT" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: ApiRoute,
   body?: unknown,
   post?: PostOptions,
@@ -217,6 +221,8 @@ async function request(
     headers["idempotency-key"] = post?.idempotencyKey ?? randomUUID();
     headers["content-type"] = "application/json";
   }
+  if (post?.ifMatch) headers["if-match"] = post.ifMatch;
+  const sendsJson = method === "POST" || method === "PATCH";
   let response: ApiReply;
   let json: unknown;
   try {
@@ -226,10 +232,9 @@ async function request(
       {
         method,
         headers,
-        body:
-          method === "POST" ? (post?.bodyText ?? JSON.stringify(body ?? {})) : raw ? blobBytes(raw.bytes) : undefined,
+        body: sendsJson ? (post?.bodyText ?? JSON.stringify(body ?? {})) : raw ? blobBytes(raw.bytes) : undefined,
       },
-      { iamMode: mode },
+      { iamMode: mode, timeoutMs: post?.timeoutMs },
     );
   } catch (error) {
     return { ok: false, status: null, error: transportError(error) };
@@ -254,7 +259,7 @@ async function request(
       },
     };
   }
-  return { ok: true, value: { status: response.status, json } };
+  return { ok: true, value: { status: response.status, json, etag: response.headers.get("etag") ?? "" } };
 }
 
 function malformed(path: string): ApiError {
@@ -524,14 +529,17 @@ export async function deleteBucket(name: BucketName): Promise<ApiResult<void>> {
   return { ok: true, value: undefined };
 }
 
-/** Reads one resource; a 404 is a missing resource, not an error. */
-async function getOne<T>(path: ApiRoute, map: (item: Record<string, unknown>) => T): Promise<ApiResult<T | null>> {
+/** Reads one resource; a 404 is a missing resource, not an error. `map` also gets the ETag console-api sent. */
+async function getOne<T>(
+  path: ApiRoute,
+  map: (item: Record<string, unknown>, etag: string) => T,
+): Promise<ApiResult<T | null>> {
   const result = await request("GET", path);
   if (!result.ok) {
     return result.error.code === "NotFound" ? { ok: true, value: null } : { ok: false, error: result.error };
   }
   try {
-    return { ok: true, value: map(result.value.json as Record<string, unknown>) };
+    return { ok: true, value: map(result.value.json as Record<string, unknown>, result.value.etag) };
   } catch {
     return { ok: false, error: malformed(path.path) };
   }
@@ -768,8 +776,41 @@ export const listAdminRegions = (): Promise<ApiResult<AdminRegion[]>> =>
   listAll(route("/admin/regions"), parseAdminRegions);
 export const listAdminAwsAccounts = (): Promise<ApiResult<AdminAwsAccount[]>> =>
   listAll(route("/admin/aws-accounts"), parseAdminAwsAccounts);
-export const getAdminRegion = (name: string): Promise<ApiResult<AdminRegion | null>> =>
-  getOne(route("/admin/regions/{name}", { name }), toAdminRegion);
+export const getAdminRegion = (name: string): Promise<ApiResult<Versioned<AdminRegion> | null>> =>
+  getOne(route("/admin/regions/{name}", { name }), (item, etag) => ({ ...toAdminRegion(item), etag }));
+
+/** console-api gives a region push and a connection test 15 s each, so these calls wait at least 20 s. */
+const adminWait = () => ({ timeoutMs: Math.max(timeoutMs(), 20_000) });
+
+/** Registers a region, or with the ETag of the read being edited saves it only if nobody changed it since. */
+export async function saveAdminRegion(input: AdminRegionInput, etag: string | null): Promise<ApiResult<void>> {
+  const item = route("/admin/regions/{name}", { name: input.name });
+  const result =
+    etag === null
+      ? await request("POST", route("/admin/regions"), input, adminWait())
+      : await request("PATCH", item, input, { ...adminWait(), ifMatch: etag });
+  return result.ok ? { ok: true, value: undefined } : { ok: false, error: result.error };
+}
+
+/** A region that is already gone counts as deleted, so a repeated delete succeeds. */
+export async function deleteAdminRegion(name: string): Promise<ApiResult<void>> {
+  const result = await request("DELETE", route("/admin/regions/{name}", { name }));
+  if (result.ok || result.error.code === "NotFound") return { ok: true, value: undefined };
+  return { ok: false, error: result.error };
+}
+
+/** Tests the saved region with the secret typed for it, if any; an unsaved one with every value of its form. */
+export async function testAdminRegion(input: AdminRegionInput, saved: boolean): Promise<ApiResult<ConnectionStep[]>> {
+  const path = saved ? route("/admin/regions/{name}/test", { name: input.name }) : route("/admin/regions/test");
+  const body = saved ? { tokenSecret: input.tokenSecret } : input;
+  const result = await request("POST", path, body, adminWait());
+  if (!result.ok) return { ok: false, error: result.error };
+  try {
+    return { ok: true, value: parseConnectionSteps(result.value.json) };
+  } catch {
+    return { ok: false, error: malformed(path.path) };
+  }
+}
 
 /** Never fails: a reading console-api did not return has status "unknown" and the reason as its last error. */
 export async function getAdminRegionHealth(name: string): Promise<AdminRegionHealth> {

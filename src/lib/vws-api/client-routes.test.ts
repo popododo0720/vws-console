@@ -36,6 +36,8 @@ const TOKEN = "tok/=&?+ en";
 const OP = "op/1 ?";
 const KEY_PAIR = "key-0123456789abcdef0" as KeyPairId;
 const api = (path: string) => `http://api.test/api/v1${path}`;
+const PVE = { name: ID, clusterName: "", pveApiUrl: "", caPem: "", tokenId: "", regionEndpoint: "", zones: [] };
+const PVE_URL = api(`/admin/regions/${enc(ID)}`);
 
 function respond(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -218,6 +220,17 @@ const rows: Row[] = [
     name: "getAdminRegionHealth",
     run: () => vws.getAdminRegionHealth(ID),
     sent: [`GET ${api(`/admin/regions/${enc(ID)}/health`)}`],
+  },
+  {
+    name: "saveAdminRegion (register, then edit)",
+    run: async () => [await vws.saveAdminRegion(PVE, null), await vws.saveAdminRegion(PVE, '"3"')],
+    sent: [`POST ${api("/admin/regions")}`, `PATCH ${PVE_URL}`],
+  },
+  { name: "deleteAdminRegion", run: () => vws.deleteAdminRegion(ID), sent: [`DELETE ${PVE_URL}`] },
+  {
+    name: "testAdminRegion (unsaved, then saved)",
+    run: async () => [await vws.testAdminRegion(PVE, false), await vws.testAdminRegion(PVE, true)],
+    sent: [`POST ${api("/admin/regions/test")}`, `POST ${PVE_URL}/test`],
   },
   {
     name: "login",

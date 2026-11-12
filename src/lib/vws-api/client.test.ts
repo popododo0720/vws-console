@@ -29,6 +29,7 @@ import {
   createInstanceTags,
   createSecurityGroup,
   createVpc,
+  deleteAdminRegion,
   deleteKeyPair,
   deleteBucket,
   deleteObject,
@@ -146,7 +147,7 @@ describe("console-api client", () => {
     );
     expect(await createVpc("bad")).toEqual({
       ok: false,
-      error: { code: "InvalidArgument", message: "must be an ipv4 network", requestId: "r-1" },
+      error: { code: "InvalidArgument", message: "must be an ipv4 network", requestId: "r-1", field: "cidrBlock" },
     });
   });
 
@@ -157,6 +158,12 @@ describe("console-api client", () => {
     expect(await getAdminPermissions()).toEqual([]);
     expect(await getAdminPermissions()).toEqual([]);
     expect(new Set(calls.map((c) => c.url))).toEqual(new Set(["http://api.test/api/v1/admin/permissions"]));
+  });
+
+  it("sends one DELETE for a region and counts one that is already gone as deleted", async () => {
+    serve(respond(404, { error: { code: "NotFound", message: "registration not found" } }));
+    expect(await deleteAdminRegion("pve-lab-1")).toEqual({ ok: true, value: undefined });
+    expect(calls.map((c) => c.init.method)).toEqual(["DELETE"]);
   });
 
   it("reports missing configuration without calling the API", async () => {
