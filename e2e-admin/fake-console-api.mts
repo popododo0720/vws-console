@@ -81,6 +81,7 @@ let seen: string[] = [];
 /** What finishing each operation does. While `held`, a read answers "running" and finishes nothing. */
 let operations = new Map<string, () => void>();
 let held = false;
+/** Never reset: an ID of an earlier run stays unknown, so a poll left over from it cannot touch a new operation. */
 let serial = 0;
 
 /**
@@ -133,7 +134,7 @@ createServer(async (request, response) => {
   }
   if (path === "/__compute") {
     const { reset, hold } = await read();
-    if (reset) [compute, seen, operations, serial] = [seed(), [], new Map(), 0];
+    if (reset) [compute, seen, operations] = [seed(), [], new Map()];
     if (typeof hold === "boolean") held = hold;
     return send(200, { seen });
   }
@@ -179,7 +180,7 @@ createServer(async (request, response) => {
     seen.push(`${method} ${path} ${zone}`);
     const input = await read();
     const accept = (items: Json[], finish: () => void) => {
-      const operation = { id: `op-${operations.size + 1}`, state: "running" };
+      const operation = { id: `op-${++serial}`, state: "running" };
       operations.set(operation.id, finish);
       return send(202, { operation, items });
     };
