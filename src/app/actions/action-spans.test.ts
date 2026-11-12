@@ -9,12 +9,13 @@ vi.mock("next/headers", () => ({
 }));
 
 import { startMemoryTelemetry, type MemoryTelemetry } from "@/lib/ops/memory-telemetry";
+import * as admin from "./admin";
 import * as auth from "./auth";
 import * as resources from "./resources";
 
 /** Every export of a "use server" module is a server action, so each must open its own span. */
-const actions = Object.entries({ ...resources, ...auth } as Record<string, unknown>).flatMap(([name, value]) =>
-  typeof value === "function" ? [[name, value as () => Promise<unknown>] as const] : [],
+const actions = Object.entries({ ...resources, ...auth, ...admin } as Record<string, unknown>).flatMap(
+  ([name, value]) => (typeof value === "function" ? [[name, value as () => Promise<unknown>] as const] : []),
 );
 
 describe("server action spans", () => {
@@ -35,7 +36,7 @@ describe("server action spans", () => {
   });
 
   it("finds every action", () => {
-    expect(actions.length).toBeGreaterThanOrEqual(34);
+    expect(actions.length).toBeGreaterThanOrEqual(37);
   });
 
   it.each(actions)("%s emits an `action <name>` span, even on bad input", async (name, action) => {
