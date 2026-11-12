@@ -3,12 +3,17 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { config, proxy } from "./proxy";
 
-function req(path: string, cookies: Record<string, string> = {}) {
+function req(path: string, cookies: Record<string, string> = {}, init: { method?: string; referer?: string } = {}) {
   const cookie = Object.entries(cookies)
     .map(([k, v]) => `${k}=${v}`)
     .join("; ");
-  return new NextRequest(`http://console.test${path}`, { headers: cookie ? { cookie } : {} });
+  const headers: Record<string, string> = { host: "console.test" };
+  if (cookie) headers.cookie = cookie;
+  if (init.referer) headers.referer = init.referer;
+  return new NextRequest(`http://console.test${path}`, { method: init.method, headers });
 }
+
+const FROM_SEOUL = "http://console.test/compute/instances?region=pve-seoul-1";
 
 function deleted(response: Response) {
   return response.headers
@@ -39,6 +44,38 @@ describe("proxy", () => {
     const response = await proxy(req("/network/vpcs", { vws_session: "s", vws_csrf: "c" }));
     expect(response.headers.get("location")).toBeNull();
     expect(response.headers.get("x-middleware-request-x-vws-path")).toBe("/network/vpcs");
+  });
+
+  it("passes the page path on in every mode, over a path header the browser sent", async () => {
+    for (const [iam, api] of [
+      ["off", "http://api.test"],
+      ["on", ""],
+    ]) {
+      vi.stubEnv("VWS_CONSOLE_IAM", iam);
+      vi.stubEnv("VWS_CONSOLE_API_URL", api);
+      const request = req("/storage/volumes?region=pve-seoul-1");
+      request.headers.set("x-vws-path", "/forged?region=all");
+      const response = await proxy(request);
+      expect(response.headers.get("x-middleware-request-x-vws-path")).toBe("/storage/volumes?region=pve-seoul-1");
+    }
+  });
+
+  it("keeps the region of the page the browser came from, before it asks for sign-in", async () => {
+    const response = await proxy(req("/storage/volumes?tab=x", {}, { referer: FROM_SEOUL }));
+    expect(response.headers.get("location")).toBe("http://console.test/storage/volumes?tab=x&region=pve-seoul-1");
+  });
+
+  it("inherits no region for a write, a named region, another host, a malformed name or the login page", async () => {
+    const session = { vws_session: "s", vws_csrf: "c" };
+    const kept = [
+      req("/storage/volumes", session, { referer: FROM_SEOUL, method: "POST" }),
+      req("/storage/volumes?region=all", session, { referer: FROM_SEOUL }),
+      req("/storage/volumes", session, { referer: "http://evil.test/?region=pve-seoul-1" }),
+      req("/storage/volumes", session, { referer: "http://console.test/?region=PVE%0d%0aX-Evil:1" }),
+      req("/storage/volumes", session, { referer: "not a url" }),
+      req("/login", session, { referer: FROM_SEOUL }),
+    ];
+    for (const request of kept) expect((await proxy(request)).headers.get("location")).toBeNull();
   });
 
   it("deletes both cookies on /login?reason=expired when console-api rejects the session", async () => {
