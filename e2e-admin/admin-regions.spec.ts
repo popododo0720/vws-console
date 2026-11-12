@@ -112,3 +112,14 @@ test("a region is deleted only after its name is typed", async ({ page, baseURL 
   await dialog.getByRole("button", { name: "Delete" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Regions (0)" })).toBeVisible();
 });
+
+test("the fake console-api refuses a write without the session's CSRF token", async ({ request }) => {
+  const register = async (cookie: string, token?: string) => {
+    const headers = { cookie, origin: api, ...(token ? { "x-csrf-token": token } : {}) };
+    const data = { name: "pve-lab-1", clusterName: "lab", tokenSecret: "s" };
+    return (await request.post(`${api}/api/v1/admin/regions`, { headers, data })).status();
+  };
+  expect(await register("__Host-vws_session=root")).toBe(403);
+  expect(await register("__Host-vws_session=root; vws_csrf=other", "other")).toBe(403);
+  expect(await register("__Host-vws_session=root", "root")).toBe(201);
+});

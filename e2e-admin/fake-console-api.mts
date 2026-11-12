@@ -65,9 +65,8 @@ createServer(async (request, response) => {
   if (!found) return send(200, { items: [] });
   const method = request.method;
   if (method === "GET" && !name) return send(200, { items: [...regions.values()].map((region) => region.body) });
-  // console-api refuses a cookie write without the CSRF token, an Origin and a JSON content type.
-  const csrf = /vws_csrf=([^;]+)/.exec(request.headers.cookie ?? "")?.[1];
-  const browserWrite = request.headers.origin && request.headers["x-csrf-token"] === csrf;
+  // console-api's rules for a cookie write. Its CSRF token is derived from the session; here it is the session value.
+  const browserWrite = request.headers.origin && request.headers["x-csrf-token"] === user;
   if (method !== "GET" && !(browserWrite && request.headers["content-type"] === "application/json")) {
     return send(403, denied);
   }
