@@ -54,6 +54,9 @@ Detection fails closed. On a timeout, a network error or an answer without `logi
 
 `npx playwright test -c playwright.live.config.ts` starts console-api with its fake backend (`VWS_CONSOLE_API_DIR`, default `../vws-console-api`, needs Go) with `-iam=fake`, a generated root password and `-console-origins` for the test console, signs in through `/login` and runs the live tests against it. `npx playwright test -c playwright.live-iam-off.config.ts` runs the resource flows with IAM off (token, no sign-in).
 
+Instance VNC and serial websocket deployment, standalone entry and timeout settings
+are described in [Deploying the instance console relay](docs/console-relay.md).
+
 ## Health, readiness and metrics
 
 The console is a VWS service: it is deployed to Kubernetes like the other `vws-*` components, so it serves the same probe and scrape endpoints (decision for #68). They answer without sign-in, are never cached, and never print configuration values, tokens or console-api responses. `/healthz` and `/readyz` are on the app port (`PORT`). `/metrics` is on its own port (`METRICS_PORT`), so a NetworkPolicy can admit only the scraper to it while the app port stays public.

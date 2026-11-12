@@ -101,6 +101,9 @@ RUN chown node:node .next
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/server ./server
+COPY --from=builder --chown=node:node /app/src/lib/instance-id.ts ./src/lib/instance-id.ts
+COPY --from=builder --chown=node:node /app/src/lib/vws-api/session-cookies.ts ./src/lib/vws-api/session-cookies.ts
 
 # If you want to persist the fetch cache generated during the build so that
 # cached responses are available immediately on startup, uncomment this line:
@@ -113,4 +116,4 @@ USER node
 EXPOSE 3000
 
 # Start Next.js standalone server
-CMD ["node", "server.js"]
+CMD ["node", "server/console-server.mts"]
