@@ -76,6 +76,9 @@ export type MenuEntry = {
   onSelect?: () => void;
   disabled?: boolean;
   checked?: boolean;
+  dot?: string;
+  hint?: string;
+  reload?: boolean;
 };
 
 export function MenuButton({
@@ -128,14 +131,19 @@ export function MenuButton({
         >
           {items.map((item) => {
             const content = (
-              <span className="flex items-center gap-2">
+              <span className={cn("flex items-center gap-2", item.hint && "whitespace-nowrap")}>
                 <Check className={cn("size-3.5", item.checked ? "opacity-100" : "opacity-0")} />
+                {item.dot ? (
+                  <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: item.dot }} />
+                ) : null}
                 {item.label}
+                {item.hint ? <span className="ml-auto pl-4 text-[12px] text-[#5f6b7a]">{item.hint}</span> : null}
               </span>
             );
             if (item.href && !item.disabled) {
+              const Anchor = item.reload ? "a" : Link;
               return (
-                <Link
+                <Anchor
                   key={item.label}
                   href={item.href}
                   role="menuitem"
@@ -143,7 +151,7 @@ export function MenuButton({
                   onClick={() => setOpen(false)}
                 >
                   {content}
-                </Link>
+                </Anchor>
               );
             }
             return (

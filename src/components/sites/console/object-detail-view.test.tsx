@@ -20,7 +20,7 @@ vi.mock("@/lib/clipboard", () => clipboard);
 
 const name = parseBucketName("logs-1");
 if (!name) throw new Error("logs-1");
-const bucket = { name, ownerId: "123456789012", created: "2026-08-02T00:00:00Z" };
+const bucket = { name, ownerId: "123456789012", created: "2026-08-02T00:00:00Z", region: "pve-seoul-1" };
 const notes: StoredObject = {
   bucket: name,
   key: "docs/2026/notes.txt",
@@ -64,7 +64,7 @@ describe("ObjectDetailView", () => {
       screen.getAllByText(/./, { selector: "dt" }).map((dt) => [dt.textContent, dt.nextElementSibling?.textContent]),
     );
     expect(fields.get("Owner")).toBe("123456789012");
-    expect(fields.get("Region")).toBe("vws-1");
+    expect(fields.get("Region")).toBe("pve-seoul-1");
     expect(fields.get("Last modified")).toBe("Aug 2, 2026, 12:00:00 AM UTC");
     expect(fields.get("Size")).toBe("2.0 KB");
     expect(fields.get("Type")).toBe("txt");

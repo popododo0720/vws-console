@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteObjectAction } from "@/app/actions/resources";
-import { REGION, type AccountBucket, type ApiError, type StoredObject } from "@/lib/vws-api/adapter";
+import type { AccountBucket, ApiError, StoredObject } from "@/lib/vws-api/adapter";
 import { copyToClipboard } from "@/lib/clipboard";
 import { formatBucketCreationDate } from "@/lib/bucket-display";
 import { formatBytes } from "@/lib/bucket-objects";
@@ -157,7 +157,7 @@ export function ObjectDetailView({ name, objectKey, bucket, object, loadError }:
           <DetailGrid
             items={[
               ["Owner", dash(bucket.ownerId)],
-              ["Region", REGION],
+              ["Region", dash(bucket.region ?? "")],
               ["Last modified", object.lastModified ? formatBucketCreationDate(object.lastModified) : "—"],
               ["Size", formatBytes(object.size)],
               ["Type", objectType(object.key)],

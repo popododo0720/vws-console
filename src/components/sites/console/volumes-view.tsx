@@ -222,6 +222,7 @@ export function VolumesView({
       <ApiErrorAlert error={loadError} title="Volumes could not be loaded" />
       <ResourceTable
         rows={volumes}
+        region={(row) => row.region}
         getId={(row) => row.id}
         columns={columns}
         selectedIds={selected.map((item) => item.id)}

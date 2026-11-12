@@ -1,9 +1,35 @@
 import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConsoleProvider, useConsole } from "@/components/sites/console/console-provider";
+import type { ApiResult, Region } from "@/lib/vws-api/adapter";
 
-const wrapper = ({ children }: { children: ReactNode }) => <ConsoleProvider>{children}</ConsoleProvider>;
+const nav = vi.hoisted(() => ({ search: "" }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(nav.search) }));
+
+const listed: Region[] = [
+  { name: "pve-busan-1", kind: "pve", state: "available" },
+  { name: "pve-seoul-1", kind: "pve", state: "degraded" },
+];
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <ConsoleProvider regions={{ ok: true, value: listed }}>{children}</ConsoleProvider>
+);
+
+beforeEach(() => {
+  nav.search = "";
+});
+
+describe("the seeded resources", () => {
+  it("move to the first region when the list arrives after a read that listed none", () => {
+    let listing: ApiResult<Region[]> = { ok: true, value: [] };
+    const { result, rerender } = renderHook(() => useConsole(), {
+      wrapper: ({ children }) => <ConsoleProvider regions={listing}>{children}</ConsoleProvider>,
+    });
+    listing = { ok: true, value: [{ name: "pve-a-1", kind: "pve", state: "available" }] };
+    rerender();
+    expect(result.current.vpcs.map((vpc) => vpc.region)).toEqual(["pve-a-1"]);
+  });
+});
 
 function renderSample() {
   const hook = renderHook(() => useConsole(), { wrapper });
@@ -67,9 +93,10 @@ describe("NAT gateway actions", () => {
   });
 
   it("rejects a subnet that exists only in another region", () => {
-    const { result } = renderSample();
+    const { result, rerender } = renderSample();
     const subnetId = result.current.subnets[0].id;
-    act(() => result.current.setRegion("US East"));
+    nav.search = "region=pve-seoul-1";
+    rerender();
     let error: string | null = null;
     act(() => {
       error = result.current.createNatGateway({ name: "x", subnetId, connectivity: "public" });
@@ -96,10 +123,14 @@ describe("NAT gateway actions", () => {
     expect(result.current.natGateways.find((item) => item.id === second.id)?.state).toBe("available");
   });
 
-  it("scopes the list to the current region while the dataset keeps every region", () => {
-    const { result } = renderSample();
-    act(() => result.current.setRegion("US East"));
+  it("scopes the list to the current region, and to every region under All regions", () => {
+    const { result, rerender } = renderSample();
+    nav.search = "region=pve-seoul-1";
+    rerender();
     expect(result.current.natGateways).toEqual([]);
     expect(result.current.dataset.natGateways.length).toBeGreaterThan(0);
+    nav.search = "region=all";
+    rerender();
+    expect(result.current.natGateways).toEqual(result.current.dataset.natGateways);
   });
 });

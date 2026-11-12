@@ -83,6 +83,7 @@ describe("console-api client", () => {
 
   function serve(...replies: Response[]) {
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      if (url.endsWith("/api/v1/regions")) return respond(200, { items: [] });
       calls.push({ url, init });
       const next = replies.shift();
       if (!next) throw new Error("unexpected request");
@@ -481,7 +482,10 @@ describe("console-api client", () => {
   });
 
   describe("retries, timeouts and logs", () => {
-    beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout"] }));
+    beforeEach(() => {
+      nav.path = null;
+      vi.useFakeTimers({ toFake: ["setTimeout"] });
+    });
     afterEach(() => vi.useRealTimers());
 
     async function settle<T>(promise: Promise<T>): Promise<T> {
@@ -1398,6 +1402,7 @@ describe("console-api client", () => {
 
     it("returns the 202 material when the operation stays running through the budget", async () => {
       vi.useFakeTimers();
+      nav.path = null;
       vi.stubEnv("VWS_CONSOLE_API_TIMEOUT_MS", "600000");
       vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
         calls.push({ url, init });

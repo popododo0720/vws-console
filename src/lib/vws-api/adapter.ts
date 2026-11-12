@@ -13,7 +13,6 @@ import type {
   Vpc,
 } from "@/types/console";
 
-export const REGION = "vws-1";
 /** console-api has one Availability Zone and refuses any other (vws-console-api internal/resource/text.go ZoneName). */
 export const ZONES = ["vws-1a"] as const;
 
@@ -21,11 +20,19 @@ export type ApiError = { code: string; message: string; requestId: string | null
 
 export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: ApiError };
 
+/** The X-Vws-Region value that reads every registered region at once. */
+export const ALL_REGIONS = "all";
+
+export const regionLabel = (region: string) => (region === ALL_REGIONS ? "All regions" : region);
+
+/** One region as GET /regions lists it. `kind` is "pve" or "aws"; the console decides nothing by it. */
+export type Region = { name: string; kind: string; state: "available" | "degraded" | "unavailable" };
+
 declare const brand: unique symbol;
 
 export type BucketName = string & { readonly [brand]: "BucketName" };
 
-export type AccountBucket = { name: BucketName; ownerId: string; created: string };
+export type AccountBucket = { name: BucketName; ownerId: string; created: string; region?: string };
 
 /** One stored object as console-api describes it, without its bytes. */
 export type StoredObject = {
@@ -89,6 +96,29 @@ export function nextPageToken(page: unknown): string {
   return str(obj(page).nextPageToken);
 }
 
+/** console-api's own rule for a region name, so a listed name that breaks it never reaches a request header. */
+const REGION_NAME = /^[a-z0-9-]{1,63}$/;
+const REGION_STATES = ["available", "degraded", "unavailable"] as const;
+
+export function parseRegions(page: unknown): Region[] {
+  return list(page).flatMap((item) => {
+    const name = str(item.name);
+    if (!REGION_NAME.test(name) || name === ALL_REGIONS) return [];
+    return [
+      { name, kind: str(item.kind), state: REGION_STATES.find((state) => state === item.state) ?? "unavailable" },
+    ];
+  });
+}
+
+/**
+ * The region a page works in: its ?region= when that is All regions or a listed name, else the first listed one.
+ * The server and the browser both decide with this, so the menu names the region the requests were sent to.
+ */
+export function pickRegion(regions: readonly Region[], choice: string | null): string | null {
+  if (choice === ALL_REGIONS || regions.some((region) => region.name === choice)) return choice;
+  return regions[0]?.name ?? null;
+}
+
 const BUCKET_NAME = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 const RESERVED_PREFIX = ["xn--", "sthree-", "amzn-s3-demo-"] as const;
 const RESERVED_SUFFIX = ["-s3alias", "--ol-s3", "--x-s3", "--table-s3"] as const;
@@ -117,7 +147,13 @@ export function toAccountBucket(item: unknown, expected?: BucketName): AccountBu
   if (expected !== undefined && name !== expected) throw new Error("unexpected bucket name");
   const created = record.creationDate;
   if (typeof created !== "string" || created.length === 0) throw new Error("invalid creationDate");
-  return { name, ownerId: typeof record.ownerId === "string" ? record.ownerId : "", created };
+  const region = str(record.region);
+  return {
+    name,
+    ownerId: typeof record.ownerId === "string" ? record.ownerId : "",
+    created,
+    ...(region && { region }),
+  };
 }
 
 /** A flat character class, not a repeated group: a grouped pattern overflows the regex stack on a 4 MiB body. */
@@ -210,7 +246,7 @@ export function toInstance(item: Json): Instance {
     elasticIp: str(item.publicIpAllocationId) ? str(item.publicIpAddress) : "",
     publicIpAllocationId: str(item.publicIpAllocationId),
     ipv6: "",
-    region: REGION,
+    region: str(item.region),
     vpcId: str(item.vpcId),
     subnetId: str(item.subnetId),
     keyPair: str(item.keyName),
@@ -234,7 +270,7 @@ export function toVolume(item: Json): Volume {
     sourceVolumeId: "",
     created: str(item.createTime),
     availabilityZone: str(item.availabilityZone),
-    region: REGION,
+    region: str(item.region),
     attachment: instanceId ? { instanceId, device: str(item.device) } : null,
   };
 }
@@ -252,7 +288,7 @@ export function toVpc(item: Json): Vpc {
     owner: str(item.ownerId),
     isDefault: bool(item.isDefault),
     tags: tags(item.tags),
-    region: REGION,
+    region: str(item.region),
   };
 }
 
@@ -269,7 +305,7 @@ export function toSubnet(item: Json): Subnet {
     autoAssignPublicIp: bool(item.mapPublicIpOnLaunch),
     blockPublicAccess: "",
     tags: tags(item.tags),
-    region: REGION,
+    region: str(item.region),
   };
 }
 
@@ -324,7 +360,7 @@ export function toSecurityGroup(item: Json): SecurityGroup {
     vpcId: str(item.vpcId),
     description: "",
     owner: str(item.ownerId),
-    region: REGION,
+    region: str(item.region),
     rules: permissions.map(toIngressRule),
   };
 }
@@ -358,7 +394,7 @@ export function toAddress(item: Json): ElasticIp {
     instanceId: str(item.instanceId),
     privateIp: "",
     owner: str(item.ownerId),
-    region: REGION,
+    region: str(item.region),
   };
 }
 
@@ -372,7 +408,7 @@ export function toSnapshot(item: Json): Snapshot {
     state: str(item.state),
     started: "",
     owner: str(item.ownerId),
-    region: REGION,
+    region: str(item.region),
   };
 }
 
@@ -391,6 +427,7 @@ export function toStoredKeyPair(item: Record<string, unknown>): StoredKeyPair {
     type: str(item.keyType),
     ownerId: str(item.ownerId),
     created: str(item.createTime),
+    ...(str(item.region) && { region: str(item.region) }),
   };
 }
 

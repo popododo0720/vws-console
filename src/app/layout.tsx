@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import "./globals.css";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { identityFromSession } from "@/lib/vws-api/adapter";
-import { getAdminPermissions, listBuckets, signedInSession } from "@/lib/vws-api/client";
+import { getAdminPermissions, listBuckets, listRegions, signedInSession } from "@/lib/vws-api/client";
 import { iamState } from "@/lib/vws-api/mode";
 
 export const metadata: Metadata = {
@@ -15,11 +16,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Everything here is the caller's own at this moment, so no page may be rendered ahead of its request.
+  await connection();
   const state = await iamState();
   const signIn = state === "on";
   const session = await signedInSession();
   const identity = identityFromSession(session, { iam: state !== "off" });
-  const [listed, adminActions] = session ? await Promise.all([listBuckets(), getAdminPermissions()]) : [null, []];
+  const [listed, adminActions, regions] = session
+    ? await Promise.all([listBuckets(), getAdminPermissions(), listRegions()])
+    : [null, [], state === "off" ? await listRegions() : null];
   const accountBuckets = listed?.ok ? listed.value : [];
   return (
     <html lang="en" className="h-full antialiased">
@@ -29,6 +34,7 @@ export default async function RootLayout({
           signIn={signIn}
           accountBuckets={accountBuckets}
           adminActions={adminActions}
+          regions={regions}
         >
           {children}
         </ConsoleProvider>

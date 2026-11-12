@@ -146,6 +146,7 @@ export function VpcsView({ vpcs, subnets, loadError }: { vpcs: Vpc[]; subnets: S
       <ApiErrorAlert error={action.error} title="The VPC action failed" />
       <ResourceTable
         rows={rows}
+        region={(row) => row.region}
         getId={(row) => row.id}
         columns={columns}
         selectedIds={selected.map((item) => item.id)}

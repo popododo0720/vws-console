@@ -71,6 +71,7 @@ const rows: Row[] = [
   { name: "listSecurityGroups", run: vws.listSecurityGroups, sent: [`GET ${api("/security-groups")}`] },
   { name: "listAddresses", run: vws.listAddresses, sent: [`GET ${api("/addresses")}`] },
   { name: "listSnapshots", run: vws.listSnapshots, sent: [`GET ${api("/snapshots")}`] },
+  { name: "listRegions", run: vws.listRegions, sent: [`GET ${api("/regions")}`] },
   { name: "putBucket", run: () => vws.putBucket(BUCKET), sent: [`PUT ${api(`/buckets/${enc(BUCKET)}`)}`] },
   { name: "getBucket", run: () => vws.getBucket(BUCKET), sent: [`GET ${api(`/buckets/${enc(BUCKET)}`)}`] },
   { name: "deleteBucket", run: () => vws.deleteBucket(BUCKET), sent: [`DELETE ${api(`/buckets/${enc(BUCKET)}`)}`] },

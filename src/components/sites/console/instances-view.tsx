@@ -250,6 +250,7 @@ export function InstancesView({ instances, loadError }: { instances: Instance[];
       <ResourceTable
         hideRefresh
         rows={instances}
+        region={(row) => row.region}
         getId={(row) => row.id}
         columns={columns}
         selectedIds={selected.map((item) => item.id)}

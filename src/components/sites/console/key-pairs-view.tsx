@@ -76,6 +76,7 @@ export function KeyPairsView({ keyPairs, loadError }: { keyPairs: StoredKeyPair[
       <ApiErrorAlert error={action.error} title="The key pair could not be deleted" />
       <ResourceTable
         rows={keyPairs}
+        region={(row) => row.region ?? ""}
         getId={(row) => row.id}
         columns={columns}
         selectedIds={selected.map((item) => item.id)}

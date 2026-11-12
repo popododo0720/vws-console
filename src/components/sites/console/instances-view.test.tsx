@@ -1,5 +1,6 @@
 import { act, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Instance } from "@/types/console";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { InstancesView, elapsedLabel } from "@/components/sites/console/instances-view";
 
@@ -10,11 +11,51 @@ vi.mock("@/app/actions/resources", () => ({
   stopInstancesAction: vi.fn(),
   terminateInstancesAction: vi.fn(),
 }));
+const nav = vi.hoisted(() => ({ search: "" }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
   usePathname: () => "/compute/instances",
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(nav.search),
 }));
+
+beforeEach(() => {
+  nav.search = "";
+});
+
+describe("InstancesView under All regions", () => {
+  const instance = (id: string, region: string, more: Partial<Instance>): Instance => ({
+    ...{ id, name: "", state: "running", type: "", status: "none", checksPassed: 0, checksTotal: 0, region },
+    ...{ availabilityZone: "", publicDns: "", publicIpv4: "", privateIpv4: "", privateDns: "", elasticIp: "" },
+    ...{ publicIpAllocationId: "", ipv6: "", vpcId: "", subnetId: "", keyPair: "", imageId: "", launchedAt: "" },
+    ...more,
+  });
+  const rows = [
+    instance("i-aws", "us-east-1", { name: "edge", type: "t3.micro", availabilityZone: "us-east-1a", keyPair: "ops" }),
+    instance("i-pve", "pve-seoul-1", { name: "web" }),
+  ];
+  const cells = () => {
+    render(
+      <ConsoleProvider regions={{ ok: true, value: [{ name: "pve-seoul-1", kind: "pve", state: "available" }] }}>
+        <InstancesView instances={rows} loadError={null} />
+      </ConsoleProvider>,
+    );
+    const table = within(screen.getByRole("table"));
+    const headers = table.getAllByRole("columnheader").map((cell) => cell.textContent?.trim());
+    const row = (id: string) => within(table.getByRole("checkbox", { name: `Select ${id}` }).closest("tr")!);
+    const cell = (id: string, header: string) => row(id).getAllByRole("cell")[headers.indexOf(header)].textContent;
+    return { headers, cell };
+  };
+
+  it("shows a Region column after the first one, and a dash where an item lacks an attribute", () => {
+    nav.search = "region=all";
+    const { headers, cell } = cells();
+    expect(headers.slice(1, 4)).toEqual(["Name", "Region", "Instance ID"]);
+    expect([cell("i-aws", "Region"), cell("i-pve", "Region")]).toEqual(["us-east-1", "pve-seoul-1"]);
+    const attributes = ["Instance type", "Availability Zone", "Key name"];
+    expect(attributes.map((header) => cell("i-aws", header))).toEqual(["t3.micro", "us-east-1a", "ops"]);
+    expect(attributes.map((header) => cell("i-pve", header))).toEqual(["—", "—", "—"]);
+  });
+});
 
 function renderEmpty() {
   render(

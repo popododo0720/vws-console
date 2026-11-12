@@ -166,6 +166,7 @@ export function SnapshotsView({ snapshots, loadError }: { snapshots: Snapshot[];
       <ApiErrorAlert error={action.error} title="The snapshot action failed" />
       <ResourceTable
         rows={snapshots}
+        region={(row) => row.region}
         getId={(row) => row.id}
         columns={columns}
         selectedIds={selected.map((item) => item.id)}

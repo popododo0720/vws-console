@@ -50,6 +50,40 @@ async function sessionRejected(base: string, session: string): Promise<boolean> 
   });
 }
 
+/** The names console-api takes in X-Vws-Region; anything else in ?region= is not carried to the next page. */
+const REGION_NAME = /^[a-z0-9-]{1,63}$/;
+
+/**
+ * The same URL with the region of the page the browser came from. Links and router calls name no region,
+ * so without this a choice would last for one page.
+ */
+function withInheritedRegion(request: NextRequest): URL | null {
+  if (request.method !== "GET" || request.nextUrl.searchParams.has("region")) return null;
+  const referer = request.headers.get("referer");
+  if (!referer || !URL.canParse(referer)) return null;
+  const from = new URL(referer);
+  const region = from.searchParams.get("region");
+  // Not nextUrl.host: behind a reverse proxy that is the address Next listens on, not the one the browser used.
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (!region || !REGION_NAME.test(region) || from.host !== host) return null;
+  const url = request.nextUrl.clone();
+  url.searchParams.set("region", region);
+  return url;
+}
+
+/**
+ * Passes the request on with the page path, which the server reads for the sign-in return and the region.
+ * no-store: Next answers an RSC request that lacks its _rsc with a redirect that has no cache headers, and a
+ * browser replays that on Back for the page itself, leaving _rsc in the address bar.
+ */
+function forward(request: NextRequest) {
+  const headers = new Headers(request.headers);
+  headers.set("x-vws-path", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  const response = NextResponse.next({ request: { headers } });
+  response.headers.set("cache-control", "no-store");
+  return response;
+}
+
 /**
  * Sends a browser with no console session to the login screen. This is only the optimistic check:
  * every console-api call still forwards the session and turns a 401 into the same redirect.
@@ -65,10 +99,12 @@ export async function proxy(request: NextRequest) {
     return new NextResponse(null, { status: 404, headers: { "cache-control": "no-store" } });
   }
   recordHttpRequest(request.method);
+  const inherited = request.nextUrl.pathname === "/login" ? null : withInheritedRegion(request);
+  if (inherited) return NextResponse.redirect(inherited, { headers: { "cache-control": "no-store" } });
   const base = process.env.VWS_CONSOLE_API_URL;
   // IAM off (the default) uses the server-side token and asks for no sign-in; without console-api
   // there is nothing to sign in to either, and the screens report ConsoleNotConfigured.
-  if (!base) return NextResponse.next();
+  if (!base) return forward(request);
   const state = await iamState();
   // Fail closed: if the mode is unknown (console-api unclear, no last-known mode) or VWS_CONSOLE_IAM is
   // invalid, refuse rather than let the page run with the root token.
@@ -82,7 +118,7 @@ export async function proxy(request: NextRequest) {
       headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "5", "cache-control": "no-store" },
     });
   }
-  if (state === "off") return NextResponse.next();
+  if (state === "off") return forward(request);
   const session = request.cookies.get(SESSION_COOKIE)?.value;
 
   if (request.nextUrl.pathname === "/login") {
@@ -94,16 +130,13 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  const path = `${request.nextUrl.pathname}${request.nextUrl.search}`;
   if (!session) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.search = new URLSearchParams({ next: path }).toString();
+    url.search = new URLSearchParams({ next: `${request.nextUrl.pathname}${request.nextUrl.search}` }).toString();
     return NextResponse.redirect(url);
   }
-  const headers = new Headers(request.headers);
-  headers.set("x-vws-path", path);
-  return NextResponse.next({ request: { headers } });
+  return forward(request);
 }
 
 export const config = {

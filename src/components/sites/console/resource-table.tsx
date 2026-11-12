@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, RefreshCw, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ALL_REGIONS } from "@/lib/vws-api/adapter";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { MenuButton, MenuChevron } from "@/components/sites/console/ui";
 
@@ -24,7 +25,8 @@ type Preset<T> = {
 export function ResourceTable<T>({
   rows,
   getId,
-  columns,
+  columns: ownColumns,
+  region,
   selectedIds,
   onSelectedIds,
   emptyTitle,
@@ -45,6 +47,8 @@ export function ResourceTable<T>({
   rows: T[];
   getId: (row: T) => string;
   columns: Column<T>[];
+  /** The region a row is in. Under All regions the table shows it in a Region column after the first one. */
+  region?: (row: T) => string;
   selectedIds: string[];
   onSelectedIds: (ids: string[]) => void;
   emptyTitle: string;
@@ -65,7 +69,12 @@ export function ResourceTable<T>({
   className?: string;
   bodyClassName?: string;
 }) {
-  const { density } = useConsole();
+  const { density, region: selectedRegion } = useConsole();
+  const columns = useMemo(() => {
+    if (!region || selectedRegion !== ALL_REGIONS) return ownColumns;
+    const column = { key: "region", header: "Region", minWidth: 140, sortValue: region, cell: region };
+    return [ownColumns[0], column, ...ownColumns.slice(1)];
+  }, [ownColumns, region, selectedRegion]);
   const awsList = variant === "aws-list";
   const [query, setQuery] = useState("");
   const [preset, setPreset] = useState("");
@@ -288,11 +297,14 @@ export function ResourceTable<T>({
                         />
                       )}
                     </td>
-                    {columns.map((column) => (
-                      <td key={column.key} className="px-2 whitespace-nowrap">
-                        {column.cell(row)}
-                      </td>
-                    ))}
+                    {columns.map((column) => {
+                      const content = column.cell(row);
+                      return (
+                        <td key={column.key} className="px-2 whitespace-nowrap">
+                          {content === "" || content == null ? "—" : content}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
