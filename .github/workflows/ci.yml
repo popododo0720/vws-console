@@ -7,11 +7,20 @@ on:
   pull_request:
     branches:
       - main
+  repository_dispatch:
+    types: [console-api-main]
+  workflow_dispatch:
+    inputs:
+      console_api_ref:
+        description: Console API ref to test
+        default: main
+        type: string
 
 jobs:
   # This repo's own guards (vws-deploy#448, #91). They run here because repo-guard.yml is only the pinned
   # vws-deploy caller (vws-deploy docs/design/repo-guard-reusable.md), whose shared jobs do not run them.
   guard:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -28,6 +37,7 @@ jobs:
         run: scripts/guard_test.sh
 
   quality:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -98,3 +108,36 @@ jobs:
 
       - name: E2E OpenTelemetry (real Collector)
         run: npm run test:e2e:otel
+
+  e2e-stack:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: console
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: console
+      - uses: actions/checkout@v7
+        with:
+          repository: popododo0720/vws-console-api
+          path: vws-console-api
+          ref: ${{ inputs.console_api_ref || github.event.client_payload.sha || 'main' }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: vws-console-api/go.mod
+          cache-dependency-path: vws-console-api/go.sum
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:stack
+        env:
+          VWS_CONSOLE_API_DIR: ../vws-console-api
