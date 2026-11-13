@@ -183,6 +183,9 @@ export const storageNav: NavTree = {
 /** The IAM action the operator's Regions screens need. GET /admin/permissions lists the actions a caller has. */
 export const ADMIN_REGIONS_ACTION = "vws:AdminListRegions";
 
+/** The IAM action a caller needs to change a project's pools and AWS accounts. */
+export const ADMIN_MAP_PROJECT_ACTION = "vws:AdminMapProject";
+
 /** Kept out of navTrees: the top bar adds these links only for a caller who has ADMIN_REGIONS_ACTION. */
 export const adminNav: NavTree = {
   id: "admin",

@@ -538,6 +538,24 @@ export type AdminRegionHealth = {
 
 export type AdminAwsAccount = { id: string; allowedRegions: string[] };
 
+/** A registry record's ETag as console-api writes it: the version in quotes. The same text goes back as If-Match. */
+export const ETAG = /^"([0-9]+)"$/;
+
+/** A VWS project ID and an AWS account ID are both 12 digits (vws-console-api internal/admin/store ValidateProject). */
+export const ACCOUNT_ID = /^[0-9]{12}$/;
+
+export type ProjectPool = { readonly region: string; readonly pool: string };
+
+/** The pool a project uses in each Proxmox region and the AWS accounts it may use. Version 0 is not stored yet. */
+export type AdminProject = {
+  readonly project: string;
+  readonly pools: readonly ProjectPool[];
+  readonly awsAccounts: readonly string[];
+  readonly version: number;
+};
+
+export type AdminProjectInput = Pick<AdminProject, "pools" | "awsAccounts">;
+
 function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
@@ -606,6 +624,39 @@ export function toAdminRegionInput(form: unknown, secret: unknown): AdminRegionI
     zones: objects(obj(form).zones).map((zone) => ({ letter: str(zone.letter).trim(), nodes: names(zone.nodes) })),
     ...(tokenSecret ? { tokenSecret } : {}),
   };
+}
+
+/** console-api sends a mapping's version only as the ETag, so an answer without one is unreadable. */
+export function toAdminProject(item: Json, etag: string): Versioned<AdminProject> {
+  const project = str(item.project);
+  const version = ETAG.exec(etag)?.[1];
+  if (!project || version === undefined) throw new Error("project mapping");
+  return {
+    project,
+    pools: objects(item.pools).map((pool) => ({ region: str(pool.region), pool: str(pool.pool) })),
+    awsAccounts: strings(item.awsAccounts),
+    version: Number(version),
+    etag,
+  };
+}
+
+/** A server action can be called with any JSON, so a mapping passes only as text pools and 12-digit account IDs. */
+export function toAdminProjectInput(form: unknown): ApiResult<AdminProjectInput> {
+  const { pools, awsAccounts } = obj(form);
+  const refused = (field: string, message: string): ApiResult<AdminProjectInput> => ({
+    ok: false,
+    error: { code: "InvalidArgument", message, requestId: null, field },
+  });
+  const isPool = (pool: unknown): pool is ProjectPool =>
+    typeof obj(pool).region === "string" && typeof obj(pool).pool === "string";
+  const isAccount = (id: unknown): id is string => typeof id === "string" && ACCOUNT_ID.test(id);
+  if (!Array.isArray(pools) || !pools.every(isPool)) {
+    return refused("pools", "Each pool needs a region and a pool name.");
+  }
+  if (!Array.isArray(awsAccounts) || !awsAccounts.every(isAccount)) {
+    return refused("awsAccounts", "An AWS account ID is 12 digits.");
+  }
+  return { ok: true, value: { pools: pools.map(({ region, pool }) => ({ region, pool })), awsAccounts } };
 }
 
 export function parseConnectionSteps(body: unknown): ConnectionStep[] {

@@ -239,6 +239,13 @@ const rows: Row[] = [
     run: async () => [await vws.testAdminRegion(PVE, false), await vws.testAdminRegion(PVE, true)],
     sent: [`POST ${api("/admin/regions/test")}`, `POST ${PVE_URL}/test`],
   },
+  { name: "getAdminProject", run: () => vws.getAdminProject(ID), sent: [`GET ${api(`/admin/projects/${enc(ID)}`)}`] },
+  {
+    name: "saveAdminProject (a 503 is not sent again)",
+    run: () => vws.saveAdminProject(ID, { pools: [], awsAccounts: [] }, '"3"'),
+    replies: () => [respond(503, {})],
+    sent: [`PUT ${api(`/admin/projects/${enc(ID)}`)}`],
+  },
   {
     name: "login",
     run: () => vws.login({ account: "1", userName: "root", password: "p" }),

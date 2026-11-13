@@ -59,10 +59,13 @@ import {
   parseAdminPermissions,
   parseAdminRegions,
   parseConnectionSteps,
+  toAdminProject,
   toAdminRegion,
   toAdminRegionHealth,
   unknownHealth,
   type AdminAwsAccount,
+  type AdminProject,
+  type AdminProjectInput,
   type AdminRegion,
   type AdminRegionHealth,
   type AdminRegionInput,
@@ -249,7 +252,7 @@ async function request(
     headers["content-type"] = "application/json";
   }
   if (post?.ifMatch) headers["if-match"] = post.ifMatch;
-  const sendsJson = method === "POST" || method === "PATCH";
+  const sendsJson = method === "POST" || method === "PATCH" || (method === "PUT" && !raw && body !== undefined);
   let response: ApiReply;
   let json: unknown;
   try {
@@ -849,7 +852,7 @@ export const listAdminAwsAccounts = (): Promise<ApiResult<AdminAwsAccount[]>> =>
 export const getAdminRegion = (name: string): Promise<ApiResult<Versioned<AdminRegion> | null>> =>
   getOne(route("/admin/regions/{name}", { name }), (item, etag) => ({ ...toAdminRegion(item), etag }));
 
-/** console-api gives a region push and a connection test 15 s each, so these calls wait at least 20 s. */
+/** console-api gives a region push and a connection test 15 s each and a project save 8 s; these wait at least 20 s. */
 const adminWait = () => ({ timeoutMs: Math.max(timeoutMs(), 20_000) });
 
 export async function saveAdminRegion(input: AdminRegionInput, etag: string | null): Promise<ApiResult<void>> {
@@ -878,6 +881,20 @@ export async function testAdminRegion(input: AdminRegionInput, saved: boolean): 
   } catch {
     return { ok: false, error: malformed(path.path) };
   }
+}
+
+export const getAdminProject = (project: string): Promise<ApiResult<Versioned<AdminProject> | null>> =>
+  getOne(route("/admin/projects/{project}", { project }), toAdminProject);
+
+/** Sent once, like every write: the first PUT that lands makes this If-Match stale. */
+export async function saveAdminProject(
+  project: string,
+  input: AdminProjectInput,
+  etag: string,
+): Promise<ApiResult<void>> {
+  const path = route("/admin/projects/{project}", { project });
+  const result = await request("PUT", path, input, { ...adminWait(), ifMatch: etag });
+  return result.ok ? { ok: true, value: undefined } : { ok: false, error: result.error };
 }
 
 /** Never fails: a reading console-api did not return has status "unknown" and the reason as its last error. */
