@@ -7,6 +7,8 @@ const apiPort = Number(process.env.E2E_FAKE_API_PORT ?? 43321);
 
 export default defineConfig({
   testDir: "./e2e-admin",
+  // The specs share the one fake's admin registry: a reset in one worker would empty it under a test in another.
+  workers: 1,
   use: { baseURL: `http://127.0.0.1:${port}` },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [

@@ -1,7 +1,8 @@
 // A deterministic console-api for the admin e2e (run with `node`, which strips the types). IAM is on and the session
-// cookie names the caller: "root" is the administrator with nothing registered yet, and any other signed-in caller
-// gets console-api's 403 answers on the admin routes. Two regions take writes and hold instances, a volume and what
-// a launch needs; every compute write is a 202 operation that GET /operations/{id} finishes.
+// cookie names the caller: "root" is the administrator with nothing registered yet, "viewer" may read the admin routes
+// and change nothing, and any other signed-in caller gets console-api's 403 answers on the admin routes. Two regions
+// take writes and hold instances, a volume and what a launch needs; every compute write is a 202 operation that
+// GET /operations/{id} finishes.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -9,6 +10,14 @@ import { createServer } from "node:http";
 const denied = { error: { code: "PermissionDenied", message: "administrator required" }, requestId: "req-e2e-denied" };
 type Json = Record<string, unknown>;
 const regions = new Map<string, { version: number; body: Json }>();
+const projects = new Map<string, { version: number; body: Json }>();
+/** The vws:Admin* actions GET /admin/permissions grants each caller who has any. */
+const granted: Record<string, string[]> = {
+  root: ["vws:AdminListRegions", "vws:AdminMapProject"],
+  viewer: ["vws:AdminListRegions"],
+};
+/** The one AWS account registered here; a project may map no other. */
+const AWS_ACCOUNT = "210987654321";
 const failure = (code: string, message: string, field?: string) => ({
   error: { code, field, message },
   requestId: "req-e2e",
@@ -130,6 +139,7 @@ createServer(async (request, response) => {
   if (path === "/healthz") return send(200, { status: "ok" });
   if (path === "/__reset") {
     regions.clear();
+    projects.clear();
     return send(204, null);
   }
   if (path === "/__compute") {
@@ -141,9 +151,8 @@ createServer(async (request, response) => {
   if (!user) return send(401, { error: { code: "Unauthenticated", message: "Sign in." } });
   const principal = `arn:vws:iam::123456789012:user/${user}`;
   if (path === "/auth/session") return send(200, { loginEnabled: true, principal, account: "123456789012" });
-  if (path === "/admin/permissions") {
-    return user === "root" ? send(200, { permissions: ["vws:AdminListRegions"] }) : send(403, { permissions: [] });
-  }
+  const permissions = Object.hasOwn(granted, user) ? granted[user] : [];
+  if (path === "/admin/permissions") return send(permissions.length > 0 ? 200 : 403, { permissions });
   if (path === "/regions") return send(200, { items: listed });
   const region = /^\/regions\/([^/]+)\/capabilities$/.exec(path)?.[1];
   if (region) {
@@ -221,11 +230,36 @@ createServer(async (request, response) => {
       () => plans.forEach(({ row, step }) => (row.state = step?.[1])),
     );
   }
-  if (path.startsWith("/admin/") && user !== "root") return send(403, denied);
+  if (path.startsWith("/admin/") && permissions.length === 0) return send(403, denied);
+  const adminWrite = browserWrite && user === "root";
+  // A partial copy of adminMapProject (vws-console-api internal/surface/console/admin_projects.go): it trusts the
+  // body's shape and regions and claims no pool. A pool name starting with "missing" is its switch for one no region has.
+  const project = /^\/admin\/projects\/([^/]+)$/.exec(path)?.[1];
+  if (project) {
+    if (!/^[0-9]{12}$/.test(project)) return send(400, invalid("project", "must be 12 digits"));
+    const version = projects.get(project)?.version ?? 0;
+    if (method === "GET") {
+      const pools = [...regions.keys()].sort().map((key) => ({ region: key, pool: project }));
+      response.setHeader("etag", `"${version}"`);
+      return send(200, projects.get(project)?.body ?? { project, pools, awsAccounts: [] });
+    }
+    if (method !== "PUT" || !adminWrite) return send(403, denied);
+    const body = { project, ...((await read()) as { pools: Record<string, string>[]; awsAccounts: string[] }) };
+    if (request.headers["if-match"] !== `"${version}"`) {
+      return send(409, failure("Conflict", "registration already exists or changed"));
+    }
+    const unknown = body.awsAccounts.find((id) => id !== AWS_ACCOUNT);
+    if (unknown !== undefined) return send(400, invalid("awsAccounts", `unregistered AWS account ${unknown}`));
+    const missing = body.pools.find((entry) => entry.pool.startsWith("missing"));
+    if (missing) return send(400, invalid("pools", `pool ${missing.pool} does not exist in region ${missing.region}`));
+    projects.set(project, { version: version + 1, body });
+    response.setHeader("etag", `"${version + 1}"`);
+    return send(200, body);
+  }
   const [found, name, tail] = /^\/admin\/regions(?:\/([^/]+))?(?:\/(health|test))?$/.exec(path) ?? [];
   if (!found) return send(200, { items: [] });
   if (method === "GET" && !name) return send(200, { items: [...regions.values()].map((region) => region.body) });
-  if (method !== "GET" && !browserWrite) return send(403, denied);
+  if (method !== "GET" && !adminWrite) return send(403, denied);
   const { tokenSecret, ...input } = await read();
   const unsaved = method === "POST" && name === "test";
   const saved = unsaved ? undefined : regions.get(name ?? String(input.name));
