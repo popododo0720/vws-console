@@ -16,6 +16,7 @@
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
     "test": "vitest run",
     "test:e2e": "playwright test && playwright test -c playwright.admin.config.ts && playwright test -c playwright.relay.config.ts",
+    "test:e2e:stack": "playwright test -c playwright.stack.config.ts",
     "test:e2e:otel": "playwright test -c playwright.otel.config.ts",
     "test:e2e:standalone": "bash scripts/check-console-standalone.sh",
     "format:check": "prettier --check ."
