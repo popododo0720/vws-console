@@ -137,11 +137,15 @@ export function AdminRegionsView({
   );
 }
 
-export function AdminAccessDenied({ error }: { error: ApiError }) {
-  const message = `You don't have permission to ${ADMIN_REGIONS_ACTION}. To request access, send this action name and the request ID below to your VWS administrator.`;
+/** `error` has no request ID when the console refused from the permission list, without asking console-api. */
+type DeniedProps = { error: ApiError; page?: string; action?: string };
+
+export function AdminAccessDenied({ error, page = "Regions", action = ADMIN_REGIONS_ACTION }: DeniedProps) {
+  const quoted = error.requestId ? "this action name and the request ID below" : "this action name";
+  const message = `You don't have permission to ${action}. To request access, send ${quoted} to your VWS administrator.`;
   return (
     <Shell tree={null}>
-      <PageHeader crumbs={[{ label: "Administration" }, { label: "Regions" }]} />
+      <PageHeader crumbs={[{ label: "Administration" }, { label: page }]} />
       <ApiErrorAlert error={{ ...error, message }} title="Access denied" />
     </Shell>
   );
