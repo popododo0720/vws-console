@@ -193,6 +193,19 @@ export const adminNav: NavTree = {
   sections: [{ id: "regions", label: "Regions", href: "/admin/regions" }],
 };
 
+/** Kept out of navTrees: only the home page exists, so the top bar links it under the service's own name. */
+export const billingNav: NavTree = {
+  id: "billing",
+  title: "Billing and Cost Management",
+  href: "/billing",
+  sections: Object.entries({
+    "Billing and Payments": ["Bills", "Payments", "Credits"],
+    "Cost and Usage Analysis": ["Cost Explorer", "Data Exports", "Cost Anomaly Detection"],
+    "Budgets and Planning": ["Budgets"],
+    "Savings and Commitments": ["Cost Optimization Hub", "Savings Plans"],
+  }).map(([label, pages]) => ({ id: label, label, children: pages.map((page) => ({ id: page, label: page })) })),
+};
+
 export const navTrees = [computeNav, networkNav, storageNav];
 
 export function linksIn(tree: NavTree) {

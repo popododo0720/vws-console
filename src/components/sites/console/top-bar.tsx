@@ -5,16 +5,18 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Bell, CircleQuestionMark, Globe, LayoutGrid, Search, Settings, SquareTerminal } from "lucide-react";
-import { ADMIN_REGIONS_ACTION, adminNav, linksIn, navTrees } from "@/lib/console-data";
+import { ADMIN_REGIONS_ACTION, adminNav, billingNav, linksIn, navTrees } from "@/lib/console-data";
 import { ALL_REGIONS, regionLabel, type Region } from "@/lib/vws-api/adapter";
 import { useConsole } from "@/components/sites/console/console-provider";
 import { Mark, MenuButton, MenuChevron, PanelDialog, type MenuEntry } from "@/components/sites/console/ui";
 
 const pageLinks = Array.from(
   new Map(
-    [...navTrees.flatMap((tree) => linksIn(tree)), { label: "Launch instance", href: "/compute/launch" }].map(
-      (link) => [link.href, link],
-    ),
+    [
+      ...navTrees.flatMap((tree) => linksIn(tree)),
+      { label: "Launch instance", href: "/compute/launch" },
+      { label: billingNav.title, href: "/billing" },
+    ].map((link) => [link.href, link]),
   ).values(),
 );
 const adminLinks = linksIn(adminNav);

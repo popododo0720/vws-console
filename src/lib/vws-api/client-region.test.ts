@@ -13,7 +13,7 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers(nav.path === null ? {} : { "x-vws-path": nav.path }),
 }));
 
-import { createVpc, getInstance, listInstances, listRegions, getCapabilities } from "./client";
+import { createVpc, getInstance, getUsage, listInstances, listRegions, getCapabilities } from "./client";
 import { pveLiveBox } from "./testdata/capabilities";
 
 type Call = { method: string; path: string; region: string | undefined; signal: unknown };
@@ -112,6 +112,13 @@ describe("the region a console-api call is sent to", () => {
       await listInstances();
       expect(sent(calls)).toEqual(["all"]);
     }
+  });
+
+  it("sends no region with the usage read, and does not read the region list for it", async () => {
+    nav.path = "/billing?region=pve-seoul-1";
+    const calls = serve();
+    await getUsage({ from: "2026-10-01", to: "2026-11-01" });
+    expect(calls.map((call) => `${call.method} ${call.path} ${call.region ?? "-"}`)).toEqual(["GET /usage -"]);
   });
 
   it("reads the capability document of the page's region, with a timeout", async () => {

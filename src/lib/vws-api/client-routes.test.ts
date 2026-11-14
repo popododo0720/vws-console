@@ -219,6 +219,11 @@ const rows: Row[] = [
     sent: [`POST ${api(`/addresses/${enc(ID)}/release`)}`],
   },
   { name: "deleteSnapshot", run: () => vws.deleteSnapshot(ID), sent: [`POST ${api(`/snapshots/${enc(ID)}/delete`)}`] },
+  {
+    name: "getUsage",
+    run: () => vws.getUsage({ from: "2026-10-01", to: "2026-11-01" }),
+    sent: [`GET ${api("/usage?from=2026-10-01&to=2026-11-01")}`],
+  },
   { name: "getAdminPermissions", run: vws.getAdminPermissions, sent: [`GET ${api("/admin/permissions")}`] },
   { name: "listAdminRegions", run: vws.listAdminRegions, sent: [`GET ${api("/admin/regions")}`] },
   { name: "listAdminAwsAccounts", run: vws.listAdminAwsAccounts, sent: [`GET ${api("/admin/aws-accounts")}`] },

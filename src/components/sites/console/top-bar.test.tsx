@@ -109,6 +109,7 @@ describe("TopBar account menu", () => {
     const view = render(bar(["vws:AdminListAwsAccounts"]));
     fireEvent.click(screen.getByRole("button", { name: "Services" }));
     expect(screen.getByRole("menuitem", { name: "Instances" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Billing and Cost Management" })).toHaveAttribute("href", "/billing");
     expect(screen.queryByRole("menuitem", { name: "Regions" })).toBeNull();
     view.rerender(bar(["vws:AdminListRegions"]));
     expect(screen.getByRole("menuitem", { name: "Regions" }).getAttribute("href")).toBe("/admin/regions");

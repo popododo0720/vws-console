@@ -1,5 +1,6 @@
 import { parseKeyPairId, parseKeyPairName, type KeyPairChoice, type StoredKeyPair } from "@/lib/key-pair";
 import { normalizeCidr } from "@/lib/security-group-rules";
+import { usageWindow, type UsageWindow } from "@/lib/usage";
 import type {
   ElasticIp,
   IngressPermission,
@@ -673,6 +674,42 @@ export function parseAdminPermissions(body: unknown): string[] {
   const permissions = obj(body).permissions;
   if (!Array.isArray(permissions)) throw new Error("expected permissions");
   return strings(permissions);
+}
+
+/** Capacity provisioned in one region when it was read (vws-console-api internal/resource Allocation). */
+export type Allocation = { vcpu: number; memoryBytes: number; diskBytes: number };
+
+/** One region of a project's usage. `allocation` is null when console-api could not read it; `error` then says why. */
+export type RegionUsage = { region: string; allocation: Allocation | null; error: string };
+
+export type ProjectUsage = { project: string; regions: RegionUsage[] };
+
+/** GET /usage: the window console-api read and the caller's projects, each with its Proxmox regions. */
+export type UsageReport = UsageWindow & { projects: ProjectUsage[] };
+
+/** Null unless all three amounts are numbers, so a region never shows a partial or invented reading. */
+function toAllocation(value: unknown): Allocation | null {
+  const vcpu = num(obj(value).vcpu);
+  const memoryBytes = num(obj(value).memoryBytes);
+  const diskBytes = num(obj(value).diskBytes);
+  if (vcpu === null || memoryBytes === null || diskBytes === null) return null;
+  return { vcpu, memoryBytes, diskBytes };
+}
+
+export function parseUsage(body: unknown): UsageReport {
+  const range = usageWindow(obj(body).from, obj(body).to);
+  if (!range) throw new Error("usage window");
+  return {
+    ...range,
+    projects: list(body).map((item) => ({
+      project: str(item.project),
+      regions: optionalList(item.regions).map((region) => ({
+        region: str(region.region),
+        allocation: toAllocation(region.allocation),
+        error: str(region.error),
+      })),
+    })),
+  };
 }
 
 /** The signed-in user and account shown in the account menu. A missing field is "—", like the rest of the console. */

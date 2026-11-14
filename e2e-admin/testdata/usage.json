@@ -1,0 +1,10 @@
+[
+  {
+    "project": "123456789012",
+    "regions": [
+      { "region": "pve-down-1", "error": "Unavailable" },
+      { "region": "pve-lab-1", "allocation": { "vcpu": 6, "memoryBytes": 8589934592, "diskBytes": 128849018880 } },
+      { "region": "pve-lab-2", "allocation": { "vcpu": 2.5, "memoryBytes": 1610612736, "diskBytes": 43218108416 } }
+    ]
+  }
+]

@@ -16,6 +16,8 @@ const granted: Record<string, string[]> = {
   root: ["vws:AdminListRegions", "vws:AdminMapProject"],
   viewer: ["vws:AdminListRegions"],
 };
+/** The items of GET /usage: two Proxmox regions with an allocation and "pve-down-1", which could not be read. */
+const usage: unknown = JSON.parse(readFileSync(new URL("./testdata/usage.json", import.meta.url), "utf8"));
 /** The one AWS account registered here; a project may map no other. */
 const AWS_ACCOUNT = "210987654321";
 const failure = (code: string, message: string, field?: string) => ({
@@ -154,6 +156,16 @@ createServer(async (request, response) => {
   const permissions = Object.hasOwn(granted, user) ? granted[user] : [];
   if (path === "/admin/permissions") return send(permissions.length > 0 ? 200 : 403, { permissions });
   if (path === "/regions") return send(200, { items: listed });
+  // A partial copy of usageWindow (vws-console-api internal/surface/console/usage.go): one from and one to, both
+  // dates, at most 366 days apart. The answer echoes them, as console-api's does.
+  if (path === "/usage") {
+    const query = new URL(request.url ?? "", "http://fake").searchParams;
+    const [from, to] = [query.get("from") ?? "", query.get("to") ?? ""];
+    const dates = [...query.keys()].length === 2 && [from, to].every((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
+    const days = (Date.parse(to) - Date.parse(from)) / 86_400_000;
+    if (dates && days > 0 && days <= 366) return send(200, { from, to, items: usage });
+    return send(400, invalid("window", "from and to must be YYYY-MM-DD, from < to, at most 366 days"));
+  }
   const region = /^\/regions\/([^/]+)\/capabilities$/.exec(path)?.[1];
   if (region) {
     return capabilities[region]
