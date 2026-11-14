@@ -10,6 +10,7 @@ import { recordOperationPoll } from "@/lib/ops/metrics";
 import { withSpan } from "@/lib/ops/span";
 import { objectKeyProblem } from "@/lib/object-upload";
 import { DEVICE_NAME, type CreateSnapshotInput, type CreateVolumeInput } from "@/lib/ebs";
+import type { UsageWindow } from "@/lib/usage";
 import { apiFetch, ApiTransportError, timeoutMs, type ApiReply } from "./transport";
 import { keyPath, route, withQuery, type ApiRoute } from "./route";
 import { API_SESSION_COOKIE, CSRF_COOKIE, sessionFromSetCookie, type ApiSession } from "./session-cookies";
@@ -48,6 +49,7 @@ import {
   parseOperation,
   parseRegions,
   parseSubnets,
+  parseUsage,
   parseVolumes,
   parseVpcs,
   pickRegion,
@@ -78,6 +80,7 @@ import {
   type Operation,
   type Region,
   type RegionCapabilities,
+  type UsageReport,
 } from "./adapter";
 import {
   parseIdempotencyKey,
@@ -835,6 +838,17 @@ export const releaseAddress = (allocationId: string) => mutate(route("/addresses
 
 export const listSnapshots = (): Promise<ApiResult<Snapshot[]>> => listAll(route("/snapshots"), parseSnapshots);
 export const deleteSnapshot = (id: string) => mutate(route("/snapshots/{id}/delete", { id }));
+
+/** The caller's project in every Proxmox region at once, so the page's region does not go with the call. */
+export async function getUsage({ from, to }: UsageWindow): Promise<ApiResult<UsageReport>> {
+  const result = await request("GET", withQuery(route("/usage"), { from, to }), undefined, { region: null });
+  if (!result.ok) return { ok: false, error: result.error };
+  try {
+    return { ok: true, value: parseUsage(result.value.json) };
+  } catch {
+    return { ok: false, error: malformed("/usage") };
+  }
+}
 
 /**
  * The vws:Admin* actions the operator menu may show. Empty when console-api grants none (its 403 for a caller who

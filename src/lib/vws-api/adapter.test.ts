@@ -14,6 +14,7 @@ import {
   parseKeyPairs,
   parseOperation,
   parseSubnets,
+  parseUsage,
   toObjectContent,
   parseVolumes,
   parseVpcs,
@@ -593,6 +594,50 @@ describe("parseVolumes", () => {
     });
     expect(gp3).toMatchObject({ iops: 3000, throughput: "125" });
     expect(gp2).toMatchObject({ iops: null, throughput: "" });
+  });
+});
+
+describe("parseUsage", () => {
+  const range = { from: "2026-10-01", to: "2026-11-01" };
+  const allocation = { vcpu: 6, memoryBytes: 8 * 2 ** 30, diskBytes: 120 * 2 ** 30 };
+
+  it("reads the window and each region's allocation, and gives a region console-api could not read none", () => {
+    const regions = [
+      { region: "pve-lab-1", allocation },
+      { region: "pve-down-1", error: "Unavailable" },
+    ];
+    expect(parseUsage({ ...range, items: [{ project: "123456789012", regions }] })).toEqual({
+      ...range,
+      projects: [
+        {
+          project: "123456789012",
+          regions: [
+            { region: "pve-lab-1", allocation, error: "" },
+            { region: "pve-down-1", allocation: null, error: "Unavailable" },
+          ],
+        },
+      ],
+    });
+  });
+
+  it.each([{}, { ...allocation, diskBytes: "120" }, { vcpu: 6, memoryBytes: 1 }, null, 7])(
+    "gives no reading, never a partial or a zero one, for the allocation %j",
+    (broken) => {
+      const regions = [{ region: "pve-lab-1", allocation: broken }];
+      expect(parseUsage({ ...range, items: [{ regions }] }).projects[0].regions[0].allocation).toBeNull();
+    },
+  );
+
+  it.each([
+    null,
+    {},
+    range,
+    { ...range, items: {} },
+    { items: [] },
+    { from: "2026-11-01", to: "2026-10-01", items: [] },
+    { ...range, items: [{ regions: "all" }] },
+  ])("rejects the malformed answer %j", (body) => {
+    expect(() => parseUsage(body)).toThrow();
   });
 });
 
