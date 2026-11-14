@@ -48,7 +48,16 @@ export type ObjectContent = StoredObject & { bytes: Uint8Array };
 
 export type OperationState = "running" | "succeeded" | "failed";
 
-export type Image = { id: string; name: string; state: string; owner: string };
+export type Image = {
+  id: string;
+  name: string;
+  state: string;
+  owner: string;
+  architecture: string;
+  /** ISO 8601, as AWS DescribeImages writes CreationDate; empty when console-api does not send it. */
+  creationDate: string;
+  region: string;
+};
 
 /** Machine types vws-compute accepts (console-api resource/instance.go). The API has no list endpoint. */
 export type InstanceType = { id: string; vcpus: number; memoryMiB: number };
@@ -377,7 +386,15 @@ export function toSubnet(item: Json): Subnet {
 }
 
 export function toImage(item: Json): Image {
-  return { id: str(item.imageId), name: str(item.name), state: str(item.state), owner: str(item.ownerId) };
+  return {
+    id: str(item.imageId),
+    name: str(item.name),
+    state: str(item.state),
+    owner: str(item.ownerId),
+    architecture: str(item.architecture),
+    creationDate: str(item.creationDate),
+    region: str(item.region),
+  };
 }
 
 export const parseImages = (page: unknown) => list(page).map(toImage);

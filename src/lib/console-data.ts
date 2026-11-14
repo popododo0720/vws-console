@@ -43,7 +43,7 @@ export const computeNav: NavTree = {
       id: "images",
       label: "Images",
       children: [
-        { id: "images-list", label: "AMIs" },
+        { id: "images-list", label: "AMIs", href: "/compute/images" },
         { id: "catalog", label: "AMI Catalog" },
       ],
     },

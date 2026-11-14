@@ -310,12 +310,19 @@ describe("console-api adapter", () => {
     expect(parseAddresses({ items: [] })).toEqual([]);
   });
 
-  it("maps images", () => {
-    expect(
-      parseImages({
-        items: [{ imageId: "ami-0123456789abcdef0", ownerId: "123456789012", name: "vws-1", state: "available" }],
-      }),
-    ).toEqual([{ id: "ami-0123456789abcdef0", name: "vws-1", state: "available", owner: "123456789012" }]);
+  it("maps images and leaves what console-api omits or mistypes empty", () => {
+    const sent = { imageId: "ami-0123456789abcdef0", ownerId: "123456789012", name: "vws-1", state: "available" };
+    const blank = { id: "", name: "", state: "", owner: "", architecture: "", creationDate: "", region: "" };
+    const image = { ...blank, id: "ami-0123456789abcdef0", name: "vws-1", state: "available", owner: "123456789012" };
+    const mistyped = { ...sent, architecture: 64, creationDate: null, region: 1 };
+    expect(parseImages({ items: [sent, mistyped, {}] })).toEqual([image, image, blank]);
+  });
+
+  it("reads an image's architecture and creation date as DescribeImages names them, and its region", () => {
+    const sent = { architecture: "arm64", creationDate: "2026-11-14T09:30:00.000Z", region: "pve-lab-2" };
+    expect(parseImages({ items: [{ imageId: "ami-1", ...sent }] })).toEqual([
+      { id: "ami-1", name: "", state: "", owner: "", ...sent },
+    ]);
   });
 
   it("names VPCs and subnets from tags.Name and keeps their tags", () => {
