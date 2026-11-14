@@ -73,7 +73,7 @@ test("root registers, tests, discovers, edits and removes a real region", async 
   await page.getByRole("button", { name: "Refresh status", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Nodes (1)", exact: true })).toBeVisible();
   await expect(page.getByText("Online", { exact: true })).toBeVisible();
-  await expect(page.getByText("pve1", { exact: true })).toBeVisible();
+  await expect(page.getByRole("term").filter({ hasText: /^pve1$/ })).toBeVisible();
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   const fingerprint = createHash("sha256").update(tokenSecret).digest("hex").slice(0, 8);
   await expect(page.getByText(`Stored secret: Set · ${fingerprint}`, { exact: true })).toBeVisible();

@@ -62,7 +62,7 @@ export default async function setup() {
       env: {
         ...process.env,
         OTEL_EXPORTER_OTLP_ENDPOINT: "",
-        CREDENTIALS_DIRECTORY: stackRoot,
+        CREDENTIALS_DIRECTORY: "",
         VWS_CONSOLE_API_URL: apiURL,
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -108,11 +108,17 @@ export default async function setup() {
       await run(`build-${binary}`, "go", ["build", "-o", file(binary), `./cmd/${binary}`], repo);
     }
     await run("console-build", "npm", ["run", "build"]);
-    for (const directory of ["etc/pve/vws", "etc/pve/priv/vws", "etc/pve/priv/lock/vws-region", "snippets"]) {
+    for (const directory of [
+      "etc/pve/vws",
+      "etc/pve/priv/vws",
+      "etc/pve/priv/lock/vws-region",
+      "etc/vws/credentials",
+      "snippets",
+    ]) {
       mkdirSync(file(directory), { recursive: true, mode: 0o700 });
     }
     const save = (name: string, contents: string | Buffer) => writeFileSync(file(name), contents, { mode: 0o600 });
-    save("region-kek", Buffer.alloc(32, 42));
+    save("etc/vws/credentials/region-kek", Buffer.alloc(32, 42));
     save("admin-kek", adminKEK);
     save("root-password", rootPassword);
     save("region.yaml", "read_only: true\npools:\n  project: '123456789012'\n");
