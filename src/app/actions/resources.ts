@@ -1,19 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { withActionSpan } from "@/lib/ops/span";
 import * as vws from "@/lib/vws-api/client";
-import { fileProblem, objectKeyProblem } from "@/lib/object-upload";
-import {
-  isInstanceId,
-  parseBucketName,
-  parseStoredBucketName,
-  reservedBucketName,
-  type ApiError,
-  type ApiResult,
-  type LaunchRequest,
-  type StoredObject,
-} from "@/lib/vws-api/adapter";
+import { isInstanceId, type ApiError, type ApiResult, type LaunchRequest } from "@/lib/vws-api/adapter";
 import type { IngressPermission, VolumeAttachment } from "@/types/console";
 import {
   MAX_RULE_CHANGES,
@@ -42,9 +31,6 @@ async function each(ids: string[], run: (id: string) => Promise<ApiResult<void>>
   }
   return null;
 }
-
-/** The object page, so Back after a delete or an overwrite does not show the old object from the client cache. */
-const OBJECT_PAGE = "/storage/buckets/[name]/object";
 
 const errorOf = async (pending: Promise<ApiResult<void>>) => {
   const result = await pending;
@@ -150,86 +136,6 @@ export async function deleteVolumesAction(ids: unknown): Promise<ApiError | null
   return withActionSpan("deleteVolumesAction", async () => {
     if (!Array.isArray(ids) || !ids.every(isVolumeId)) return invalid("A volume ID is not valid.");
     return each(ids, deleteOrGone(vws.deleteVolume));
-  });
-}
-
-const INVALID_BUCKET_NAME: ApiError = {
-  code: "InvalidArgument",
-  message: "Use 3\u201363 characters: lowercase letters, numbers, and hyphens.",
-  requestId: null,
-};
-
-const RESERVED_BUCKET_NAME: ApiError = {
-  code: "InvalidArgument",
-  message:
-    "Bucket names cannot start with xn--, sthree-, or amzn-s3-demo-, or end with -s3alias, --ol-s3, --x-s3, or --table-s3.",
-  requestId: null,
-};
-
-export async function createBucketAction(rawName: string): Promise<ApiError | null> {
-  return withActionSpan("createBucketAction", async () => {
-    const name = parseBucketName(rawName);
-    if (name) {
-      const result = await vws.putBucket(name);
-      return result.ok ? null : result.error;
-    }
-    const stored = parseStoredBucketName(rawName);
-    return stored && reservedBucketName(stored) ? RESERVED_BUCKET_NAME : INVALID_BUCKET_NAME;
-  });
-}
-
-export type BucketDeletion = { deleted: string[]; error: ApiError | null; failedName: string | null };
-
-export async function deleteBucketsAction(names: string[]): Promise<BucketDeletion> {
-  return withActionSpan("deleteBucketsAction", async () => {
-    const deleted: string[] = [];
-    for (const rawName of names) {
-      const name = parseStoredBucketName(rawName);
-      if (!name) return { deleted, error: INVALID_BUCKET_NAME, failedName: rawName };
-      const result = await vws.deleteBucket(name);
-      if (!result.ok) return { deleted, error: result.error, failedName: name };
-      deleted.push(name);
-    }
-    return { deleted, error: null, failedName: null };
-  });
-}
-
-export async function uploadObjectAction(rawBucket: string, formData: FormData): Promise<ApiError | null> {
-  return withActionSpan("uploadObjectAction", async () => {
-    const bucket = parseStoredBucketName(rawBucket);
-    if (!bucket) return INVALID_BUCKET_NAME;
-    const key = String(formData.get("key") ?? "");
-    const keyProblem = objectKeyProblem(key);
-    if (keyProblem) return { code: "InvalidArgument", message: keyProblem, requestId: null };
-    const file = formData.get("file");
-    if (!(file instanceof File))
-      return { code: "InvalidArgument", message: "Choose a file to upload.", requestId: null };
-    const tooLarge = fileProblem(file);
-    if (tooLarge) return tooLarge;
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const result = await vws.putObject(bucket, key, bytes, file.type || "application/octet-stream");
-    if (!result.ok) return result.error;
-    revalidatePath(OBJECT_PAGE, "page");
-    return null;
-  });
-}
-
-/** Looks up one object for the Objects tab. A missing key is null, and the bytes never leave the server. */
-export async function getObjectAction(rawBucket: string, key: string): Promise<ApiResult<StoredObject | null>> {
-  return withActionSpan("getObjectAction", async () => {
-    const bucket = parseStoredBucketName(rawBucket);
-    if (!bucket) return { ok: false, error: INVALID_BUCKET_NAME };
-    return vws.getObjectMeta(bucket, key);
-  });
-}
-
-export async function deleteObjectAction(rawBucket: string, key: string): Promise<ApiError | null> {
-  return withActionSpan("deleteObjectAction", async () => {
-    const bucket = parseStoredBucketName(rawBucket);
-    if (!bucket) return INVALID_BUCKET_NAME;
-    const error = await errorOf(vws.deleteObject(bucket, key));
-    if (!error) revalidatePath(OBJECT_PAGE, "page");
-    return error;
   });
 }
 

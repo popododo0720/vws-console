@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { createEmptyAccount, createSampleAccount } from "@/lib/console-data";
 import type { Dataset, Instance, InternetGateway, NatGateway, RouteTable, Subnet, Volume, Vpc } from "@/types/console";
 import { ALL_REGIONS, mutationCapability, pickRegion } from "@/lib/vws-api/adapter";
-import type { AccountBucket, ApiError, ApiResult, Identity, Region, RegionCapabilities } from "@/lib/vws-api/adapter";
+import type { ApiError, ApiResult, Identity, Region, RegionCapabilities } from "@/lib/vws-api/adapter";
 
 type Mode = "empty" | "sample";
 
@@ -44,7 +44,6 @@ type ConsoleApi = {
   natGateways: NatGateway[];
   /** The browser-only resources of every region, for screens that count across regions. */
   dataset: Dataset;
-  accountBuckets: readonly AccountBucket[];
   /** The vws:Admin* actions console-api grants the signed-in caller; the operator menu needs one of them. */
   adminActions: readonly string[];
   flash: ConsoleFlash | null;
@@ -105,7 +104,6 @@ export function ConsoleProvider({
   children,
   identity = UNKNOWN,
   signIn = false,
-  accountBuckets = [],
   adminActions = [],
   regions: listing = null,
   capabilities: read = null,
@@ -113,7 +111,6 @@ export function ConsoleProvider({
   children: ReactNode;
   identity?: Identity;
   signIn?: boolean;
-  accountBuckets?: readonly AccountBucket[];
   adminActions?: readonly string[];
   regions?: ApiResult<Region[]> | null;
   capabilities?: ApiResult<RegionCapabilities | null> | null;
@@ -186,7 +183,6 @@ export function ConsoleProvider({
       internetGateways,
       natGateways,
       dataset: data,
-      accountBuckets,
       adminActions,
       flash,
       showFlash: setFlash,
@@ -336,7 +332,6 @@ export function ConsoleProvider({
       },
     };
   }, [
-    accountBuckets,
     adminActions,
     capabilities,
     capabilitiesError,

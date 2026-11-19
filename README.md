@@ -1,6 +1,6 @@
 # VWS console
 
-A local mock of a cloud operations console. It covers six screens: instances, the launch form, volumes, security groups, VPCs, and buckets. All records stay in the browser session. There are no cloud credentials and no calls to a cloud provider.
+A local mock of a cloud operations console. It covers five screens: instances, the launch form, volumes, security groups, and VPCs. All records stay in the browser session. There are no cloud credentials and no calls to a cloud provider.
 
 VWS console is an independent open-source project. It is not affiliated with, endorsed by, or sponsored by Amazon Web Services or any other cloud provider. Service names such as EC2, EBS, S3, and VPC appear only to describe the kind of resource a screen manages. All other product names and trademarks belong to their owners.
 
@@ -15,7 +15,7 @@ npm install
 npm run dev -- -p 43123 -H 0.0.0.0
 ```
 
-Open [http://127.0.0.1:43123](http://127.0.0.1:43123). Node.js 22 or newer is enough. The template's Docker files still expect Node 24.
+Open [http://127.0.0.1:43123](http://127.0.0.1:43123). Node.js 22 or newer is enough. The `Dockerfile` that builds the standalone output for the `vws-global` .deb expects Node 24.
 
 | Script                                                  | What it does                                                                         |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -23,7 +23,7 @@ Open [http://127.0.0.1:43123](http://127.0.0.1:43123). Node.js 22 or newer is en
 | `npm run build` then `npm start -- -p 43123 -H 0.0.0.0` | Production build and server.                                                         |
 | `npm run check`                                         | Lint, typecheck, and build. Run it before opening a PR.                              |
 
-No environment variables are required, and no `.env` file is read by the app. `PORT` and `DEV_PORT` only change the host ports in `docker-compose.yml`.
+No environment variables are required, and no `.env` file is read by the app. `PORT` sets the app port.
 
 Check it is up: `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:43123/compute/instances` prints `200`. The root path `/` redirects (307) to the instances screen.
 
@@ -59,7 +59,7 @@ are described in [Deploying the instance console relay](docs/console-relay.md).
 
 ## Health, readiness and metrics
 
-The console is a VWS service: it is deployed to Kubernetes like the other `vws-*` components, so it serves the same probe and scrape endpoints (decision for #68). They answer without sign-in, are never cached, and never print configuration values, tokens or console-api responses. `/healthz` and `/readyz` are on the app port (`PORT`). `/metrics` is on its own port (`METRICS_PORT`), so a NetworkPolicy can admit only the scraper to it while the app port stays public.
+The console runs as a systemd unit installed by the `vws-global` .deb, next to the other VWS services on the same VM or bare-metal host, and serves probe and scrape endpoints so a supervisor or monitor can check it (decision for #68). They answer without sign-in, are never cached, and never print configuration values, tokens or console-api responses. `/healthz` and `/readyz` are on the app port (`PORT`). `/metrics` is on its own port (`METRICS_PORT`), so a firewall rule can admit only the scraper to it while the app port stays public.
 
 | Endpoint                         | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -72,7 +72,7 @@ The console is a VWS service: it is deployed to Kubernetes like the other `vws-*
 | `PORT`         | `3000`      | App port: the console UI, `/healthz` and `/readyz`. `GET /metrics` here answers `404` with no body, in every sign-in mode.                                                                                                                                                   |
 | `METRICS_PORT` | unset (off) | Metrics port. Unset, empty or `0` starts no listener. A whole number from 1 to 65535 starts one on all interfaces (not `HOSTNAME`), so the pod IP can be scraped. It answers only `GET` and `HEAD /metrics`; other paths are `404`. vws-deploy#612 sets `9464` in the chart. |
 
-An invalid `METRICS_PORT`, or a port that is already in use, logs `metrics.listen` with `outcome:"error"` and `code` `InvalidMetricsPort` or the listen error (such as `EADDRINUSE`), and the console runs without metrics. A successful start logs `metrics.listen` with `outcome:"success"`. `/metrics` carries no secrets but is unauthenticated, like the other VWS services' ops endpoints; restrict `METRICS_PORT` to the scraper with a NetworkPolicy.
+An invalid `METRICS_PORT`, or a port that is already in use, logs `metrics.listen` with `outcome:"error"` and `code` `InvalidMetricsPort` or the listen error (such as `EADDRINUSE`), and the console runs without metrics. A successful start logs `metrics.listen` with `outcome:"success"`. `/metrics` carries no secrets but is unauthenticated, like the other VWS services' ops endpoints; restrict `METRICS_PORT` to the scraper with a host firewall rule.
 
 `route` is the console-api route template, such as `/vpcs/{id}/delete`, never a path with an ID, an object key or a query. `status_class` is `1xx` to `5xx`, or `none` when console-api never answered. `outcome` is `success` (below 400), `failure` (400 and up), `timeout` or `network`. `reason` is `timeout`, `network`, `429` or `5xx`. `api_timeouts_total` counts each attempt that hit the deadline, even when a later attempt answered.
 
@@ -119,17 +119,16 @@ What is exported:
 | Volumes         | `/storage/volumes`         |
 | Security groups | `/network/security-groups` |
 | VPCs            | `/network/vpcs`            |
-| Buckets         | `/storage/buckets`         |
 
 The left nav reaches each list screen. Launch is the header menu item and the Launch instances button.
 
 ## Empty account and sample data
 
-The console opens on an empty account: no instances, volumes, or buckets, plus one default VPC and one default security group in **Europe (North)**. Other regions are empty.
+The console opens on an empty account: no instances or volumes, plus one default VPC and one default security group in **Europe (North)**. Other regions are empty.
 
 The account menu in the header has **Show empty account** and **Show sample data**.
 
-Launching an instance, or using Create on volumes, security groups, VPCs, or buckets, adds records in the current region. Refreshing the browser resets the session to the empty account.
+Launching an instance, or using Create on volumes, security groups, or VPCs, adds records in the current region. Refreshing the browser resets the session to the empty account.
 
 ## Checks
 

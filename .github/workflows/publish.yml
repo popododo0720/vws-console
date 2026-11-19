@@ -1,6 +1,6 @@
-# Publishes the vws-console image (#102) on a push to main, so vws-test can serve the console.
-# Docker builds the Next.js standalone server from ./Dockerfile, the same file docker compose
-# uses. The build is the check: a Dockerfile or standalone-output break fails the publish run.
+# Publishes the vws-console image (#102) on a push to main, so pve-test can serve the console.
+# Docker builds the Next.js standalone server from ./Dockerfile, the same file that builds the
+# standalone output for the vws-global .deb. The build is the check: a Dockerfile or standalone-output break fails the publish run.
 # Tag: sha-<7-char commit>, immutable by convention: no job writes the same tag twice for another commit.
 # Labels: org.opencontainers.image.revision is the full commit SHA; org.opencontainers.image.source
 # is this repository, so a new package is linked to it (and inherits its Actions access).

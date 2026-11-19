@@ -1,6 +1,6 @@
 import { checkReadiness } from "@/lib/ops/readiness";
 
-// Kubernetes readiness probe: per request, never cached, never behind sign-in (see proxy.ts).
+// Readiness probe: per request, never cached, never behind sign-in (see proxy.ts).
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {

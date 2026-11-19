@@ -83,16 +83,16 @@ describe("startTelemetry", () => {
 
   it("exports only the console's own scope, never Next's spans with raw URLs", async () => {
     const telemetry = startMemoryTelemetry();
-    await withSpan("console-api GET /buckets/{name}/objects/{key}", "client", {}, async () => {
+    await withSpan("console-api GET /instances/{id}", "client", {}, async () => {
       trace
         .getTracer("next.js")
-        .startSpan("fetch GET http://api.test/api/v1/buckets/b/objects/SENTINEL-KEY", {
-          attributes: { "http.url": "http://api.test/api/v1/buckets/b/objects/SENTINEL-KEY" },
+        .startSpan("fetch GET http://api.test/api/v1/instances/SENTINEL-KEY", {
+          attributes: { "http.url": "http://api.test/api/v1/instances/SENTINEL-KEY" },
         })
         .end();
     });
     const spans = await telemetry.spans();
-    expect(spans.map((span) => span.name)).toEqual(["console-api GET /buckets/{name}/objects/{key}"]);
+    expect(spans.map((span) => span.name)).toEqual(["console-api GET /instances/{id}"]);
     expect(JSON.stringify(spans.map((span) => [span.name, span.attributes]))).not.toContain("SENTINEL-KEY");
   });
 

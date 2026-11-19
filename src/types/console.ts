@@ -172,26 +172,6 @@ export type ElasticIp = {
   region: string;
 };
 
-export type BucketKind = "general" | "directory";
-
-export type Bucket = {
-  name: string;
-  region: string;
-  created: string;
-  kind: BucketKind;
-  versioning: boolean;
-  blockPublicAccess: boolean;
-};
-
-export type BucketObject = {
-  bucket: string;
-  /** Full key, using "/" as the folder delimiter. Folders end with "/". */
-  key: string;
-  sizeBytes: number;
-  modified: string;
-  storageClass: string;
-};
-
 export type Dataset = {
   instances: Instance[];
   volumes: Volume[];
@@ -200,8 +180,6 @@ export type Dataset = {
   routeTables: RouteTable[];
   internetGateways: InternetGateway[];
   natGateways: NatGateway[];
-  buckets: Bucket[];
-  objects: BucketObject[];
 };
 
 export type NavNode = {
