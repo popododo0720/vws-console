@@ -1,15 +1,4 @@
-import type {
-  Bucket,
-  BucketObject,
-  Dataset,
-  InternetGateway,
-  NatGateway,
-  NavNode,
-  NavTree,
-  RouteTable,
-  Subnet,
-  Vpc,
-} from "@/types/console";
+import type { Dataset, InternetGateway, NatGateway, NavNode, NavTree, RouteTable, Subnet, Vpc } from "@/types/console";
 
 /** Owner ID on the sample route tables and gateways only; the account menu shows the signed-in account. */
 const SAMPLE_OWNER_ID = "100200300400";
@@ -138,48 +127,6 @@ export const networkNav: NavTree = {
   ],
 };
 
-export const storageNav: NavTree = {
-  id: "storage",
-  title: "S3",
-  sections: [
-    {
-      id: "buckets-group",
-      label: "Buckets",
-      children: [
-        { id: "general", label: "General purpose buckets", href: "/storage/buckets" },
-        { id: "directory", label: "Directory buckets", href: "/storage/buckets?tab=directory" },
-        { id: "table-buckets", label: "Table buckets" },
-        { id: "vector-buckets", label: "Vector buckets" },
-      ],
-    },
-    {
-      id: "files",
-      label: "Files",
-      children: [{ id: "filesystems", label: "File systems" }],
-    },
-    {
-      id: "access",
-      label: "Access management and security",
-      children: [
-        { id: "access-points", label: "Access points" },
-        { id: "access-files", label: "Access Points for FSx" },
-        { id: "grants", label: "Access grants" },
-        { id: "analyzer", label: "Access analyzer" },
-      ],
-    },
-    {
-      id: "insights",
-      label: "Storage management and insights",
-      children: [
-        { id: "lens", label: "Storage lens" },
-        { id: "batch", label: "Batch operations" },
-      ],
-    },
-    { id: "account-settings", label: "Account and organization settings" },
-    { id: "marketplace", label: "Marketplace for S3" },
-  ],
-};
-
 /** The IAM action the operator's Regions screens need. GET /admin/permissions lists the actions a caller has. */
 export const ADMIN_REGIONS_ACTION = "vws:AdminListRegions";
 
@@ -193,7 +140,7 @@ export const adminNav: NavTree = {
   sections: [{ id: "regions", label: "Regions", href: "/admin/regions" }],
 };
 
-export const navTrees = [computeNav, networkNav, storageNav];
+export const navTrees = [computeNav, networkNav];
 
 export function linksIn(tree: NavTree) {
   const links: { label: string; href: string }[] = [];
@@ -228,8 +175,6 @@ export function createEmptyAccount(region: string): Dataset {
   return {
     instances: [],
     volumes: [],
-    buckets: [],
-    objects: [],
     vpcs: [defaultVpc(region)],
     subnets: [],
     routeTables: [],
@@ -373,36 +318,6 @@ export function createSampleAccount(region: string): Dataset {
       region,
     },
   ];
-  const buckets: Bucket[] = [
-    {
-      name: "vws-logs",
-      region,
-      created: "Aug 2, 2026",
-      kind: "general",
-      versioning: false,
-      blockPublicAccess: true,
-    },
-    {
-      name: "vws-media",
-      region,
-      created: "Sep 18, 2026",
-      kind: "general",
-      versioning: true,
-      blockPublicAccess: true,
-    },
-  ];
-  // MOCK_OBJECTS: sample-only objects for the sample buckets. Sizes and dates are invented.
-  const MOCK_OBJECTS: BucketObject[] = [
-    { bucket: "vws-logs", key: "2026/", sizeBytes: 0, modified: "", storageClass: "" },
-    {
-      bucket: "vws-logs",
-      key: "2026/access-sample.log",
-      sizeBytes: 18432,
-      modified: "Aug 3, 2026",
-      storageClass: "Standard",
-    },
-    { bucket: "vws-logs", key: "readme-sample.txt", sizeBytes: 512, modified: "Aug 2, 2026", storageClass: "Standard" },
-  ];
   return {
     instances: [],
     volumes: [],
@@ -411,7 +326,5 @@ export function createSampleAccount(region: string): Dataset {
     routeTables: MOCK_ROUTE_TABLES,
     internetGateways: MOCK_INTERNET_GATEWAYS,
     natGateways: MOCK_NAT_GATEWAYS,
-    buckets,
-    objects: MOCK_OBJECTS,
   };
 }

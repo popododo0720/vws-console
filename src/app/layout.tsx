@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import "./globals.css";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { identityFromSession } from "@/lib/vws-api/adapter";
-import { getAdminPermissions, getCapabilities, listBuckets, listRegions, signedInSession } from "@/lib/vws-api/client";
+import { getAdminPermissions, getCapabilities, listRegions, signedInSession } from "@/lib/vws-api/client";
 import { iamState } from "@/lib/vws-api/mode";
 
 export const metadata: Metadata = {
@@ -23,20 +23,17 @@ export default async function RootLayout({
   const session = await signedInSession();
   const identity = identityFromSession(session, { iam: state !== "off" });
   const callable = session !== null || state === "off";
-  const [listed, adminActions, regions, capabilities] = await Promise.all([
-    session ? listBuckets() : null,
+  const [adminActions, regions, capabilities] = await Promise.all([
     session ? getAdminPermissions() : [],
     callable ? listRegions() : null,
     callable ? getCapabilities() : null,
   ]);
-  const accountBuckets = listed?.ok ? listed.value : [];
   return (
     <html lang="en" className="h-full antialiased">
       <body className="console min-h-full">
         <ConsoleProvider
           identity={identity}
           signIn={signIn}
-          accountBuckets={accountBuckets}
           adminActions={adminActions}
           regions={regions}
           capabilities={capabilities}

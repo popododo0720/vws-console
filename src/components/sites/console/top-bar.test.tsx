@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { parseBucketName, type ApiResult, type Region } from "@/lib/vws-api/adapter";
+import { type ApiResult, type Region } from "@/lib/vws-api/adapter";
 import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { TopBar } from "@/components/sites/console/top-bar";
 
@@ -112,20 +112,5 @@ describe("TopBar account menu", () => {
     expect(screen.queryByRole("menuitem", { name: "Regions" })).toBeNull();
     view.rerender(bar(["vws:AdminListRegions"]));
     expect(screen.getByRole("menuitem", { name: "Regions" }).getAttribute("href")).toBe("/admin/regions");
-  });
-
-  it("links an account bucket to its page and ignores sample buckets", () => {
-    const name = parseBucketName("logs-1");
-    if (!name) throw new Error("logs-1");
-    render(
-      <ConsoleProvider accountBuckets={[{ name, ownerId: "1", created: "2026-08-02T00:00:00Z" }]}>
-        <TopBar onMenu={() => {}} />
-      </ConsoleProvider>,
-    );
-    fireEvent.click(screen.getByRole("button", { name: /—/ }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Show sample data" }));
-    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "logs" } });
-    expect(screen.getByRole("link", { name: /logs-1/ }).getAttribute("href")).toBe("/storage/buckets/logs-1");
-    expect(screen.queryByRole("link", { name: /vws-logs/ })).toBeNull();
   });
 });

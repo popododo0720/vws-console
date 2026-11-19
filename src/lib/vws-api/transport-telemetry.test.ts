@@ -2,7 +2,7 @@
 import { SpanKind, SpanStatusCode } from "@opentelemetry/api";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startMemoryTelemetry, type MemoryTelemetry } from "@/lib/ops/memory-telemetry";
-import { keyPath, route } from "./route";
+import { route } from "./route";
 import { apiFetch, ApiTransportError } from "./transport";
 
 const BASE = "http://api.test";
@@ -137,25 +137,15 @@ describe("apiFetch telemetry", () => {
     expect(sent.map(({ headers }) => headers.baggage)).toEqual([undefined, undefined]);
   });
 
-  it("never puts an ID, object key or query in a span name or label, however hostile", async () => {
+  it("never puts an ID or query in a span name or label, however hostile", async () => {
     const id = "../../etc/passwd?token=SENTINEL-ID#x";
-    const key = "a/../../b?X-Amz-Signature=SENTINEL-KEY";
+    const other = "a/../../b?X-Amz-Signature=SENTINEL-KEY";
     serve(reply(404), reply(500), reply(500), reply(500));
     await apiFetch(BASE, route("/vpcs/{id}", { id }), {}, { retry: false });
-    await apiFetch(
-      BASE,
-      route("/buckets/{name}/objects/{key}", { name: "b", key: keyPath(key) }),
-      {},
-      {
-        sleep: async () => {},
-      },
-    );
+    await apiFetch(BASE, route("/instances/{id}", { id: other }), {}, { sleep: async () => {} });
     expect(sent[0].url).toBe(`${BASE}/api/v1/vpcs/${encodeURIComponent(id)}`);
     const spans = await telemetry.spans();
-    expect(spans.map((span) => span.name)).toEqual([
-      "console-api GET /vpcs/{id}",
-      "console-api GET /buckets/{name}/objects/{key}",
-    ]);
+    expect(spans.map((span) => span.name)).toEqual(["console-api GET /vpcs/{id}", "console-api GET /instances/{id}"]);
     const exported = JSON.stringify([
       spans.map((span) => [span.name, span.attributes, span.events]),
       await telemetry.points("vws_console_api_requests_total"),

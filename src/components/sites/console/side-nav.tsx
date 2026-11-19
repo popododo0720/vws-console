@@ -23,7 +23,6 @@ function isActive(href: string, pathname: string, tab: string | null) {
   if (url.pathname !== pathname) return false;
   const wanted = url.searchParams.get("tab");
   if (wanted) return wanted === tab;
-  if (url.pathname === "/storage/buckets") return tab !== "directory";
   return true;
 }
 

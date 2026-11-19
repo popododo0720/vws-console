@@ -11,17 +11,11 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers({ origin: "htt
 vi.mock("./session", () => ({ currentSession: async () => ({ session: "sess-1", csrf: "csrf-1" }) }));
 
 import type { CreateAttempt, IdempotencyKey, KeyPairId } from "@/lib/key-pair";
-import type { BucketName } from "./adapter";
 import * as vws from "./client";
-import { keyPath, route, withQuery } from "./route";
+import { route, withQuery } from "./route";
 
-/** The path formulas client.ts used before route(): `seg` (encodeURIComponent) per ID, the object key per segment. */
+/** The path formula client.ts used before route(): `seg` (encodeURIComponent) per ID. */
 const enc = encodeURIComponent;
-const oldObjectPath = (bucket: string, key: string) =>
-  `/buckets/${enc(bucket)}/objects/${key
-    .split("/")
-    .map((part) => encodeURIComponent(part))
-    .join("/")}`;
 const oldListQuery = (path: string, pageSize: number | undefined, token: string) => {
   const params: string[] = [];
   if (pageSize !== undefined) params.push(`pageSize=${pageSize}`);
@@ -30,8 +24,6 @@ const oldListQuery = (path: string, pageSize: number | undefined, token: string)
 };
 
 const ID = "id with/slash?q=1#frag%25&é";
-const BUCKET = "bucket?x=/y" as BucketName;
-const KEY = "dir one/sub+dir/a?b#c%25é.txt";
 const TOKEN = "tok/=&?+ en";
 const OP = "op/1 ?";
 const KEY_PAIR = "key-0123456789abcdef0" as KeyPairId;
@@ -60,12 +52,6 @@ const rows: Row[] = [
     sent: [`GET ${api("/vpcs")}`, `GET ${api(oldListQuery("/vpcs", undefined, TOKEN))}`],
   },
   { name: "listSubnets", run: vws.listSubnets, sent: [`GET ${api("/subnets")}`] },
-  {
-    name: "listBuckets (paged)",
-    run: vws.listBuckets,
-    replies: () => [page(TOKEN), page()],
-    sent: [`GET ${api(oldListQuery("/buckets", 100, ""))}`, `GET ${api(oldListQuery("/buckets", 100, TOKEN))}`],
-  },
   { name: "listKeyPairs", run: vws.listKeyPairs, sent: [`GET ${api("/key-pairs")}`] },
   { name: "listInstanceTypes", run: vws.listInstanceTypes, sent: [`GET ${api("/instance-types")}`] },
   { name: "listSecurityGroups", run: vws.listSecurityGroups, sent: [`GET ${api("/security-groups")}`] },
@@ -73,25 +59,6 @@ const rows: Row[] = [
   { name: "listSnapshots", run: vws.listSnapshots, sent: [`GET ${api("/snapshots")}`] },
   { name: "listRegions", run: vws.listRegions, sent: [`GET ${api("/regions")}`] },
   { name: "getCapabilities (outside a page: no region, so no call)", run: vws.getCapabilities, sent: [] },
-  { name: "putBucket", run: () => vws.putBucket(BUCKET), sent: [`PUT ${api(`/buckets/${enc(BUCKET)}`)}`] },
-  { name: "getBucket", run: () => vws.getBucket(BUCKET), sent: [`GET ${api(`/buckets/${enc(BUCKET)}`)}`] },
-  { name: "deleteBucket", run: () => vws.deleteBucket(BUCKET), sent: [`DELETE ${api(`/buckets/${enc(BUCKET)}`)}`] },
-  {
-    name: "putObject",
-    run: () => vws.putObject(BUCKET, KEY, new Uint8Array([1]), "text/plain"),
-    sent: [`PUT ${api(oldObjectPath(BUCKET, KEY))}`],
-  },
-  { name: "getObject", run: () => vws.getObject(BUCKET, KEY), sent: [`GET ${api(oldObjectPath(BUCKET, KEY))}`] },
-  {
-    name: "getObjectMeta",
-    run: () => vws.getObjectMeta(BUCKET, KEY),
-    sent: [`GET ${api(oldObjectPath(BUCKET, KEY))}`],
-  },
-  {
-    name: "deleteObject",
-    run: () => vws.deleteObject(BUCKET, KEY),
-    sent: [`DELETE ${api(oldObjectPath(BUCKET, KEY))}`],
-  },
   { name: "getInstance", run: () => vws.getInstance(ID), sent: [`GET ${api(`/instances/${enc(ID)}`)}`] },
   { name: "getVpc", run: () => vws.getVpc(ID), sent: [`GET ${api(`/vpcs/${enc(ID)}`)}`] },
   { name: "getVolume", run: () => vws.getVolume(ID), sent: [`GET ${api(`/volumes/${enc(ID)}`)}`] },
@@ -300,15 +267,12 @@ describe("route", () => {
     const vpc = route("/vpcs/{id}/delete", { id: ID });
     expect(vpc.template).toBe("/vpcs/{id}/delete");
     expect(vpc.path).toBe(`/vpcs/${enc(ID)}/delete`);
-    const object = route("/buckets/{name}/objects/{key}", { name: BUCKET, key: keyPath(KEY) });
-    expect(object.template).toBe("/buckets/{name}/objects/{key}");
-    expect(object.path).toBe(oldObjectPath(BUCKET, KEY));
   });
 
   it("puts a query on the path and never on the template", () => {
-    const listed = withQuery(route("/buckets"), { pageSize: 100, pageToken: TOKEN });
-    expect(listed.template).toBe("/buckets");
-    expect(listed.path).toBe(oldListQuery("/buckets", 100, TOKEN));
+    const listed = withQuery(route("/vpcs"), { pageSize: 100, pageToken: TOKEN });
+    expect(listed.template).toBe("/vpcs");
+    expect(listed.path).toBe(oldListQuery("/vpcs", 100, TOKEN));
     expect(withQuery(route("/vpcs"), { pageSize: undefined, pageToken: "" }).path).toBe("/vpcs");
   });
 

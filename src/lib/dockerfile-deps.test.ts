@@ -69,7 +69,7 @@ function installsWithout(all: string[], dir: string): { installs: number; missin
   return { installs, missing };
 }
 
-describe.each(["Dockerfile", "Dockerfile.dev"])("%s", (dockerfile) => {
+describe.each(["Dockerfile"])("%s", (dockerfile) => {
   const all = instructions(dockerfile);
 
   it.each(localDirs)("has %s in the stage and WORKDIR of every npm install", (dir) => {

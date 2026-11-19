@@ -28,29 +28,11 @@ export const regionLabel = (region: string) => (region === ALL_REGIONS ? "All re
 /** One region as GET /regions lists it. `kind` is "pve" or "aws"; the console decides nothing by it. */
 export type Region = { name: string; kind: string; state: "available" | "degraded" | "unavailable" };
 
-declare const brand: unique symbol;
-
-export type BucketName = string & { readonly [brand]: "BucketName" };
-
-export type AccountBucket = { name: BucketName; ownerId: string; created: string; region?: string };
-
-/** One stored object as console-api describes it, without its bytes. */
-export type StoredObject = {
-  bucket: BucketName;
-  key: string;
-  size: number;
-  contentType: string;
-  lastModified: string;
-  etag: string;
-};
-
-export type ObjectContent = StoredObject & { bytes: Uint8Array };
-
 export type OperationState = "running" | "succeeded" | "failed";
 
 export type Image = { id: string; name: string; state: string; owner: string };
 
-/** Machine types vws-compute accepts (console-api resource/instance.go). The API has no list endpoint. */
+/** Machine types console-api accepts for an instance (console-api resource/instance.go). The API has no list endpoint. */
 export type InstanceType = { id: string; vcpus: number; memoryMiB: number };
 
 export type LaunchRequest = {
@@ -181,79 +163,6 @@ export function parseCapabilities(doc: unknown): RegionCapabilities {
 
 export function mutationCapability(capabilities: RegionCapabilities, action: string): ActionCapability {
   return Object.hasOwn(capabilities.actions, action) ? capabilities.actions[action] : NOT_DECLARED;
-}
-
-const BUCKET_NAME = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
-const RESERVED_PREFIX = ["xn--", "sthree-", "amzn-s3-demo-"] as const;
-const RESERVED_SUFFIX = ["-s3alias", "--ol-s3", "--x-s3", "--table-s3"] as const;
-
-export function parseStoredBucketName(input: string): BucketName | null {
-  const name = input.trim();
-  return BUCKET_NAME.test(name) ? (name as BucketName) : null;
-}
-
-export function reservedBucketName(name: BucketName): boolean {
-  return (
-    RESERVED_PREFIX.some((prefix) => name.startsWith(prefix)) || RESERVED_SUFFIX.some((suffix) => name.endsWith(suffix))
-  );
-}
-
-export function parseBucketName(input: string): BucketName | null {
-  const name = parseStoredBucketName(input);
-  if (!name || reservedBucketName(name)) return null;
-  return name;
-}
-
-export function toAccountBucket(item: unknown, expected?: BucketName): AccountBucket {
-  const record = obj(item);
-  const name = parseStoredBucketName(typeof record.name === "string" ? record.name : "");
-  if (!name) throw new Error("invalid bucket name");
-  if (expected !== undefined && name !== expected) throw new Error("unexpected bucket name");
-  const created = record.creationDate;
-  if (typeof created !== "string" || created.length === 0) throw new Error("invalid creationDate");
-  const region = str(record.region);
-  return {
-    name,
-    ownerId: typeof record.ownerId === "string" ? record.ownerId : "",
-    created,
-    ...(region && { region }),
-  };
-}
-
-/** A flat character class, not a repeated group: a grouped pattern overflows the regex stack on a 4 MiB body. */
-const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
-
-function decodeBase64(text: string): Uint8Array {
-  if (text.length % 4 !== 0 || !BASE64.test(text)) throw new Error("invalid base64 body");
-  const binary = atob(text);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
-  return bytes;
-}
-
-/** Reads a GET object reply. It must name the requested bucket and key, and its size must match its bytes. */
-export function toObjectContent(item: unknown, bucket: BucketName, key: string): ObjectContent {
-  const record = obj(item);
-  if (record.bucket !== bucket || record.key !== key) throw new Error("unexpected object");
-  const size = record.size;
-  if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0) throw new Error("invalid size");
-  const bytes = decodeBase64(record.body === null || record.body === undefined ? "" : str(record.body));
-  if (bytes.byteLength !== size) throw new Error("size does not match body");
-  return {
-    bucket,
-    key,
-    size,
-    contentType: str(record.contentType),
-    lastModified: str(record.lastModified),
-    etag: str(record.etag),
-    bytes,
-  };
-}
-
-export function parseAccountBuckets(page: unknown): AccountBucket[] {
-  const items = obj(page).items;
-  if (!Array.isArray(items)) throw new Error("expected items");
-  return items.map((item) => toAccountBucket(item));
 }
 
 export function parseApiError(body: unknown): ApiError | null {

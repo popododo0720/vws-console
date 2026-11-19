@@ -54,14 +54,9 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
         detail: item.id,
         href: "/storage/volumes",
       })),
-      ...consoleApi.accountBuckets.map((item) => ({
-        label: item.name,
-        detail: "Bucket",
-        href: `/storage/buckets/${encodeURIComponent(item.name)}`,
-      })),
     ].filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(q));
     return [...pages, ...resources].slice(0, 8);
-  }, [consoleApi.accountBuckets, consoleApi.instances, consoleApi.volumes, links, query]);
+  }, [consoleApi.instances, consoleApi.volumes, links, query]);
 
   /** A plain link, so choosing a region loads the page again and nothing of the old region stays on screen. */
   const regionEntry = (name: string, state?: Region["state"]): MenuEntry => {
