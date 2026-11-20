@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-const port = Number(process.env.FAKE_API_PORT ?? 43320);
+const port = Number(process.env.FAKE_API_PORT ?? 23320);
 const session = process.env.FAKE_API_SESSION ?? "sess-e2e";
 const csrf = process.env.FAKE_API_CSRF ?? "csrf-e2e";
 let vpcGets = 0;
