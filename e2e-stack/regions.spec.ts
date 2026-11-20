@@ -57,7 +57,7 @@ test("root registers, tests, discovers, edits and removes a real region", async 
   for (const [label, value] of Object.entries({
     "Region name": name,
     "Cluster name": "test",
-    "Proxmox API URL": pveURL,
+    "Proxmox API URL 1": pveURL,
     "Region endpoint": regionEndpoint,
     "API token ID": tokenId,
     "API token secret": tokenSecret,

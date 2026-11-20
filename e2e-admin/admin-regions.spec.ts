@@ -2,11 +2,13 @@ import { createHash } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 const api = `http://127.0.0.1:${process.env.E2E_FAKE_API_PORT ?? 43321}`;
+const CA = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----";
 const CANARY = "canary.S3cret-175_token";
 const lab = {
   "Region name": "pve-lab-1",
   "Cluster name": "lab",
-  "Proxmox API URL": "https://pve1.lab.example:8006",
+  "Proxmox API URL 1": "https://pve1.lab.example:8006",
+  "CA certificate": CA,
   "Region endpoint": "https://10.0.0.10:8443",
   "API token ID": "vws@pve!console",
   "API token secret": CANARY,
@@ -103,6 +105,41 @@ test("a save over another administrator's change shows the conflict and reloads"
   await expect(page.getByText("mine", { exact: true })).toBeVisible();
 });
 
+test("the PVE API URLs are a list: several are saved and shown, and bad ones are refused at the field", async ({
+  page,
+  baseURL,
+  request,
+}) => {
+  const submit = await fillRegister(page, baseURL);
+  await page.getByRole("button", { name: "Add Proxmox API URL" }).click();
+  await page.getByLabel("Proxmox API URL 2", { exact: true }).fill("https://pve1.lab.example:8006/");
+  await submit.click();
+  await expect(page.getByRole("alert").filter({ hasText: "repeats the host" })).toBeVisible();
+  await page.getByLabel("Proxmox API URL 2", { exact: true }).fill("https://pve2.lab.example:8006");
+  await page.getByRole("button", { name: "Add Proxmox API URL" }).click();
+  await page.getByLabel("Proxmox API URL 3", { exact: true }).fill("https://pve3.lab.example:8006");
+  await page.getByRole("button", { name: "Remove Proxmox API URL 3" }).click();
+  const sent: unknown[] = [];
+  page.on("request", (r) => r.method() === "POST" && sent.push(r.postData()));
+  await submit.click();
+  await expect(page.getByRole("heading", { level: 1, name: "pve-lab-1" })).toBeVisible();
+  const urls = page.getByRole("definition").filter({ hasText: "https://pve2.lab.example:8006" });
+  await expect(urls).toContainText("https://pve1.lab.example:8006");
+  const headers = { cookie: "__Host-vws_session=root; vws_csrf=root", "x-csrf-token": "root", origin: api };
+  const old = { name: "pve-lab-3", clusterName: "lab", pveApiUrl: "https://pve1.lab.example:8006", caPem: CA };
+  const refused = await request.post(`${api}/api/v1/admin/regions`, { headers, data: { ...old, tokenSecret: "s" } });
+  expect(refused.status()).toBe(400);
+  expect(sent).not.toEqual([]);
+});
+
+test("the region list shows the API node, not a leader", async ({ page, baseURL }) => {
+  await (await fillRegister(page, baseURL)).click();
+  await page.goto("/admin/regions");
+  await expect(page.getByRole("columnheader", { name: "API node" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Leader" })).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "pve1", exact: true })).toBeVisible();
+});
+
 test("a region is deleted only after its name is typed", async ({ page, baseURL }) => {
   await (await fillRegister(page, baseURL)).click();
   await page.getByRole("button", { name: "Delete" }).click();
@@ -116,7 +153,13 @@ test("a region is deleted only after its name is typed", async ({ page, baseURL 
 test("the fake console-api refuses a write without the session's CSRF token", async ({ request }) => {
   const register = async (cookie: string, token?: string) => {
     const headers = { cookie, origin: api, ...(token ? { "x-csrf-token": token } : {}) };
-    const data = { name: "pve-lab-1", clusterName: "lab", tokenSecret: "s" };
+    const data = {
+      name: "pve-lab-1",
+      clusterName: "lab",
+      pveApiUrls: ["https://pve1.lab.example:8006"],
+      caPem: "-----BEGIN CERTIFICATE-----",
+      tokenSecret: "s",
+    };
     return (await request.post(`${api}/api/v1/admin/regions`, { headers, data })).status();
   };
   expect(await register("__Host-vws_session=root")).toBe(403);

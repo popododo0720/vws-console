@@ -15,7 +15,13 @@ const save = (page: Page) => page.getByRole("button", { name: "Save changes" });
 
 test.beforeEach(async ({ request }) => {
   await request.post(`${api}/__reset`);
-  const data = { name: "pve-lab-1", clusterName: "lab", tokenSecret: "s" };
+  const data = {
+    name: "pve-lab-1",
+    clusterName: "lab",
+    pveApiUrls: ["https://pve1.lab.example:8006"],
+    caPem: "-----BEGIN CERTIFICATE-----",
+    tokenSecret: "s",
+  };
   expect((await request.post(`${api}/api/v1/admin/regions`, { headers: caller("root"), data })).status()).toBe(201);
 });
 

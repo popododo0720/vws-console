@@ -183,7 +183,7 @@
       "name": "lab",
       "pveRelease": "",
       "quorate": false,
-      "leader": ""
+      "apiNode": ""
     },
     "zones": [
       {

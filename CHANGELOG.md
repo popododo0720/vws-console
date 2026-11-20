@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The region form takes a list of Proxmox API URLs (`pveApiUrls`, 1 to 16 HTTPS origins, with Add and Remove) and a required CA certificate; the region detail page lists them, and the region list and status show the API node instead of the leader (#216).
 - The S3 upload page shows Pending, Uploading, Succeeded or Failed per file and an `Upload: status` summary, keeps going after a failed file, resends only failed files on Retry, and no longer redirects when it finishes (#13).
 - The Objects tab no longer sends object bytes through a server action; its rows link to the object page and Download goes through the download route (#13).
 

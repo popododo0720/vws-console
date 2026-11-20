@@ -71,7 +71,18 @@ export function AdminRegionDetailView({
               ["Region name", <CopyText key="name" value={region.name} />],
               ["Type", "Proxmox"],
               ["Cluster name", dash(region.clusterName)],
-              ["Proxmox API URL", dash(region.pveApiUrl)],
+              [
+                "Proxmox API URLs",
+                region.pveApiUrls.length ? (
+                  <ul key="urls" className="m-0 list-none p-0">
+                    {region.pveApiUrls.map((url) => (
+                      <li key={url}>{url}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  dash("")
+                ),
+              ],
               ["Region endpoint", dash(region.regionEndpoint)],
               ["CA certificate", region.caPem ? "Provided" : "—"],
               ["API token ID", dash(region.tokenId)],

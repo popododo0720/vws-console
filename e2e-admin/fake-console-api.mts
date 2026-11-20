@@ -24,8 +24,29 @@ const failure = (code: string, message: string, field?: string) => ({
 });
 const invalid = (field: string, message: string) => failure("InvalidArgument", message, field);
 
+/** A copy of resource.CheckPVEAPIURLs: 1 to 16 distinct-host HTTPS origins without credentials, query or fragment. */
+function pveUrlProblem(value: unknown): string | null {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 16) return "expected 1 to 16 HTTPS origins";
+  const hosts = new Set<string>();
+  for (const raw of value) {
+    const url = typeof raw === "string" && raw.length <= 255 && !/[?#]/.test(raw) ? URL.parse(raw) : null;
+    if (!url || url.protocol !== "https:" || url.username || url.password || /^https:\/\/[^/]*@/i.test(raw)) {
+      return "each entry must be an HTTPS origin without credentials, query or fragment";
+    }
+    if (url.pathname !== "/") return "each entry must be an HTTPS origin without credentials, query or fragment";
+    if (hosts.has(url.host)) return "duplicate entry";
+    hosts.add(url.host);
+  }
+  return null;
+}
+
 /** A partial copy of validateRegion (vws-console-api internal/surface/console/admin_regions.go). */
 function refused(region: Json, secret: unknown, create: boolean) {
+  const urls = pveUrlProblem(region.pveApiUrls);
+  if (urls) return invalid("pveApiUrls", urls);
+  if (!String(region.caPem ?? "").includes("-----BEGIN CERTIFICATE-----")) {
+    return invalid("caPem", "expected the PEM certificates that sign the PVE nodes");
+  }
   const name = /^pve-[a-z0-9]+(-[a-z0-9]+)*-[0-9]+$/.test(String(region.name));
   if (!name) return invalid("name", "invalid Proxmox region name");
   const cluster = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/.test(String(region.clusterName));
@@ -115,7 +136,7 @@ const PASSED = {
 
 /** console-api's step names, order and messages. "unreachable" in the URL is this fake's own switch for a failure. */
 function connectionSteps(region: Json, secret: unknown) {
-  const down = secret !== undefined && String(region.pveApiUrl).includes("unreachable");
+  const down = secret !== undefined && JSON.stringify(region.pveApiUrls).includes("unreachable");
   return Object.entries(PASSED).map(([name, message], index) => {
     if (down && index === 0) return { name, result: "FAIL", message: "PVE TLS handshake failed" };
     if (down) return { name, result: "SKIPPED", message: "previous step failed" };
@@ -266,7 +287,7 @@ createServer(async (request, response) => {
   if (name && !unsaved && !saved) return send(404, failure("NotFound", "registration not found"));
   if (tail === "health") {
     const nodes = [{ name: "pve1", online: true }];
-    return send(200, { status: "ok", quorate: true, leader: "pve1", nodes, checkedAt: "2026-11-12T00:00:00Z" });
+    return send(200, { status: "ok", quorate: true, apiNode: "pve1", nodes, checkedAt: "2026-11-12T00:00:00Z" });
   }
   if (method === "GET") {
     response.setHeader("etag", `"${saved?.version}"`);
@@ -282,7 +303,16 @@ createServer(async (request, response) => {
   if (tail === "test" && Object.keys(input).length > 0) {
     return send(400, invalid("name", "saved tests accept only tokenSecret; use the unsaved test for edits"));
   }
+  if ("pveApiUrl" in input) return send(400, invalid("pveApiUrl", "unknown field pveApiUrl"));
   const body: Json = { zones: [], ...saved?.body, ...input };
+  const urlSet = (value: unknown) => (Array.isArray(value) ? [...value].sort().join(",") : "");
+  const moved =
+    saved !== undefined &&
+    ((input.caPem !== undefined && input.caPem !== saved.body.caPem) ||
+      (input.pveApiUrls !== undefined && urlSet(input.pveApiUrls) !== urlSet(saved.body.pveApiUrls)));
+  if (moved && tokenSecret === undefined && tail !== "test") {
+    return send(400, invalid("tokenSecret", "the token secret is needed when the CA or the URLs change"));
+  }
   const problem = !name && saved ? invalid("name", "already registered") : refused(body, tokenSecret, !saved);
   if (problem) return send(400, problem);
   if (tail === "test" || unsaved) return send(200, { steps: connectionSteps(body, tokenSecret) });
