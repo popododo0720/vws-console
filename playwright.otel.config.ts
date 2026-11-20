@@ -5,9 +5,11 @@ import { defineConfig, devices } from "@playwright/test";
 
 // The OTel e2e: the production build exports to a real OpenTelemetry Collector (scripts/otelcol.sh, OTLP over
 // HTTP in, the file exporter out) while it talks to a deterministic fake console-api. The spec reads the file.
-const port = Number(process.env.E2E_PORT ?? 43126);
-const apiPort = Number(process.env.E2E_FAKE_API_PORT ?? 43320);
-const otlpPort = Number(process.env.E2E_OTLP_PORT ?? 43318);
+// The ports sit below Linux's ephemeral range (32768-60999): inside it, an outgoing connection of the runner
+// (cache restore, browser, npm) can hold one as its source port and the listen fails with EADDRINUSE.
+const port = Number(process.env.E2E_PORT ?? 23126);
+const apiPort = Number(process.env.E2E_FAKE_API_PORT ?? 23320);
+const otlpPort = Number(process.env.E2E_OTLP_PORT ?? 23318);
 const healthPort = otlpPort + 1;
 
 process.env.OTEL_E2E_OUT ??= join(mkdtempSync(join(tmpdir(), "vws-otel-e2e-")), "telemetry.jsonl");

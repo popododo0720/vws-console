@@ -14,7 +14,7 @@ dist
 .git
 .gitignore
 
-# Environment files (pass via docker-compose env_file or runtime env vars)
+# Environment files (pass as runtime env vars)
 .env
 .env.local
 .env.*.local
@@ -41,7 +41,6 @@ scripts
 
 # Docker files themselves (no need to copy into image)
 Dockerfile
-docker-compose.yml
 .dockerignore
 
 # Misc

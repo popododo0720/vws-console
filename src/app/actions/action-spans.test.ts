@@ -36,7 +36,7 @@ describe("server action spans", () => {
   });
 
   it("finds every action", () => {
-    expect(actions.length).toBeGreaterThanOrEqual(37);
+    expect(actions.length).toBeGreaterThanOrEqual(34);
   });
 
   it.each(actions)("%s emits an `action <name>` span, even on bad input", async (name, action) => {

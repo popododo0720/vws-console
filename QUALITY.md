@@ -7,7 +7,7 @@ Adopted 2026-10-15 (vws-deploy#300), the same standard as the other vws-* repos.
 3. **Security**: validate all input on the server side of the console as well as in forms, never render untrusted HTML, keep credentials out of the browser bundle, logs and the repo.
 4. **Unit tests** (Vitest) for new behavior and failure paths.
 5. **Integration tests** (Playwright) at real or faithfully faked boundaries.
-6. **Live evidence on vws-test**: commands, screenshots or output from the vws-test cluster, linked or pathed in the PR. Without live evidence the work is not done; a change that never touches vws-test says "N/A: reason".
+6. **Live evidence on pve-test**: commands, screenshots or output from the pve-test target, linked or pathed in the PR. Without live evidence the work is not done; a change that never touches pve-test says "N/A: reason".
 7. **Observability**: errors and slow requests are visible (structured server logs, no secrets).
 8. **Idempotency**: safe on double submit, retry and page reload.
 9. **AWS compatibility** where applicable: console flows, names and error messages match the AWS console and APIs.
