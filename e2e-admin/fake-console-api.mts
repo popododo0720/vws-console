@@ -281,7 +281,7 @@ createServer(async (request, response) => {
   if (!found) return send(200, { items: [] });
   if (method === "GET" && !name) return send(200, { items: [...regions.values()].map((region) => region.body) });
   if (method !== "GET" && !adminWrite) return send(403, denied);
-  const { tokenSecret, ...input } = await read();
+  const { tokenSecret, firewallTokenSecret, backupTokenSecret, ...input } = await read();
   const unsaved = method === "POST" && name === "test";
   const saved = unsaved ? undefined : regions.get(name ?? String(input.name));
   if (name && !unsaved && !saved) return send(404, failure("NotFound", "registration not found"));
@@ -313,6 +313,19 @@ createServer(async (request, response) => {
   if (moved && tokenSecret === undefined && tail !== "test") {
     return send(400, invalid("tokenSecret", "the token secret is needed when the CA or the URLs change"));
   }
+  // The firewall and backup tokens only went to the first address, so moving it asks for their secrets too.
+  const firstMoved =
+    saved !== undefined &&
+    Array.isArray(input.pveApiUrls) &&
+    input.pveApiUrls[0] !== (saved.body.pveApiUrls as unknown[])[0];
+  for (const [field, id, secret] of [
+    ["firewallTokenSecret", body.firewallTokenId, firewallTokenSecret],
+    ["backupTokenSecret", body.backupTokenId, backupTokenSecret],
+  ]) {
+    if (id && (moved || firstMoved) && secret === undefined && tail !== "test") {
+      return send(400, invalid(String(field), "the secret is needed when the CA or the first address changes"));
+    }
+  }
   const problem = !name && saved ? invalid("name", "already registered") : refused(body, tokenSecret, !saved);
   if (problem) return send(400, problem);
   if (tail === "test" || unsaved) return send(200, { steps: connectionSteps(body, tokenSecret) });
@@ -320,6 +333,19 @@ createServer(async (request, response) => {
     const fingerprint = createHash("sha256").update(String(tokenSecret)).digest("hex").slice(0, 8);
     body.tokenSecret = { set: true, fingerprint };
   }
+  for (const [field, secret] of [
+    ["firewallTokenSecret", firewallTokenSecret],
+    ["backupTokenSecret", backupTokenSecret],
+  ])
+    if (secret !== undefined) {
+      body[String(field)] = {
+        set: true,
+        fingerprint: createHash("sha256").update(String(secret)).digest("hex").slice(0, 8),
+      };
+    }
+  // Like console-api: the region is stored, the push to the daemon fails, and the answer is 2xx with lastError set.
+  const pushed = !JSON.stringify(body.pveApiUrls).includes("wrong-cluster");
+  body.lastError = pushed ? null : { time: "2026-11-12T00:00:00Z", message: "cluster_name mismatch" };
   const version = (saved?.version ?? 0) + 1;
   regions.set(String(body.name), { version, body });
   response.setHeader("etag", `"${version}"`);

@@ -166,3 +166,93 @@ test("the fake console-api refuses a write without the session's CSRF token", as
   expect(await register("__Host-vws_session=root; vws_csrf=other", "other")).toBe(403);
   expect(await register("__Host-vws_session=root", "root")).toBe(201);
 });
+
+const headers = { cookie: "__Host-vws_session=root; vws_csrf=root", "x-csrf-token": "root", origin: api };
+
+test("an edit that adds an address asks for the write secrets again, and sends them without echoing the stored ones", async ({
+  page,
+  baseURL,
+  request,
+}) => {
+  const created = await request.post(`${api}/api/v1/admin/regions`, {
+    headers,
+    data: {
+      name: "pve-lab-1",
+      clusterName: "lab",
+      pveApiUrls: [lab["Proxmox API URL 1"]],
+      caPem: `${CA}\n`,
+      tokenId: "vws@pve!console",
+      tokenSecret: CANARY,
+      firewallTokenId: "vws@pve!firewall",
+      firewallTokenSecret: "fw-canary-secret",
+      backupTokenId: "vws@pve!backup",
+      backupTokenSecret: "bk-canary-secret",
+      regionEndpoint: "https://10.0.0.10:8443",
+    },
+  });
+  expect(created.status()).toBe(201);
+  await signIn(page, baseURL, "root");
+  await page.goto("/admin/regions/pve-lab-1/edit");
+  await expect(page.getByLabel("Firewall token secret")).toHaveValue("");
+  expect(await page.content()).not.toContain("fw-canary-secret");
+  await page.getByRole("button", { name: "Add Proxmox API URL" }).click();
+  await page.getByLabel("Proxmox API URL 2", { exact: true }).fill("https://pve2.lab.example:8006");
+  await page.getByLabel("API token secret", { exact: true }).fill(CANARY);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "firewall token secret again" })).toBeVisible();
+  await page.getByLabel("Firewall token secret").fill("fw-new");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "backup token secret again" })).toBeVisible();
+  await page.getByLabel("Backup token secret").fill("bk-new");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page).toHaveURL(/\/admin\/regions\/pve-lab-1$/);
+  const stored = (await (await request.get(`${api}/api/v1/admin/regions/pve-lab-1`, { headers })).json()) as Record<
+    string,
+    { fingerprint?: string } | string
+  >;
+  const print = (secret: string) => createHash("sha256").update(secret).digest("hex").slice(0, 8);
+  expect(stored.firewallTokenSecret).toEqual({ set: true, fingerprint: print("fw-new") });
+  expect(stored.backupTokenSecret).toEqual({ set: true, fingerprint: print("bk-new") });
+  expect(stored.caPem).toBe(`${CA}\n`);
+});
+
+test("a save the daemon could not apply stays on the edit form, then shows on the detail page", async ({
+  page,
+  baseURL,
+}) => {
+  await (await fillRegister(page, baseURL, { ...lab, "CA certificate": `${CA}\n` })).click();
+  await expect(page.getByRole("heading", { level: 1, name: "pve-lab-1" })).toBeVisible();
+  await page.goto("/admin/regions/pve-lab-1/edit");
+  await page.getByRole("button", { name: "Add Proxmox API URL" }).click();
+  await page.getByLabel("Proxmox API URL 2", { exact: true }).fill("https://wrong-cluster.lab.example:8006");
+  await page.getByLabel("API token secret", { exact: true }).fill(CANARY);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "applying it to the region daemon failed: cluster_name mismatch" }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/edit$/);
+  await page.getByRole("button", { name: "Remove Proxmox API URL 2" }).click();
+  await page.getByLabel("Cluster name", { exact: true }).fill("lab-2");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page).toHaveURL(/\/admin\/regions\/pve-lab-1$/);
+  await expect(page.getByText("cluster_name mismatch")).toHaveCount(0);
+});
+
+test("the detail page shows the stored apply error of a region", async ({ page, baseURL, request }) => {
+  const made = await request.post(`${api}/api/v1/admin/regions`, {
+    headers,
+    data: {
+      name: "pve-lab-1",
+      clusterName: "lab",
+      pveApiUrls: ["https://wrong-cluster.lab.example:8006"],
+      caPem: CA,
+      tokenId: "vws@pve!console",
+      tokenSecret: CANARY,
+      regionEndpoint: "https://10.0.0.10:8443",
+    },
+  });
+  expect(made.status()).toBe(201);
+  await signIn(page, baseURL, "root");
+  await page.goto("/admin/regions/pve-lab-1");
+  await expect(page.getByRole("alert").filter({ hasText: "cluster_name mismatch" })).toBeVisible();
+});

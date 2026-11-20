@@ -204,9 +204,10 @@ describe("admin Regions pages on a mocked admin API", () => {
     fill("API token secret", "typed-secret");
     click("Save changes");
     await waitFor(() => expect(router.push).toHaveBeenCalledWith("/admin/regions/pve-lab-1"));
-    const { pveApiUrls, caPem, zones } = region;
-    const body = { name: "pve-lab-1", clusterName: "lab", pveApiUrls, caPem, zones, tokenSecret: "typed-secret" };
+    const { pveApiUrls, zones } = region;
+    const body = { name: "pve-lab-1", clusterName: "lab", pveApiUrls, zones, tokenSecret: "typed-secret" };
     expect(calls.at(-1)).toMatchObject({ method: "PATCH", path: "/regions/pve-lab-1", ifMatch: '"3"', body });
+    expect(calls.at(-1)?.body).not.toHaveProperty("caPem");
     expect(screen.getByLabelText("API token secret")).toHaveValue("");
   });
 
@@ -268,6 +269,104 @@ describe("admin Regions pages on a mocked admin API", () => {
     await waitFor(() => expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1));
     expect(calls.at(-1)?.body).toMatchObject({ pveApiUrls: ["https://pve1.lab.example:8006"] });
     expect(calls.at(-1)?.body).not.toHaveProperty("tokenSecret");
+  });
+
+  it("sends no caPem for a zones-only edit of a CA that ends in a newline, and the bytes of an edited one", async () => {
+    const stored = { ...region, caPem: `${region.caPem}\n` };
+    adminApi({ "/regions/pve-lab-1": [200, stored, { etag: '"3"' }], "PATCH /regions/pve-lab-1": [200, stored] });
+    await show(edit());
+    fill("Zone letter", "b");
+    click("Save changes");
+    await waitFor(() => expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1));
+    expect(calls.at(-1)?.body).not.toHaveProperty("caPem");
+    const pem = `${region.caPem}\n\n`;
+    fill("CA certificate", pem);
+    fill("API token secret", "typed-secret");
+    click("Save changes");
+    await waitFor(() => expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(2));
+    expect(calls.at(-1)?.body).toMatchObject({ caPem: pem });
+  });
+
+  describe("with firewall and backup tokens", () => {
+    const withTokens = {
+      ...region,
+      firewallTokenId: "vws@pve!firewall",
+      firewallTokenSecret: { set: true, fingerprint: "0a1b2c3d", value: "fw-secret-value" },
+      backupTokenId: "vws@pve!backup",
+      backupTokenSecret: { set: true, fingerprint: "4e5f6a7b", value: "bk-secret-value" },
+    };
+
+    it("asks for each write secret when an address is added, never shows the stored ones, and sends them", async () => {
+      adminApi({
+        "/regions/pve-lab-1": [200, withTokens, { etag: '"3"' }],
+        "PATCH /regions/pve-lab-1": [200, withTokens],
+      });
+      const view = await show(edit());
+      expect(view.container.innerHTML).not.toContain("fw-secret-value");
+      expect(view.container.innerHTML).not.toContain("bk-secret-value");
+      expect(screen.getByLabelText("Firewall token secret")).toHaveValue("");
+      expect(screen.getByText(/Stored secret: Set · 0a1b2c3d/)).toBeTruthy();
+      click("Add Proxmox API URL");
+      fill("Proxmox API URL 3", "https://pve3.lab.example:8006");
+      fill("API token secret", "typed-secret");
+      click("Save changes");
+      expect((await screen.findByRole("alert")).textContent).toContain("Enter the firewall token secret again");
+      fill("Firewall token secret", "new-fw");
+      click("Save changes");
+      await waitFor(() =>
+        expect(screen.getByRole("alert").textContent).toContain("Enter the backup token secret again"),
+      );
+      fill("Backup token secret", "new-bk");
+      click("Save changes");
+      await waitFor(() => expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1));
+      expect(calls.at(-1)?.body).toMatchObject({
+        tokenSecret: "typed-secret",
+        firewallTokenSecret: "new-fw",
+        backupTokenSecret: "new-bk",
+      });
+    });
+
+    it("keeps the stored write secrets when only zones change", async () => {
+      adminApi({
+        "/regions/pve-lab-1": [200, withTokens, { etag: '"3"' }],
+        "PATCH /regions/pve-lab-1": [200, withTokens],
+      });
+      await show(edit());
+      fill("Zone letter", "b");
+      click("Save changes");
+      await waitFor(() => expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1));
+      expect(calls.at(-1)?.body).not.toHaveProperty("firewallTokenSecret");
+      expect(calls.at(-1)?.body).not.toHaveProperty("backupTokenSecret");
+    });
+  });
+
+  it("shows a failed apply, stays on the form and reloads the saved region when the save answers with lastError", async () => {
+    const lastError = { time: "2026-11-11T09:30:00Z", message: "cluster_name mismatch" };
+    adminApi({
+      "/regions/pve-lab-1": saved,
+      "PATCH /regions/pve-lab-1": [200, { ...region, lastError }, { etag: '"4"' }],
+    });
+    await show(edit());
+    fill("Zone letter", "b");
+    click("Save changes");
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("saved, but applying it to the region daemon failed: cluster_name mismatch");
+    expect(router.push).not.toHaveBeenCalled();
+    expect(router.refresh).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeTruthy();
+  });
+
+  it("shows the stored apply error on the detail page", async () => {
+    const lastError = { time: "2026-11-11T09:30:00Z", message: "cluster_name mismatch" };
+    adminApi({
+      "/regions/pve-lab-1": [200, { ...region, lastError }, { etag: '"4"' }],
+      "/regions/pve-lab-1/health": [200, health],
+    });
+    await detail();
+    expect(
+      (await screen.findByText("The last change was saved but not applied to the region daemon")).textContent,
+    ).toBeTruthy();
+    expect(field("Last apply error")).toBe("cluster_name mismatch");
   });
 
   it("shows the conflict alert for a 409 and reloads the region with its new ETag", async () => {

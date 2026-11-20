@@ -87,10 +87,30 @@ export function AdminRegionDetailView({
               ["CA certificate", region.caPem ? "Provided" : "—"],
               ["API token ID", dash(region.tokenId)],
               ["API token secret", region.tokenSecret],
+              ...(region.firewallTokenId
+                ? ([["Firewall token", `${region.firewallTokenId} · ${region.firewallTokenSecret}`]] as [
+                    string,
+                    ReactNode,
+                  ][])
+                : []),
+              ...(region.backupTokenId
+                ? ([["Backup token", `${region.backupTokenId} · ${region.backupTokenSecret}`]] as [string, ReactNode][])
+                : []),
+              ["Last apply error", dash(region.lastError?.message ?? "")],
             ]
           : []
       }
     >
+      {region?.lastError ? (
+        <div
+          role="alert"
+          className="mx-4 my-2 rounded-lg border border-[#d91515] bg-[#fff7f7] px-3 py-2 text-[13px] text-[#16191f]"
+        >
+          <p className="font-semibold text-[#d91515]">The last change was saved but not applied to the region daemon</p>
+          <p className="mt-1">{region.lastError.message}</p>
+          <p className="mt-1">Edit the region and save it again to retry.</p>
+        </div>
+      ) : null}
       <section className="rounded-lg border border-[#d5dbdb]">
         <div className="flex gap-4 border-b border-[#e6e8eb] px-4">
           {tabs.map((item) => (

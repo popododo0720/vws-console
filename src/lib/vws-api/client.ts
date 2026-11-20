@@ -52,6 +52,7 @@ import {
   parseAdminRegions,
   parseConnectionSteps,
   toAdminProject,
+  savedRegionLastError,
   toAdminRegion,
   toAdminRegionHealth,
   unknownHealth,
@@ -654,13 +655,18 @@ export const getAdminRegion = (name: string): Promise<ApiResult<Versioned<AdminR
 /** console-api gives a region push and a connection test 15 s each and a project save 8 s; these wait at least 20 s. */
 const adminWait = () => ({ timeoutMs: Math.max(timeoutMs(), 20_000) });
 
-export async function saveAdminRegion(input: AdminRegionInput, etag: string | null): Promise<ApiResult<void>> {
+/** The answer to a save: console-api answers 2xx with lastError set when it saved the region but the push failed. */
+export async function saveAdminRegion(
+  input: AdminRegionInput,
+  etag: string | null,
+): Promise<ApiResult<{ lastError: AdminRegion["lastError"] }>> {
   const item = route("/admin/regions/{name}", { name: input.name });
   const result =
     etag === null
       ? await request("POST", route("/admin/regions"), input, adminWait())
       : await request("PATCH", item, input, { ...adminWait(), ifMatch: etag });
-  return result.ok ? { ok: true, value: undefined } : { ok: false, error: result.error };
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, value: { lastError: savedRegionLastError(result.value.json) } };
 }
 
 export async function deleteAdminRegion(name: string): Promise<ApiResult<void>> {

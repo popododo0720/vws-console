@@ -19,6 +19,11 @@ export const rootPassword = "stack-root-canary-176";
 export const userPassword = "stack-user-canary-176";
 const consoleToken = "stack-console-canary-176";
 const adminKEK = Buffer.alloc(32, 176).toString("base64");
+/** The optional write tokens the stack's PVE fake knows, with the secrets the browser must never see. */
+export const writeTokens = {
+  firewall: { id: "vws@pve!firewall", secret: "stack-firewall-canary-216" },
+  backup: { id: "vws@pve!backup", secret: "stack-backup-canary-216" },
+};
 export const canaries = [rootPassword, userPassword, consoleToken, adminKEK];
 
 export function assertNoSecrets(text: string, secrets: string[], source: string) {
@@ -53,7 +58,19 @@ export default async function setup() {
   const tokenSecret = token?.[2];
   expect(tokenId, "scenario token ID").toBeTruthy();
   expect(tokenSecret, "scenario token secret").toBeTruthy();
-  const secrets = [...canaries, tokenSecret!];
+  const secrets = [...canaries, tokenSecret!, writeTokens.firewall.secret, writeTokens.backup.secret];
+  // The firewall token holds only Sys.Modify and Sys.Audit; the backup token VM.Backup on the pool and
+  // Datastore.AllocateSpace on a storage (docs/region-daemon.md, console-api main).
+  const pool = "123456789012";
+  const withWriteTokens = scenario
+    .replace(
+      "roles:\n",
+      `roles:\n  - id: VWSFirewall\n    privs: [Sys.Modify, Sys.Audit]\n  - id: BackupVM\n    privs: [VM.Backup]\n  - id: BackupStorage\n    privs: [Datastore.AllocateSpace]\n`,
+    )
+    .replace(
+      "tokens:\n",
+      `tokens:\n  - id: ${writeTokens.firewall.id}\n    secret: ${writeTokens.firewall.secret}\n    acl:\n      - path: /\n        role: VWSFirewall\n  - id: ${writeTokens.backup.id}\n    secret: ${writeTokens.backup.secret}\n    acl:\n      - path: /pool/${pool}\n        role: BackupVM\n      - path: /storage/backups\n        role: BackupStorage\n`,
+    );
   const start = (name: string, command: string, args: string[], cwd = process.cwd()) => {
     const log = file(`${name}.log`);
     writeFileSync(log, "");
@@ -112,7 +129,8 @@ export default async function setup() {
     const save = (name: string, contents: string | Buffer) => writeFileSync(file(name), contents, { mode: 0o600 });
     save("admin-kek", adminKEK);
     save("root-password", rootPassword);
-    save("region.yaml", "read_only: true\npools:\n  project: '123456789012'\n");
+    save("scenario.yaml", withWriteTokens);
+    save("region.yaml", `read_only: false\npools:\n  project: '${pool}'\n`);
     await run("certificates", "openssl", [
       "req",
       "-x509",
@@ -135,7 +153,7 @@ export default async function setup() {
     chmodSync(file("key.pem"), 0o600);
     const pve = start("pvefake", file("pvefake"), [
       "-scenario",
-      resolve(repo, "cmd/pvefake/testdata/scenario.yaml"),
+      file("scenario.yaml"),
       "-listen",
       `127.0.0.1:${pvePort}`,
       "-ca-file",

@@ -38,6 +38,9 @@ const pemClass = "w-full max-w-[783px] rounded-lg border border-[#aab7b8] px-2.5
 const withinStored = (sent: readonly string[], stored: readonly string[]) =>
   sent.every((url) => stored.includes(url.trim()));
 
+/** The failure code of a save that console-api stored but could not apply to the region daemon. */
+const APPLY_FAILED = "ApplyFailed";
+
 /** The save state lives here, outside the keyed form, so the conflict alert survives the reload that remounts it. */
 export function AdminRegionFormView({ name, region, loadError }: Props) {
   const save = useApiAction();
@@ -64,6 +67,8 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
   const router = useRouter();
   /** Uncontrolled, so the typed secret is never in React state or in an attribute of the page. */
   const secret = useRef<HTMLInputElement>(null);
+  const firewallSecret = useRef<HTMLInputElement>(null);
+  const backupSecret = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState(() => Object.fromEntries(TEXT_KEYS.map((key) => [key, region?.[key] ?? ""])));
   const [urls, setUrls] = useState(() => (region?.pveApiUrls.length ? region.pveApiUrls : [""]));
   const [localError, setLocalError] = useState<ApiError | null>(null);
@@ -77,7 +82,34 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
     [localError, save.error, probe?.ok === false ? probe.error : null].find((error) => error?.field === key)?.message ??
     null;
   const typedSecret = () => secret.current?.value ?? "";
-  const form = () => ({ ...draft, pveApiUrls: urls, zones });
+  /** The daemon compares the CA byte for byte, so it is sent, as typed, only when the operator changed it. */
+  const caChanged = !region || draft.caPem !== region.caPem;
+  const trustMoved = Boolean(region) && (caChanged || !withinStored(urls, region?.pveApiUrls ?? []));
+  /** The firewall and backup tokens only ever went to the first address, so moving that one asks for them too. */
+  const firstMoved = Boolean(region) && urls[0]?.trim() !== region?.pveApiUrls[0];
+  const secretInput = (id: string) => (id === "firewall" ? firewallSecret : backupSecret);
+  const writeTokens = [
+    {
+      id: "firewall",
+      label: "Firewall",
+      tokenId: region?.firewallTokenId,
+      stored: region?.firewallTokenSecret,
+    },
+    {
+      id: "backup",
+      label: "Backup",
+      tokenId: region?.backupTokenId,
+      stored: region?.backupTokenSecret,
+    },
+  ].filter((token) => token.tokenId);
+  const form = () => ({
+    ...draft,
+    caPem: caChanged ? draft.caPem : undefined,
+    pveApiUrls: urls,
+    zones,
+    firewallTokenSecret: firewallSecret.current?.value ?? "",
+    backupTokenSecret: backupSecret.current?.value ?? "",
+  });
   /** console-api's rules, checked first so a mistake shows at its field without a round trip. */
   const refuse = (): ApiError | null => {
     const invalid = (field: string, message: string): ApiError => ({
@@ -89,12 +121,19 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
     const urlProblem = checkPveApiUrls(urls.map((url) => url.trim()));
     if (urlProblem) return invalid("pveApiUrls", urlProblem);
     if (!draft.caPem.trim()) return invalid("caPem", "Enter the PEM certificates that sign the Proxmox nodes.");
-    const moved = region && (draft.caPem.trim() !== region.caPem.trim() || !withinStored(urls, region.pveApiUrls));
-    if (moved && !typedSecret()) {
+    if (trustMoved && !typedSecret()) {
       return invalid(
         "tokenSecret",
         "Enter the API token secret again when the CA certificate changes or a URL is added or replaced.",
       );
+    }
+    for (const token of writeTokens) {
+      if ((trustMoved || firstMoved) && !secretInput(token.id).current?.value) {
+        return invalid(
+          `${token.id}TokenSecret`,
+          `Enter the ${token.label.toLowerCase()} token secret again when the CA certificate or the first URL changes, or a URL is added or replaced.`,
+        );
+      }
     }
     return null;
   };
@@ -106,11 +145,13 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
     save.run(
       async () => {
         const failure = await saveRegionAction(form(), typedSecret(), region?.etag ?? null);
-        if (failure?.code === "Conflict" && region) save.refresh();
-        return failure;
+        // A saved region has a new version: reload it, so the retry carries the latest ETag and the stored values.
+        if ((failure?.code === "Conflict" || failure?.code === APPLY_FAILED) && region) save.refresh();
+        // A region that was just created and not applied is shown with its stored error on its page.
+        return failure?.code === APPLY_FAILED && !region ? null : failure;
       },
       () => {
-        if (secret.current) secret.current.value = "";
+        for (const input of [secret, firewallSecret, backupSecret]) if (input.current) input.current.value = "";
         router.push(regionHref(draft.name.trim()));
       },
     );
@@ -208,6 +249,24 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
         >
           <input id="region-secret" ref={secret} type="password" autoComplete="new-password" className={inputClass} />
         </Field>
+        {writeTokens.map((token) => (
+          <Field
+            key={token.id}
+            label={`${token.label} token secret`}
+            htmlFor={`region-${token.id}-secret`}
+            description={`${token.label} token ${token.tokenId} · Stored secret: ${token.stored}`}
+            hint="Leave blank to keep the stored one. Enter it again when the CA certificate, the first URL or the URL set changes. It cannot be shown again after you save."
+            error={fieldError(`${token.id}TokenSecret`)}
+          >
+            <input
+              id={`region-${token.id}-secret`}
+              ref={secretInput(token.id)}
+              type="password"
+              autoComplete="new-password"
+              className={inputClass}
+            />
+          </Field>
+        ))}
       </FormCard>
       <FormCard title={optional("Availability Zones")}>
         <p>An Availability Zone is a group of cluster nodes. Its name is the region name followed by its letter.</p>

@@ -503,7 +503,7 @@ describe("parseVolumes", () => {
 
 describe("toAdminRegionInput", () => {
   it("lets only the region fields through, each as text, and takes the secret only from its own argument", () => {
-    const empty = { name: "", clusterName: "", pveApiUrls: [], caPem: "", tokenId: "", regionEndpoint: "", zones: [] };
+    const empty = { name: "", clusterName: "", pveApiUrls: [], tokenId: "", regionEndpoint: "", zones: [] };
     const zones = [{ letter: "a ", nodes: "pve1, pve2 ,,", extra: 1 }];
     const forged = {
       name: " pve-lab-1 ",
@@ -522,6 +522,15 @@ describe("toAdminRegionInput", () => {
     };
     expect(toAdminRegionInput(forged, { not: "text" })).toEqual(expected);
     expect(toAdminRegionInput({ zones: "junk" }, " typed ")).toEqual({ ...empty, tokenSecret: " typed " });
+  });
+
+  it("keeps the CA bytes as sent, leaves it out when absent, and passes the write secrets as typed", () => {
+    const pem = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+    expect(toAdminRegionInput({ caPem: pem }, "").caPem).toBe(pem);
+    expect(toAdminRegionInput({ caPem: undefined }, "")).not.toHaveProperty("caPem");
+    const input = toAdminRegionInput({ firewallTokenSecret: " fw ", backupTokenSecret: "" }, "");
+    expect(input.firewallTokenSecret).toBe(" fw ");
+    expect(input).not.toHaveProperty("backupTokenSecret");
   });
 });
 

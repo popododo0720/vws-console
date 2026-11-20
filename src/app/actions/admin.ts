@@ -19,7 +19,16 @@ export async function saveRegionAction(form: unknown, secret: unknown, etag: unk
     const urls = checkPveApiUrls(input.pveApiUrls);
     if (urls) return { ...invalid(urls), field: "pveApiUrls" };
     const result = await saveAdminRegion(input, etag);
-    return result.ok ? null : result.error;
+    if (!result.ok) return result.error;
+    // console-api answers 2xx when it saved the region but could not apply it to the region daemon.
+    const failed = result.value.lastError;
+    return failed
+      ? {
+          code: "ApplyFailed",
+          message: `The region was saved, but applying it to the region daemon failed: ${failed.message}`,
+          requestId: null,
+        }
+      : null;
   });
 }
 

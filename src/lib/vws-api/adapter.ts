@@ -425,6 +425,13 @@ export type AdminRegion = {
   caPem: string;
   tokenId: string;
   tokenSecret: string;
+  /** The optional write tokens. The ID is empty when the region has none; the secret is only ever a label. */
+  firewallTokenId: string;
+  firewallTokenSecret: string;
+  backupTokenId: string;
+  backupTokenSecret: string;
+  /** Why the last push to the region daemon failed, or null. console-api answers 2xx with it set. */
+  lastError: { time: string; message: string } | null;
   regionEndpoint: string;
   zones: { letter: string; nodes: string[] }[];
 };
@@ -454,7 +461,25 @@ export function checkPveApiUrls(urls: readonly string[]): string | null {
   return null;
 }
 
-export type AdminRegionInput = Omit<AdminRegion, "tokenSecret"> & { tokenSecret?: string };
+/**
+ * What a save sends. caPem is left out when the operator did not touch it: the daemon compares it byte for byte, so a
+ * value that was only trimmed would count as a new CA. The write-only secrets are sent only when typed.
+ */
+export type AdminRegionInput = Omit<
+  AdminRegion,
+  | "tokenSecret"
+  | "caPem"
+  | "firewallTokenId"
+  | "firewallTokenSecret"
+  | "backupTokenId"
+  | "backupTokenSecret"
+  | "lastError"
+> & {
+  caPem?: string;
+  tokenSecret?: string;
+  firewallTokenSecret?: string;
+  backupTokenSecret?: string;
+};
 
 export type ConnectionStep = { name: string; result: string; message: string };
 
@@ -507,6 +532,16 @@ function secretLabel(value: unknown): string {
   return /^[0-9a-f]{8}$/.test(fingerprint) ? `Set · ${fingerprint}` : "Set";
 }
 
+/** A failed push to the region daemon, as console-api stores it on the region; null when the last push succeeded. */
+export function toRegionLastError(value: unknown): AdminRegion["lastError"] {
+  const error = obj(value);
+  const message = str(error.message);
+  return message ? { time: str(error.time), message } : null;
+}
+
+/** The lastError a save answered with (the saved region's body). */
+export const savedRegionLastError = (body: unknown) => toRegionLastError(obj(body).lastError);
+
 export function toAdminRegion(item: Json): AdminRegion {
   const name = str(item.name);
   if (!name) throw new Error("region name");
@@ -517,6 +552,11 @@ export function toAdminRegion(item: Json): AdminRegion {
     caPem: str(item.caPem),
     tokenId: str(item.tokenId),
     tokenSecret: secretLabel(item.tokenSecret),
+    firewallTokenId: str(item.firewallTokenId),
+    firewallTokenSecret: secretLabel(item.firewallTokenSecret),
+    backupTokenId: str(item.backupTokenId),
+    backupTokenSecret: secretLabel(item.backupTokenSecret),
+    lastError: toRegionLastError(item.lastError),
     regionEndpoint: str(item.regionEndpoint),
     zones: objects(item.zones).map((zone) => ({ letter: str(zone.letter), nodes: strings(zone.nodes) })),
   };
@@ -545,17 +585,20 @@ export function unknownHealth(error: ApiError): AdminRegionHealth {
 /** A server action can be called with any JSON, so only the region fields pass, each read as text. */
 export function toAdminRegionInput(form: unknown, secret: unknown): AdminRegionInput {
   const text = (key: string) => str(obj(form)[key]).trim();
+  const typed = (key: string) => str(obj(form)[key]);
   const names = (value: unknown) => str(value).match(/[^\s,]+/g) ?? [];
   const tokenSecret = str(secret);
   return {
     name: text("name"),
     clusterName: text("clusterName"),
     pveApiUrls: strings(obj(form).pveApiUrls).map((url) => url.trim()),
-    caPem: text("caPem"),
+    ...(typeof obj(form).caPem === "string" ? { caPem: typed("caPem") } : {}),
     tokenId: text("tokenId"),
     regionEndpoint: text("regionEndpoint"),
     zones: objects(obj(form).zones).map((zone) => ({ letter: str(zone.letter).trim(), nodes: names(zone.nodes) })),
     ...(tokenSecret ? { tokenSecret } : {}),
+    ...(typed("firewallTokenSecret") ? { firewallTokenSecret: typed("firewallTokenSecret") } : {}),
+    ...(typed("backupTokenSecret") ? { backupTokenSecret: typed("backupTokenSecret") } : {}),
   };
 }
 
