@@ -28,7 +28,7 @@ const TOKEN = "tok/=&?+ en";
 const OP = "op/1 ?";
 const KEY_PAIR = "key-0123456789abcdef0" as KeyPairId;
 const api = (path: string) => `http://api.test/api/v1${path}`;
-const PVE = { name: ID, clusterName: "", pveApiUrl: "", caPem: "", tokenId: "", regionEndpoint: "", zones: [] };
+const PVE = { name: ID, clusterName: "", pveApiUrls: [], caPem: "", tokenId: "", regionEndpoint: "", zones: [] };
 const PVE_URL = api(`/admin/regions/${enc(ID)}`);
 
 function respond(status: number, body: unknown) {

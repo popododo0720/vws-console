@@ -421,17 +421,65 @@ export function firstItem(body: unknown, key: string): string {
 export type AdminRegion = {
   name: string;
   clusterName: string;
-  pveApiUrl: string;
+  pveApiUrls: string[];
   caPem: string;
   tokenId: string;
   tokenSecret: string;
+  /** The optional write tokens. The ID is empty when the region has none; the secret is only ever a label. */
+  firewallTokenId: string;
+  firewallTokenSecret: string;
+  backupTokenId: string;
+  backupTokenSecret: string;
+  /** Why the last push to the region daemon failed, or null. console-api answers 2xx with it set. */
+  lastError: { time: string; message: string } | null;
   regionEndpoint: string;
   zones: { letter: string; nodes: string[] }[];
 };
 
 export type Versioned<T> = T & { etag: string };
 
-export type AdminRegionInput = Omit<AdminRegion, "tokenSecret"> & { tokenSecret?: string };
+/** vws-console-api internal/resource MaxPVEAPIURLs: a region has 1 to 16 PVE node addresses. */
+export const MAX_PVE_API_URLS = 16;
+
+/**
+ * The PVE API URL rules of console-api (resource.CheckPVEAPIURLs): 1 to 16 HTTPS origins without credentials, path,
+ * query or fragment, each at most 255 characters, and no two with the same host. Returns the first problem, or null.
+ */
+export function checkPveApiUrls(urls: readonly string[]): string | null {
+  if (urls.length < 1 || urls.length > MAX_PVE_API_URLS) return `Enter 1 to ${MAX_PVE_API_URLS} Proxmox API URLs.`;
+  const seen = new Set<string>();
+  for (const [index, url] of urls.entries()) {
+    const row = `Proxmox API URL ${index + 1}`;
+    if (!/^https:\/\/[^\s/@?#]+\/?$/i.test(url) || url.length > 255) {
+      return `${row} must be an HTTPS origin without credentials, path, query or fragment, such as https://pve1.example.com:8006.`;
+    }
+    // Go keeps the port as typed (u.Host), so "https://a:443" and "https://a" are two hosts there; do the same.
+    const host = url.slice("https://".length).replace(/\/$/, "").toLowerCase();
+    if (seen.has(host)) return `${row} repeats the host ${host}. Each host can be listed once.`;
+    seen.add(host);
+  }
+  return null;
+}
+
+/**
+ * What a save sends. caPem is left out when the operator did not touch it: the daemon compares it byte for byte, so a
+ * value that was only trimmed would count as a new CA. The write-only secrets are sent only when typed.
+ */
+export type AdminRegionInput = Omit<
+  AdminRegion,
+  | "tokenSecret"
+  | "caPem"
+  | "firewallTokenId"
+  | "firewallTokenSecret"
+  | "backupTokenId"
+  | "backupTokenSecret"
+  | "lastError"
+> & {
+  caPem?: string;
+  tokenSecret?: string;
+  firewallTokenSecret?: string;
+  backupTokenSecret?: string;
+};
 
 export type ConnectionStep = { name: string; result: string; message: string };
 
@@ -439,7 +487,8 @@ export type ConnectionStep = { name: string; result: string; message: string };
 export type AdminRegionHealth = {
   status: "ok" | "unreachable" | "unknown";
   quorate: boolean;
-  leader: string;
+  /** The PVE node the region daemon is connected to; empty when the reading names none. */
+  apiNode: string;
   nodes: { name: string; online: boolean }[];
   lastError: { time: string; message: string } | null;
   checkedAt: string;
@@ -483,16 +532,31 @@ function secretLabel(value: unknown): string {
   return /^[0-9a-f]{8}$/.test(fingerprint) ? `Set · ${fingerprint}` : "Set";
 }
 
+/** A failed push to the region daemon, as console-api stores it on the region; null when the last push succeeded. */
+export function toRegionLastError(value: unknown): AdminRegion["lastError"] {
+  const error = obj(value);
+  const message = str(error.message);
+  return message ? { time: str(error.time), message } : null;
+}
+
+/** The lastError a save answered with (the saved region's body). */
+export const savedRegionLastError = (body: unknown) => toRegionLastError(obj(body).lastError);
+
 export function toAdminRegion(item: Json): AdminRegion {
   const name = str(item.name);
   if (!name) throw new Error("region name");
   return {
     name,
     clusterName: str(item.clusterName),
-    pveApiUrl: str(item.pveApiUrl),
+    pveApiUrls: strings(item.pveApiUrls),
     caPem: str(item.caPem),
     tokenId: str(item.tokenId),
     tokenSecret: secretLabel(item.tokenSecret),
+    firewallTokenId: str(item.firewallTokenId),
+    firewallTokenSecret: secretLabel(item.firewallTokenSecret),
+    backupTokenId: str(item.backupTokenId),
+    backupTokenSecret: secretLabel(item.backupTokenSecret),
+    lastError: toRegionLastError(item.lastError),
     regionEndpoint: str(item.regionEndpoint),
     zones: objects(item.zones).map((zone) => ({ letter: str(zone.letter), nodes: strings(zone.nodes) })),
   };
@@ -505,7 +569,7 @@ export function toAdminRegionHealth(item: Json): AdminRegionHealth {
   return {
     status,
     quorate: item.quorate === true,
-    leader: str(item.leader),
+    apiNode: str(item.apiNode),
     nodes: objects(item.nodes).map((node) => ({ name: str(node.name), online: node.online === true })),
     lastError: lastError ? { time: str(lastError.time), message: str(lastError.message) } : null,
     checkedAt: str(item.checkedAt),
@@ -515,23 +579,26 @@ export function toAdminRegionHealth(item: Json): AdminRegionHealth {
 /** The reading shown when console-api returned none: why, with the code and request ID an operator can quote. */
 export function unknownHealth(error: ApiError): AdminRegionHealth {
   const message = `${error.message} (${error.code} · Request ID ${error.requestId ?? "—"})`;
-  return { status: "unknown", quorate: false, leader: "", nodes: [], lastError: { time: "", message }, checkedAt: "" };
+  return { status: "unknown", quorate: false, apiNode: "", nodes: [], lastError: { time: "", message }, checkedAt: "" };
 }
 
 /** A server action can be called with any JSON, so only the region fields pass, each read as text. */
 export function toAdminRegionInput(form: unknown, secret: unknown): AdminRegionInput {
   const text = (key: string) => str(obj(form)[key]).trim();
+  const typed = (key: string) => str(obj(form)[key]);
   const names = (value: unknown) => str(value).match(/[^\s,]+/g) ?? [];
   const tokenSecret = str(secret);
   return {
     name: text("name"),
     clusterName: text("clusterName"),
-    pveApiUrl: text("pveApiUrl"),
-    caPem: text("caPem"),
+    pveApiUrls: strings(obj(form).pveApiUrls).map((url) => url.trim()),
+    ...(typeof obj(form).caPem === "string" ? { caPem: typed("caPem") } : {}),
     tokenId: text("tokenId"),
     regionEndpoint: text("regionEndpoint"),
     zones: objects(obj(form).zones).map((zone) => ({ letter: str(zone.letter).trim(), nodes: names(zone.nodes) })),
     ...(tokenSecret ? { tokenSecret } : {}),
+    ...(typed("firewallTokenSecret") ? { firewallTokenSecret: typed("firewallTokenSecret") } : {}),
+    ...(typed("backupTokenSecret") ? { backupTokenSecret: typed("backupTokenSecret") } : {}),
   };
 }
 

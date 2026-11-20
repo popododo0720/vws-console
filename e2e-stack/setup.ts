@@ -12,12 +12,18 @@ const regionPort = Number(process.env.E2E_STACK_REGION_PORT ?? 21720);
 const pvePort = Number(process.env.E2E_STACK_PVE_PORT ?? 21730);
 export const apiURL = `http://127.0.0.1:${apiPort}`;
 export const origin = `http://127.0.0.1:${port}`;
+export const regionName = "pve-stack-1";
 export const regionEndpoint = `https://127.0.0.1:${regionPort}`;
 export const regionReadyURL = `http://127.0.0.1:${regionPort + 1}/readyz`;
 export const rootPassword = "stack-root-canary-176";
 export const userPassword = "stack-user-canary-176";
 const consoleToken = "stack-console-canary-176";
 const adminKEK = Buffer.alloc(32, 176).toString("base64");
+/** The optional write tokens the stack's PVE fake knows, with the secrets the browser must never see. */
+export const writeTokens = {
+  firewall: { id: "vws@pve!firewall", secret: "stack-firewall-canary-216" },
+  backup: { id: "vws@pve!backup", secret: "stack-backup-canary-216" },
+};
 export const canaries = [rootPassword, userPassword, consoleToken, adminKEK];
 
 export function assertNoSecrets(text: string, secrets: string[], source: string) {
@@ -52,7 +58,19 @@ export default async function setup() {
   const tokenSecret = token?.[2];
   expect(tokenId, "scenario token ID").toBeTruthy();
   expect(tokenSecret, "scenario token secret").toBeTruthy();
-  const secrets = [...canaries, tokenSecret!];
+  const secrets = [...canaries, tokenSecret!, writeTokens.firewall.secret, writeTokens.backup.secret];
+  // The firewall token holds only Sys.Modify and Sys.Audit; the backup token VM.Backup on the pool and
+  // Datastore.AllocateSpace on a storage (docs/region-daemon.md, console-api main).
+  const pool = "123456789012";
+  const withWriteTokens = scenario
+    .replace(
+      "roles:\n",
+      `roles:\n  - id: VWSFirewall\n    privs: [Sys.Modify, Sys.Audit]\n  - id: BackupVM\n    privs: [VM.Backup]\n  - id: BackupStorage\n    privs: [Datastore.AllocateSpace]\n`,
+    )
+    .replace(
+      "tokens:\n",
+      `tokens:\n  - id: ${writeTokens.firewall.id}\n    secret: ${writeTokens.firewall.secret}\n    acl:\n      - path: /\n        role: VWSFirewall\n  - id: ${writeTokens.backup.id}\n    secret: ${writeTokens.backup.secret}\n    acl:\n      - path: /pool/${pool}\n        role: BackupVM\n      - path: /storage/backups\n        role: BackupStorage\n`,
+    );
   const start = (name: string, command: string, args: string[], cwd = process.cwd()) => {
     const log = file(`${name}.log`);
     writeFileSync(log, "");
@@ -104,24 +122,15 @@ export default async function setup() {
     for (const log of logs) assertNoSecrets(readFileSync(log, "utf8"), secrets, log);
   };
   try {
-    for (const binary of ["pvefake", "vws-region-helper", "vws-region", "vws-console-api"]) {
+    for (const binary of ["pvefake", "vws-region", "vws-console-api"]) {
       await run(`build-${binary}`, "go", ["build", "-o", file(binary), `./cmd/${binary}`], repo);
     }
     await run("console-build", "npm", ["run", "build"]);
-    for (const directory of [
-      "etc/pve/vws",
-      "etc/pve/priv/vws",
-      "etc/pve/priv/lock/vws-region",
-      "etc/vws/credentials",
-      "snippets",
-    ]) {
-      mkdirSync(file(directory), { recursive: true, mode: 0o700 });
-    }
     const save = (name: string, contents: string | Buffer) => writeFileSync(file(name), contents, { mode: 0o600 });
-    save("etc/vws/credentials/region-kek", Buffer.alloc(32, 42));
     save("admin-kek", adminKEK);
     save("root-password", rootPassword);
-    save("region.yaml", "read_only: true\npools:\n  project: '123456789012'\n");
+    save("scenario.yaml", withWriteTokens);
+    save("region.yaml", `read_only: false\npools:\n  project: '${pool}'\n`);
     await run("certificates", "openssl", [
       "req",
       "-x509",
@@ -144,7 +153,7 @@ export default async function setup() {
     chmodSync(file("key.pem"), 0o600);
     const pve = start("pvefake", file("pvefake"), [
       "-scenario",
-      resolve(repo, "cmd/pvefake/testdata/scenario.yaml"),
+      file("scenario.yaml"),
       "-listen",
       `127.0.0.1:${pvePort}`,
       "-ca-file",
@@ -159,20 +168,14 @@ export default async function setup() {
     ]);
     lines.close();
     expect(pveURL).toBe(`https://127.0.0.1:${pvePort}`);
-    writeFileSync(file("registration.json"), JSON.stringify({ pveURL, tokenId, tokenSecret }), { mode: 0o600 });
+    writeFileSync(file("pve-token.json"), JSON.stringify({ pveURL, tokenId, tokenSecret }), { mode: 0o600 });
     start("region", file("vws-region"), [
       "-config",
       file("region.yaml"),
-      "-registration-file",
-      file("etc/pve/vws/registration.json"),
-      "-helper-path",
-      file("vws-region-helper"),
-      "-helper-root",
-      stackRoot,
-      "-pve-endpoint",
-      pveURL as string,
-      "-pve-ca-file",
-      file("pve-ca.pem"),
+      "-region",
+      regionName,
+      "-state-dir",
+      file("state"),
       "-tls-cert-file",
       file("cert.pem"),
       "-tls-key-file",

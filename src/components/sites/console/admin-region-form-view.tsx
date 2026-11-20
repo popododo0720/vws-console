@@ -5,7 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { saveRegionAction, testRegionAction } from "@/app/actions/admin";
 import { adminNav } from "@/lib/console-data";
-import type { AdminRegion, ApiError, ApiResult, ConnectionStep, Versioned } from "@/lib/vws-api/adapter";
+import {
+  MAX_PVE_API_URLS,
+  checkPveApiUrls,
+  type AdminRegion,
+  type ApiError,
+  type ApiResult,
+  type ConnectionStep,
+  type Versioned,
+} from "@/lib/vws-api/adapter";
 import { StatusText, adminCrumb, regionHref } from "@/components/sites/console/admin-regions-view";
 import { ApiErrorAlert, UNREACHABLE, useApiAction } from "@/components/sites/console/api-action";
 import {
@@ -19,12 +27,19 @@ import {
 import { Shell } from "@/components/sites/console/shell";
 import { OrangeButton, OutlineButton } from "@/components/sites/console/ui";
 
-const TEXT_KEYS = ["name", "clusterName", "pveApiUrl", "regionEndpoint", "caPem", "tokenId"] as const;
+const TEXT_KEYS = ["name", "clusterName", "regionEndpoint", "caPem", "tokenId"] as const;
 type Props = { name?: string; region: Versioned<AdminRegion> | null; loadError: ApiError | null };
 const STEP_OK: Record<string, boolean> = { PASS: true, FAIL: false };
 const inputClass = "field max-w-[783px]";
 const nameHint = "Lowercase: pve, a location and a number, joined by hyphens. It cannot be changed later.";
 const pemClass = "w-full max-w-[783px] rounded-lg border border-[#aab7b8] px-2.5 py-2 font-mono text-[13px]";
+
+/** console-api reuses a stored secret only when every URL sent is already stored (a subset), with the same CA. */
+const withinStored = (sent: readonly string[], stored: readonly string[]) =>
+  sent.every((url) => stored.includes(url.trim()));
+
+/** The failure code of a save that console-api stored but could not apply to the region daemon. */
+const APPLY_FAILED = "ApplyFailed";
 
 /** The save state lives here, outside the keyed form, so the conflict alert survives the reload that remounts it. */
 export function AdminRegionFormView({ name, region, loadError }: Props) {
@@ -52,7 +67,11 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
   const router = useRouter();
   /** Uncontrolled, so the typed secret is never in React state or in an attribute of the page. */
   const secret = useRef<HTMLInputElement>(null);
+  const firewallSecret = useRef<HTMLInputElement>(null);
+  const backupSecret = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState(() => Object.fromEntries(TEXT_KEYS.map((key) => [key, region?.[key] ?? ""])));
+  const [urls, setUrls] = useState(() => (region?.pveApiUrls.length ? region.pveApiUrls : [""]));
+  const [localError, setLocalError] = useState<ApiError | null>(null);
   const [zones, setZones] = useState(() => (region?.zones ?? []).map((z) => ({ ...z, nodes: z.nodes.join(", ") })));
   const [probe, setProbe] = useState<ApiResult<ConnectionStep[]> | null>(null);
   const [testing, startTest] = useTransition();
@@ -60,25 +79,87 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
   const changed = `${region?.name} was changed since you opened it. The form now shows the latest saved values. Review them and save again.`;
   const saveError = region && save.error?.code === "Conflict" ? { ...save.error, message: changed } : save.error;
   const fieldError = (key: string) =>
-    [save.error, probe?.ok === false ? probe.error : null].find((error) => error?.field === key)?.message ?? null;
+    [localError, save.error, probe?.ok === false ? probe.error : null].find((error) => error?.field === key)?.message ??
+    null;
   const typedSecret = () => secret.current?.value ?? "";
+  /** The daemon compares the CA byte for byte, so it is sent, as typed, only when the operator changed it. */
+  const caChanged = !region || draft.caPem !== region.caPem;
+  const trustMoved = Boolean(region) && (caChanged || !withinStored(urls, region?.pveApiUrls ?? []));
+  /** The firewall and backup tokens only ever went to the first address, so moving that one asks for them too. */
+  const firstMoved = Boolean(region) && urls[0]?.trim() !== region?.pveApiUrls[0];
+  const secretInput = (id: string) => (id === "firewall" ? firewallSecret : backupSecret);
+  const writeTokens = [
+    {
+      id: "firewall",
+      label: "Firewall",
+      tokenId: region?.firewallTokenId,
+      stored: region?.firewallTokenSecret,
+    },
+    {
+      id: "backup",
+      label: "Backup",
+      tokenId: region?.backupTokenId,
+      stored: region?.backupTokenSecret,
+    },
+  ].filter((token) => token.tokenId);
+  const form = () => ({
+    ...draft,
+    caPem: caChanged ? draft.caPem : undefined,
+    pveApiUrls: urls,
+    zones,
+    firewallTokenSecret: firewallSecret.current?.value ?? "",
+    backupTokenSecret: backupSecret.current?.value ?? "",
+  });
+  /** console-api's rules, checked first so a mistake shows at its field without a round trip. */
+  const refuse = (): ApiError | null => {
+    const invalid = (field: string, message: string): ApiError => ({
+      code: "InvalidArgument",
+      message,
+      requestId: null,
+      field,
+    });
+    const urlProblem = checkPveApiUrls(urls.map((url) => url.trim()));
+    if (urlProblem) return invalid("pveApiUrls", urlProblem);
+    if (!draft.caPem.trim()) return invalid("caPem", "Enter the PEM certificates that sign the Proxmox nodes.");
+    if (trustMoved && !typedSecret()) {
+      return invalid(
+        "tokenSecret",
+        "Enter the API token secret again when the CA certificate changes or a URL is added or replaced.",
+      );
+    }
+    for (const token of writeTokens) {
+      if ((trustMoved || firstMoved) && !secretInput(token.id).current?.value) {
+        return invalid(
+          `${token.id}TokenSecret`,
+          `Enter the ${token.label.toLowerCase()} token secret again when the CA certificate or the first URL changes, or a URL is added or replaced.`,
+        );
+      }
+    }
+    return null;
+  };
 
-  const submit = () =>
+  const submit = () => {
+    const refused = refuse();
+    setLocalError(refused);
+    if (refused) return;
     save.run(
       async () => {
-        const failure = await saveRegionAction({ ...draft, zones }, typedSecret(), region?.etag ?? null);
-        if (failure?.code === "Conflict" && region) save.refresh();
-        return failure;
+        const failure = await saveRegionAction(form(), typedSecret(), region?.etag ?? null);
+        // A saved region has a new version: reload it, so the retry carries the latest ETag and the stored values.
+        if ((failure?.code === "Conflict" || failure?.code === APPLY_FAILED) && region) save.refresh();
+        // A region that was just created and not applied is shown with its stored error on its page.
+        return failure?.code === APPLY_FAILED && !region ? null : failure;
       },
       () => {
-        if (secret.current) secret.current.value = "";
+        for (const input of [secret, firewallSecret, backupSecret]) if (input.current) input.current.value = "";
         router.push(regionHref(draft.name.trim()));
       },
     );
+  };
   const test = () =>
     startTest(async () => {
       const unreachable = { ok: false as const, error: UNREACHABLE };
-      setProbe(await testRegionAction({ ...draft, zones }, typedSecret(), Boolean(region)).catch(() => unreachable));
+      setProbe(await testRegionAction(form(), typedSecret(), Boolean(region)).catch(() => unreachable));
     });
 
   const text = (key: (typeof TEXT_KEYS)[number], label: ReactNode, hint: string) => {
@@ -111,9 +192,51 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
       <FormCard title="Region settings">
         {region ? null : text("name", "Region name", nameHint)}
         {text("clusterName", "Cluster name", "The name of the Proxmox cluster, as pvecm status reports it.")}
-        {text("pveApiUrl", "Proxmox API URL", "An HTTPS origin, such as https://pve1.example.com:8006.")}
         {text("regionEndpoint", "Region endpoint", "The region daemon's HTTPS origin, such as https://10.0.0.10:8443.")}
-        {text("caPem", optional("CA certificate"), "The PEM certificates that sign the Proxmox API certificate.")}
+        {text("caPem", "CA certificate", "The PEM certificates that sign the Proxmox API certificates of every node.")}
+      </FormCard>
+      <FormCard title="Proxmox API URLs">
+        <p>
+          The HTTPS address of each cluster node the region can connect to, 1 to {MAX_PVE_API_URLS}. Each host can be
+          listed once.
+        </p>
+        {fieldError("pveApiUrls") ? (
+          <p id="region-urls-error" role="alert" className="text-[12px] text-[#d91515]">
+            {fieldError("pveApiUrls")}
+          </p>
+        ) : null}
+        {urls.map((url, index) => (
+          <div key={index} className="flex max-w-[783px] flex-wrap items-end gap-3">
+            <div className="min-w-48 flex-1">
+              <Field label={`Proxmox API URL ${index + 1}`} htmlFor={`region-url-${index}`}>
+                <input
+                  id={`region-url-${index}`}
+                  className="field"
+                  aria-invalid={fieldError("pveApiUrls") ? true : undefined}
+                  aria-describedby={fieldError("pveApiUrls") ? "region-urls-error" : undefined}
+                  value={url}
+                  placeholder="https://pve1.example.com:8006"
+                  onChange={(event) => setUrls(urls.map((u, at) => (at === index ? event.target.value : u)))}
+                />
+              </Field>
+            </div>
+            <OutlineButton
+              className={secondaryPill}
+              aria-label={`Remove Proxmox API URL ${index + 1}`}
+              disabled={urls.length === 1}
+              onClick={() => setUrls(urls.filter((_, at) => at !== index))}
+            >
+              Remove
+            </OutlineButton>
+          </div>
+        ))}
+        <OutlineButton
+          className={secondaryPill}
+          disabled={urls.length >= MAX_PVE_API_URLS}
+          onClick={() => setUrls([...urls, ""])}
+        >
+          Add Proxmox API URL
+        </OutlineButton>
       </FormCard>
       <FormCard title="API token">
         {text("tokenId", "API token ID", "user@realm!token, such as vws@pve!console.")}
@@ -126,6 +249,24 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
         >
           <input id="region-secret" ref={secret} type="password" autoComplete="new-password" className={inputClass} />
         </Field>
+        {writeTokens.map((token) => (
+          <Field
+            key={token.id}
+            label={`${token.label} token secret`}
+            htmlFor={`region-${token.id}-secret`}
+            description={`${token.label} token ${token.tokenId} · Stored secret: ${token.stored}`}
+            hint="Leave blank to keep the stored one. Enter it again when the CA certificate, the first URL or the URL set changes. It cannot be shown again after you save."
+            error={fieldError(`${token.id}TokenSecret`)}
+          >
+            <input
+              id={`region-${token.id}-secret`}
+              ref={secretInput(token.id)}
+              type="password"
+              autoComplete="new-password"
+              className={inputClass}
+            />
+          </Field>
+        ))}
       </FormCard>
       <FormCard title={optional("Availability Zones")}>
         <p>An Availability Zone is a group of cluster nodes. Its name is the region name followed by its letter.</p>

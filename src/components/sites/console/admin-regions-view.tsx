@@ -42,7 +42,7 @@ const statusLabels = { ok: "Available", unreachable: "Unreachable", unknown: "Un
 
 /**
  * The health fields as [label, text, cell], shared by the list columns and the detail page so both use one wording.
- * Quorum, leader and the node count are shown only from a reading console-api got from the region itself.
+ * Quorum, API node and the node count are shown only from a reading console-api got from the region itself.
  */
 export function healthFields(health: AdminRegionHealth | null): [string, string, ReactNode][] {
   const read = health?.status === "ok" ? health : null;
@@ -54,7 +54,7 @@ export function healthFields(health: AdminRegionHealth | null): [string, string,
   return [
     ["Status", status, <StatusText key="status" ok={reached} text={status} />],
     ["Quorum", quorum, <StatusText key="quorum" ok={read ? read.quorate : null} text={quorum} />],
-    ["Leader", read?.leader ?? "", dash(read?.leader ?? "")],
+    ["API node", read?.apiNode ?? "", dash(read?.apiNode ?? "")],
     ["Online nodes", online, dash(online)],
     ["Last error", lastError, dash(lastError)],
   ];

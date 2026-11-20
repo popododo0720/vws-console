@@ -59,7 +59,7 @@ const medium = { instanceType: "vws.medium", vcpus: 2, memoryMiB: 4096 };
 export const pveLiveBox = {
   region: "pve-lab-1",
   kind: "proxmox",
-  cluster: { name: "lab", pveRelease: "", quorate: false, leader: "" },
+  cluster: { name: "lab", pveRelease: "", quorate: false, apiNode: "" },
   zones: [{ zoneName: "pve-lab-1a", zoneId: "pve-lab-1a", state: "available", nodes: ["pve"] }],
   actions: {
     "vws:OpenConsole": readOnly,

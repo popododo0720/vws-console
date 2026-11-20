@@ -8,15 +8,17 @@ import {
   canaries,
   origin,
   regionEndpoint,
+  regionName,
   regionReadyURL,
   rootPassword,
   stackRoot,
   userPassword,
+  writeTokens,
 } from "./setup";
 
-const name = "pve-stack-1";
+const name = regionName;
 type Registration = { pveURL: string; tokenId: string; tokenSecret: string };
-const registration = () => JSON.parse(readFileSync(resolve(stackRoot, "registration.json"), "utf8")) as Registration;
+const registration = () => JSON.parse(readFileSync(resolve(stackRoot, "pve-token.json"), "utf8")) as Registration;
 
 async function signIn(page: Page, user: string, password: string) {
   await page.goto("/login");
@@ -57,7 +59,7 @@ test("root registers, tests, discovers, edits and removes a real region", async 
   for (const [label, value] of Object.entries({
     "Region name": name,
     "Cluster name": "test",
-    "Proxmox API URL": pveURL,
+    "Proxmox API URL 1": pveURL,
     "Region endpoint": regionEndpoint,
     "API token ID": tokenId,
     "API token secret": tokenSecret,
@@ -73,6 +75,8 @@ test("root registers, tests, discovers, edits and removes a real region", async 
   await page.getByRole("button", { name: "Refresh status", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Nodes (1)", exact: true })).toBeVisible();
   await expect(page.getByText("Online", { exact: true })).toBeVisible();
+  await expect(page.getByText("API node", { exact: true })).toBeVisible();
+  await expect(page.getByText("Leader", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("term").filter({ hasText: /^pve1$/ })).toBeVisible();
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   const fingerprint = createHash("sha256").update(tokenSecret).digest("hex").slice(0, 8);
@@ -88,8 +92,61 @@ test("root registers, tests, discovers, edits and removes a real region", async 
   await expect(page.getByRole("heading", { name, exact: true, level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "Availability Zones", exact: true }).click();
   await expect(page.getByText(`${name}b`, { exact: true })).toBeVisible();
-  const identity = readFileSync(resolve(stackRoot, "etc/pve/vws/registration.json"), "utf8");
+  const identity = readFileSync(resolve(stackRoot, "state/registration.json"), "utf8");
   expect(JSON.parse(identity) as { zones: { letter: string }[] }).toMatchObject({ zones: [{ letter: "b" }] });
+  // Register the optional write tokens through the admin API (the form edits only the stored ones), then change the
+  // CA: the daemon compares it byte for byte, so every secret has to be entered again.
+  const cookies = await page.context().cookies();
+  const session = cookies.find((cookie) => cookie.name === "vws_session")!.value;
+  const csrf = cookies.find((cookie) => cookie.name === "vws_csrf")!.value;
+  const admin = { cookie: `__Host-vws_session=${session}; vws_csrf=${csrf}`, "x-csrf-token": csrf, origin };
+  const current = await request.get(`${apiURL}/api/v1/admin/regions/${name}`, { headers: admin });
+  const attached = await request.patch(`${apiURL}/api/v1/admin/regions/${name}`, {
+    headers: { ...admin, "if-match": current.headers().etag },
+    data: {
+      firewallTokenId: writeTokens.firewall.id,
+      firewallTokenSecret: writeTokens.firewall.secret,
+      backupTokenId: writeTokens.backup.id,
+      backupTokenSecret: writeTokens.backup.secret,
+    },
+  });
+  expect(attached.status(), await attached.text()).toBe(200);
+  expect(((await attached.json()) as { lastError?: unknown }).lastError ?? null).toBeNull();
+  await page.goto(`/admin/regions/${name}/edit`);
+  await expect(page.getByLabel("Firewall token secret", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Backup token secret", { exact: true })).toHaveValue("");
+  const pem = readFileSync(resolve(stackRoot, "pve-ca.pem"), "utf8");
+  await page.getByLabel("CA certificate").fill(`${pem}\n`);
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Enter the API token secret again" })).toBeVisible();
+  await page.getByLabel("API token secret", { exact: true }).fill(tokenSecret);
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Enter the firewall token secret again" })).toBeVisible();
+  await page.getByLabel("Firewall token secret", { exact: true }).fill(writeTokens.firewall.secret);
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Enter the backup token secret again" })).toBeVisible();
+  await page.getByLabel("Backup token secret", { exact: true }).fill(writeTokens.backup.secret);
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/regions/${name}$`));
+  const state = () =>
+    JSON.parse(readFileSync(resolve(stackRoot, "state/registration.json"), "utf8")) as {
+      caPem: string;
+      firewallTokenId: string;
+      backupTokenId: string;
+    };
+  expect(state()).toMatchObject({
+    caPem: `${pem}\n`,
+    firewallTokenId: writeTokens.firewall.id,
+    backupTokenId: writeTokens.backup.id,
+  });
+  // The stored CA now ends in a newline. A zones-only edit must not send it trimmed, or the daemon would see a new
+  // CA and ask for every secret again.
+  await page.goto(`/admin/regions/${name}/edit`);
+  await page.getByLabel("Zone letter", { exact: true }).fill("c");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/regions/${name}$`));
+  expect(state().caPem).toBe(`${pem}\n`);
+  await expect.poll(async () => (await request.get(regionReadyURL)).status(), { timeout: 15_000 }).toBe(200);
   await page.reload();
   await page.getByRole("banner").getByRole("button", { name, exact: true }).click();
   await expect(page.getByRole("menuitem", { name: new RegExp(name) })).toBeVisible();

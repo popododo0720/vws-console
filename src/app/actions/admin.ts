@@ -1,7 +1,7 @@
 "use server";
 
 import { withActionSpan } from "@/lib/ops/span";
-import { ACCOUNT_ID, ETAG, toAdminProjectInput, toAdminRegionInput } from "@/lib/vws-api/adapter";
+import { ACCOUNT_ID, ETAG, checkPveApiUrls, toAdminProjectInput, toAdminRegionInput } from "@/lib/vws-api/adapter";
 import type { ApiError, ApiResult, ConnectionStep } from "@/lib/vws-api/adapter";
 import { deleteAdminRegion, saveAdminProject, saveAdminRegion, testAdminRegion } from "@/lib/vws-api/client";
 
@@ -15,8 +15,20 @@ export async function saveRegionAction(form: unknown, secret: unknown, etag: unk
     if (etag !== null && !isEtag(etag)) {
       return invalid("The region version is not valid. Reload the page and try again.");
     }
-    const result = await saveAdminRegion(toAdminRegionInput(form, secret), etag);
-    return result.ok ? null : result.error;
+    const input = toAdminRegionInput(form, secret);
+    const urls = checkPveApiUrls(input.pveApiUrls);
+    if (urls) return { ...invalid(urls), field: "pveApiUrls" };
+    const result = await saveAdminRegion(input, etag);
+    if (!result.ok) return result.error;
+    // console-api answers 2xx when it saved the region but could not apply it to the region daemon.
+    const failed = result.value.lastError;
+    return failed
+      ? {
+          code: "ApplyFailed",
+          message: `The region was saved, but applying it to the region daemon failed: ${failed.message}`,
+          requestId: null,
+        }
+      : null;
   });
 }
 
@@ -45,6 +57,9 @@ export async function testRegionAction(
   saved: unknown,
 ): Promise<ApiResult<ConnectionStep[]>> {
   return withActionSpan("testRegionAction", async () => {
-    return testAdminRegion(toAdminRegionInput(form, secret), saved === true);
+    const input = toAdminRegionInput(form, secret);
+    const urls = saved === true ? null : checkPveApiUrls(input.pveApiUrls);
+    if (urls) return { ok: false, error: { ...invalid(urls), field: "pveApiUrls" } };
+    return testAdminRegion(input, saved === true);
   });
 }

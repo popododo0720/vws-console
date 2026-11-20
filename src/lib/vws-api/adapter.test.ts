@@ -17,6 +17,9 @@ import {
   parseInstanceTypes,
   parseSecurityGroups,
   parseSnapshots,
+  checkPveApiUrls,
+  toAdminRegion,
+  toAdminRegionHealth,
   toAdminRegionInput,
   toIngressPermission,
   toInstance,
@@ -500,11 +503,76 @@ describe("parseVolumes", () => {
 
 describe("toAdminRegionInput", () => {
   it("lets only the region fields through, each as text, and takes the secret only from its own argument", () => {
-    const empty = { name: "", clusterName: "", pveApiUrl: "", caPem: "", tokenId: "", regionEndpoint: "", zones: [] };
+    const empty = { name: "", clusterName: "", pveApiUrls: [], tokenId: "", regionEndpoint: "", zones: [] };
     const zones = [{ letter: "a ", nodes: "pve1, pve2 ,,", extra: 1 }];
-    const forged = { name: " pve-lab-1 ", clusterName: 7, pveApiUrl: ["x"], zones, admin: true, tokenSecret: "form" };
-    const expected = { ...empty, name: "pve-lab-1", zones: [{ letter: "a", nodes: ["pve1", "pve2"] }] };
+    const forged = {
+      name: " pve-lab-1 ",
+      clusterName: 7,
+      pveApiUrl: "https://old.example:8006",
+      pveApiUrls: [" https://pve1:8006 ", 3],
+      zones,
+      admin: true,
+      tokenSecret: "form",
+    };
+    const expected = {
+      ...empty,
+      name: "pve-lab-1",
+      pveApiUrls: ["https://pve1:8006"],
+      zones: [{ letter: "a", nodes: ["pve1", "pve2"] }],
+    };
     expect(toAdminRegionInput(forged, { not: "text" })).toEqual(expected);
     expect(toAdminRegionInput({ zones: "junk" }, " typed ")).toEqual({ ...empty, tokenSecret: " typed " });
+  });
+
+  it("keeps the CA bytes as sent, leaves it out when absent, and passes the write secrets as typed", () => {
+    const pem = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+    expect(toAdminRegionInput({ caPem: pem }, "").caPem).toBe(pem);
+    expect(toAdminRegionInput({ caPem: undefined }, "")).not.toHaveProperty("caPem");
+    const input = toAdminRegionInput({ firewallTokenSecret: " fw ", backupTokenSecret: "" }, "");
+    expect(input.firewallTokenSecret).toBe(" fw ");
+    expect(input).not.toHaveProperty("backupTokenSecret");
+  });
+});
+
+describe("checkPveApiUrls", () => {
+  const long = `https://${"a".repeat(250)}.example`;
+  it.each([
+    [["https://pve1.example:8006"], null],
+    [["https://pve1.example:8006/", "https://PVE2.example", "https://pve1.example:8007"], null],
+    [["https://pve1.example:443", "https://pve1.example"], null],
+    [Array.from({ length: 16 }, (_, i) => `https://pve${i}.example`), null],
+    [[], "Enter 1 to 16"],
+    [Array.from({ length: 17 }, (_, i) => `https://pve${i}.example`), "Enter 1 to 16"],
+    [["http://pve1.example"], "must be an HTTPS origin"],
+    [["pve1.example:8006"], "must be an HTTPS origin"],
+    [[""], "must be an HTTPS origin"],
+    [["https://root:pw@pve1.example"], "must be an HTTPS origin"],
+    [["https://@pve1.example"], "must be an HTTPS origin"],
+    [["https://pve1.example/api2"], "must be an HTTPS origin"],
+    [["https://pve1.example?x=1"], "must be an HTTPS origin"],
+    [["https://pve1.example#top"], "must be an HTTPS origin"],
+    [["https://pve1.example:8006 "], "must be an HTTPS origin"],
+    [[long], "must be an HTTPS origin"],
+    [["https://pve1.example", "https://PVE1.example/"], "Proxmox API URL 2 repeats the host pve1.example"],
+  ])("checks %j", (urls, problem) => {
+    const result = checkPveApiUrls(urls);
+    if (problem === null) expect(result).toBeNull();
+    else expect(result).toContain(problem);
+  });
+});
+
+describe("toAdminRegion and toAdminRegionHealth", () => {
+  it("reads pveApiUrls as a list, drops a pveApiUrl the API no longer sends, and reads apiNode", () => {
+    const region = toAdminRegion({
+      name: "pve-lab-1",
+      pveApiUrl: "https://old:8006",
+      pveApiUrls: ["https://a:8006", 4],
+    });
+    expect(region.pveApiUrls).toEqual(["https://a:8006"]);
+    expect(region).not.toHaveProperty("pveApiUrl");
+    expect(toAdminRegion({ name: "pve-lab-1" }).pveApiUrls).toEqual([]);
+    const health = toAdminRegionHealth({ status: "ok", quorate: true, apiNode: "pve2", leader: "pve1", nodes: [] });
+    expect(health.apiNode).toBe("pve2");
+    expect(health).not.toHaveProperty("leader");
   });
 });
