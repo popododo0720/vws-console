@@ -34,8 +34,9 @@ const inputClass = "field max-w-[783px]";
 const nameHint = "Lowercase: pve, a location and a number, joined by hyphens. It cannot be changed later.";
 const pemClass = "w-full max-w-[783px] rounded-lg border border-[#aab7b8] px-2.5 py-2 font-mono text-[13px]";
 
-const sameUrls = (a: readonly string[], b: readonly string[]) =>
-  a.length === b.length && a.every((url) => b.includes(url.trim()));
+/** console-api reuses a stored secret only when every URL sent is already stored (a subset), with the same CA. */
+const withinStored = (sent: readonly string[], stored: readonly string[]) =>
+  sent.every((url) => stored.includes(url.trim()));
 
 /** The save state lives here, outside the keyed form, so the conflict alert survives the reload that remounts it. */
 export function AdminRegionFormView({ name, region, loadError }: Props) {
@@ -88,9 +89,12 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
     const urlProblem = checkPveApiUrls(urls.map((url) => url.trim()));
     if (urlProblem) return invalid("pveApiUrls", urlProblem);
     if (!draft.caPem.trim()) return invalid("caPem", "Enter the PEM certificates that sign the Proxmox nodes.");
-    const moved = region && (draft.caPem.trim() !== region.caPem.trim() || !sameUrls(urls, region.pveApiUrls));
+    const moved = region && (draft.caPem.trim() !== region.caPem.trim() || !withinStored(urls, region.pveApiUrls));
     if (moved && !typedSecret()) {
-      return invalid("tokenSecret", "Enter the API token secret again when the CA certificate or the URLs change.");
+      return invalid(
+        "tokenSecret",
+        "Enter the API token secret again when the CA certificate changes or a URL is added or replaced.",
+      );
     }
     return null;
   };
@@ -156,7 +160,7 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
           listed once.
         </p>
         {fieldError("pveApiUrls") ? (
-          <p role="alert" className="text-[12px] text-[#d91515]">
+          <p id="region-urls-error" role="alert" className="text-[12px] text-[#d91515]">
             {fieldError("pveApiUrls")}
           </p>
         ) : null}
@@ -167,6 +171,8 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
                 <input
                   id={`region-url-${index}`}
                   className="field"
+                  aria-invalid={fieldError("pveApiUrls") ? true : undefined}
+                  aria-describedby={fieldError("pveApiUrls") ? "region-urls-error" : undefined}
                   value={url}
                   placeholder="https://pve1.example.com:8006"
                   onChange={(event) => setUrls(urls.map((u, at) => (at === index ? event.target.value : u)))}

@@ -12,6 +12,7 @@ const regionPort = Number(process.env.E2E_STACK_REGION_PORT ?? 21720);
 const pvePort = Number(process.env.E2E_STACK_PVE_PORT ?? 21730);
 export const apiURL = `http://127.0.0.1:${apiPort}`;
 export const origin = `http://127.0.0.1:${port}`;
+export const regionName = "pve-stack-1";
 export const regionEndpoint = `https://127.0.0.1:${regionPort}`;
 export const regionReadyURL = `http://127.0.0.1:${regionPort + 1}/readyz`;
 export const rootPassword = "stack-root-canary-176";
@@ -104,21 +105,11 @@ export default async function setup() {
     for (const log of logs) assertNoSecrets(readFileSync(log, "utf8"), secrets, log);
   };
   try {
-    for (const binary of ["pvefake", "vws-region-helper", "vws-region", "vws-console-api"]) {
+    for (const binary of ["pvefake", "vws-region", "vws-console-api"]) {
       await run(`build-${binary}`, "go", ["build", "-o", file(binary), `./cmd/${binary}`], repo);
     }
     await run("console-build", "npm", ["run", "build"]);
-    for (const directory of [
-      "etc/pve/vws",
-      "etc/pve/priv/vws",
-      "etc/pve/priv/lock/vws-region",
-      "etc/vws/credentials",
-      "snippets",
-    ]) {
-      mkdirSync(file(directory), { recursive: true, mode: 0o700 });
-    }
     const save = (name: string, contents: string | Buffer) => writeFileSync(file(name), contents, { mode: 0o600 });
-    save("etc/vws/credentials/region-kek", Buffer.alloc(32, 42));
     save("admin-kek", adminKEK);
     save("root-password", rootPassword);
     save("region.yaml", "read_only: true\npools:\n  project: '123456789012'\n");
@@ -159,20 +150,14 @@ export default async function setup() {
     ]);
     lines.close();
     expect(pveURL).toBe(`https://127.0.0.1:${pvePort}`);
-    writeFileSync(file("registration.json"), JSON.stringify({ pveURL, tokenId, tokenSecret }), { mode: 0o600 });
+    writeFileSync(file("pve-token.json"), JSON.stringify({ pveURL, tokenId, tokenSecret }), { mode: 0o600 });
     start("region", file("vws-region"), [
       "-config",
       file("region.yaml"),
-      "-registration-file",
-      file("etc/pve/vws/registration.json"),
-      "-helper-path",
-      file("vws-region-helper"),
-      "-helper-root",
-      stackRoot,
-      "-pve-endpoint",
-      pveURL as string,
-      "-pve-ca-file",
-      file("pve-ca.pem"),
+      "-region",
+      regionName,
+      "-state-dir",
+      file("state"),
       "-tls-cert-file",
       file("cert.pem"),
       "-tls-key-file",

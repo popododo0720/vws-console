@@ -530,6 +530,7 @@ describe("checkPveApiUrls", () => {
   it.each([
     [["https://pve1.example:8006"], null],
     [["https://pve1.example:8006/", "https://PVE2.example", "https://pve1.example:8007"], null],
+    [["https://pve1.example:443", "https://pve1.example"], null],
     [Array.from({ length: 16 }, (_, i) => `https://pve${i}.example`), null],
     [[], "Enter 1 to 16"],
     [Array.from({ length: 17 }, (_, i) => `https://pve${i}.example`), "Enter 1 to 16"],

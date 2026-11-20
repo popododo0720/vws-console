@@ -446,12 +446,8 @@ export function checkPveApiUrls(urls: readonly string[]): string | null {
     if (!/^https:\/\/[^\s/@?#]+\/?$/i.test(url) || url.length > 255) {
       return `${row} must be an HTTPS origin without credentials, path, query or fragment, such as https://pve1.example.com:8006.`;
     }
-    let host: string;
-    try {
-      host = new URL(url).host.toLowerCase();
-    } catch {
-      return `${row} is not a valid URL.`;
-    }
+    // Go keeps the port as typed (u.Host), so "https://a:443" and "https://a" are two hosts there; do the same.
+    const host = url.slice("https://".length).replace(/\/$/, "").toLowerCase();
     if (seen.has(host)) return `${row} repeats the host ${host}. Each host can be listed once.`;
     seen.add(host);
   }

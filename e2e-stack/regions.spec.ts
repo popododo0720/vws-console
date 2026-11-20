@@ -8,15 +8,16 @@ import {
   canaries,
   origin,
   regionEndpoint,
+  regionName,
   regionReadyURL,
   rootPassword,
   stackRoot,
   userPassword,
 } from "./setup";
 
-const name = "pve-stack-1";
+const name = regionName;
 type Registration = { pveURL: string; tokenId: string; tokenSecret: string };
-const registration = () => JSON.parse(readFileSync(resolve(stackRoot, "registration.json"), "utf8")) as Registration;
+const registration = () => JSON.parse(readFileSync(resolve(stackRoot, "pve-token.json"), "utf8")) as Registration;
 
 async function signIn(page: Page, user: string, password: string) {
   await page.goto("/login");
@@ -73,6 +74,8 @@ test("root registers, tests, discovers, edits and removes a real region", async 
   await page.getByRole("button", { name: "Refresh status", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Nodes (1)", exact: true })).toBeVisible();
   await expect(page.getByText("Online", { exact: true })).toBeVisible();
+  await expect(page.getByText("API node", { exact: true })).toBeVisible();
+  await expect(page.getByText("Leader", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("term").filter({ hasText: /^pve1$/ })).toBeVisible();
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   const fingerprint = createHash("sha256").update(tokenSecret).digest("hex").slice(0, 8);
@@ -88,7 +91,7 @@ test("root registers, tests, discovers, edits and removes a real region", async 
   await expect(page.getByRole("heading", { name, exact: true, level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "Availability Zones", exact: true }).click();
   await expect(page.getByText(`${name}b`, { exact: true })).toBeVisible();
-  const identity = readFileSync(resolve(stackRoot, "etc/pve/vws/registration.json"), "utf8");
+  const identity = readFileSync(resolve(stackRoot, "state/registration.json"), "utf8");
   expect(JSON.parse(identity) as { zones: { letter: string }[] }).toMatchObject({ zones: [{ letter: "b" }] });
   await page.reload();
   await page.getByRole("banner").getByRole("button", { name, exact: true }).click();

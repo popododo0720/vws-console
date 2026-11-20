@@ -305,11 +305,11 @@ createServer(async (request, response) => {
   }
   if ("pveApiUrl" in input) return send(400, invalid("pveApiUrl", "unknown field pveApiUrl"));
   const body: Json = { zones: [], ...saved?.body, ...input };
-  const urlSet = (value: unknown) => (Array.isArray(value) ? [...value].sort().join(",") : "");
   const moved =
     saved !== undefined &&
     ((input.caPem !== undefined && input.caPem !== saved.body.caPem) ||
-      (input.pveApiUrls !== undefined && urlSet(input.pveApiUrls) !== urlSet(saved.body.pveApiUrls)));
+      (Array.isArray(input.pveApiUrls) &&
+        input.pveApiUrls.some((url) => !(saved.body.pveApiUrls as unknown[]).includes(url))));
   if (moved && tokenSecret === undefined && tail !== "test") {
     return send(400, invalid("tokenSecret", "the token secret is needed when the CA or the URLs change"));
   }

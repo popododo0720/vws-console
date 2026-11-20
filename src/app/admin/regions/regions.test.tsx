@@ -260,6 +260,16 @@ describe("admin Regions pages on a mocked admin API", () => {
     await waitFor(() => expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1));
   });
 
+  it("keeps the stored token when URLs are only removed and the CA is unchanged", async () => {
+    adminApi({ "/regions/pve-lab-1": saved, "PATCH /regions/pve-lab-1": [200, region] });
+    await show(edit());
+    click("Remove Proxmox API URL 2");
+    click("Save changes");
+    await waitFor(() => expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1));
+    expect(calls.at(-1)?.body).toMatchObject({ pveApiUrls: ["https://pve1.lab.example:8006"] });
+    expect(calls.at(-1)?.body).not.toHaveProperty("tokenSecret");
+  });
+
   it("shows the conflict alert for a 409 and reloads the region with its new ETag", async () => {
     const conflict: Reply = [409, failure("Conflict", "registration already exists or changed")];
     const api: Record<string, Reply> = { "/regions/pve-lab-1": saved, "PATCH /regions/pve-lab-1": conflict };
