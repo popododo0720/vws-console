@@ -4,6 +4,7 @@ import { ConsoleProvider } from "@/components/sites/console/console-provider";
 import { supported } from "@/lib/vws-api/testdata/capabilities";
 import { LaunchView } from "@/components/sites/console/launch-view";
 import type { KeyPairId, KeyPairName, StoredKeyPair } from "@/lib/key-pair";
+import type { Image } from "@/lib/vws-api/adapter";
 import type { Subnet, Vpc } from "@/types/console";
 
 const launchInstancesAction = vi.hoisted(() => vi.fn());
@@ -58,11 +59,15 @@ const web: StoredKeyPair = {
   created: "",
 };
 
+function image(id: string, name: string, owner: string): Image {
+  return { id, name, state: "available", owner, architecture: "x86_64", creationDate: "", region: "vws-1" };
+}
+
 function renderLaunch() {
   return render(
     <ConsoleProvider capabilities={supported}>
       <LaunchView
-        images={[{ id: "ami-1", name: "Amazon Linux", state: "available", owner: "amazon" }]}
+        images={[image("ami-1", "Amazon Linux", "amazon")]}
         instanceTypes={[{ id: "vws.small", vcpus: 1, memoryMiB: 1024 }]}
         vpcs={[vpc]}
         subnets={[subnet]}
@@ -119,7 +124,7 @@ describe("launch key pair selection", () => {
     render(
       <ConsoleProvider capabilities={supported}>
         <LaunchView
-          images={[{ id: "ami-1", name: "Amazon Linux", state: "available", owner: "amazon" }]}
+          images={[image("ami-1", "Amazon Linux", "amazon")]}
           instanceTypes={[{ id: "vws.small", vcpus: 1, memoryMiB: 1024 }]}
           vpcs={[vpc]}
           subnets={[subnet]}
@@ -153,10 +158,7 @@ function renderWizard() {
   return render(
     <ConsoleProvider capabilities={supported}>
       <LaunchView
-        images={[
-          { id: "ami-1", name: "Amazon Linux", state: "available", owner: "amazon" },
-          { id: "ami-2", name: "Ubuntu", state: "available", owner: "vws" },
-        ]}
+        images={[image("ami-1", "Amazon Linux", "amazon"), image("ami-2", "Ubuntu", "vws")]}
         instanceTypes={[{ id: "vws.small", vcpus: 1, memoryMiB: 1024 }]}
         vpcs={[vpc, otherVpc]}
         subnets={[subnet, otherSubnet]}
