@@ -27,7 +27,12 @@
     { "urls": ["https://pve1:8006", "https://PVE1:8006/"], "ok": false },
     { "urls": ["HTTPS://pve1", "https://pve1"], "ok": false },
     { "urls": ["https://pve1:8006", "https://pve1:8007"], "ok": true },
-    { "urls": ["https://pve1:443", "https://pve1"], "ok": true }
+    { "urls": ["https://pve1:443", "https://pve1"], "ok": true },
+    { "urls": ["https://[fe80::1%25br-lab]:8006"], "ok": true },
+    { "urls": ["https://[fe80::1%25ens3_1]:8006"], "ok": true },
+    { "urls": ["https://[fe80::1%25en%30]:8006"], "ok": true },
+    { "urls": ["https://[fe80::1%25en/0]:8006"], "ok": false },
+    { "urls": ["https://İSTANBUL.example:8006", "https://istanbul.example:8006"], "ok": false }
   ],
   "destinations": [
     { "stored": "https://pve1:8006", "sent": "https://pve1:8006", "same": true },
@@ -37,6 +42,7 @@
     { "stored": "https://pve1:8006", "sent": "HTTPS://pve1:8006", "same": true },
     { "stored": "https://pve1", "sent": "https://pve1:443", "same": false },
     { "stored": "https://pve1:8006", "sent": "https://pve1:8007", "same": false },
-    { "stored": "https://pve1:8006", "sent": "https://pve2:8006", "same": false }
+    { "stored": "https://pve1:8006", "sent": "https://pve2:8006", "same": false },
+    { "stored": "https://İSTANBUL.example:8006", "sent": "https://istanbul.example:8006", "same": true }
   ]
 }

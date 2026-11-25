@@ -24,17 +24,21 @@ const failure = (code: string, message: string, field?: string) => ({
 });
 const invalid = (field: string, message: string) => failure("InvalidArgument", message, field);
 
+/** Copies of adapter.ts PVE_ORIGIN and goLower: Go's url.Parse origin and strings.ToLower. node runs this file alone. */
+const PVE_ORIGIN =
+  /^https:\/\/(\[[0-9a-f:.]+(%25([\w\-.~!$&'()*+,;=:<>"\u0080-\uffff]|%[0-9a-f]{2})+)?\]|[^\s/@?#:[\]%\\]+)(:[0-9]*)?\/?$/i;
+const goLower = (s: string) => Array.from(s, (c) => (c === "\u0130" ? "i" : c.toLowerCase())).join("");
+
 /** A copy of resource.CheckPVEAPIURLs: 1 to 16 distinct-host HTTPS origins without credentials, query or fragment. */
 function pveUrlProblem(value: unknown): string | null {
   if (!Array.isArray(value) || value.length < 1 || value.length > 16) return "expected 1 to 16 HTTPS origins";
   const hosts = new Set<string>();
   for (const raw of value) {
     // Go's url.Parse, not WHATWG URL: that one drops a default port, trims spaces, decodes %41 and refuses a zone.
-    const origin = /^https:\/\/(\[[0-9a-z:.%]+\]|[^\s/@?#:[\]%\\]+)(:[0-9]*)?\/?$/i;
-    if (typeof raw !== "string" || raw.length > 255 || !origin.test(raw)) {
+    if (typeof raw !== "string" || raw.length > 255 || !PVE_ORIGIN.test(raw)) {
       return "each entry must be an HTTPS origin without credentials, query or fragment";
     }
-    const host = raw.slice("https://".length).replace(/\/$/, "").toLowerCase();
+    const host = goLower(raw.slice("https://".length).replace(/\/$/, ""));
     if (hosts.has(host)) return "duplicate entry";
     hosts.add(host);
   }
@@ -42,7 +46,7 @@ function pveUrlProblem(value: unknown): string | null {
 }
 
 /** The proxmox endpointKey: the daemon reuses a stored secret only for addresses that match one stored this way. */
-const endpointKey = (url: unknown) => String(url).toLowerCase().replace(/\/$/, "");
+const endpointKey = (url: unknown) => goLower(String(url)).replace(/\/$/, "");
 const storedAddress = (stored: unknown, url: unknown) =>
   (stored as unknown[]).some((s) => endpointKey(s) === endpointKey(url));
 
