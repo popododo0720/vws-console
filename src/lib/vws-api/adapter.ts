@@ -452,7 +452,7 @@ export function checkPveApiUrls(urls: readonly string[]): string | null {
   const seen = new Set<string>();
   for (const [index, url] of urls.entries()) {
     const row = `Proxmox API URL ${index + 1}`;
-    if (!/^https:\/\/(\[[0-9a-f:.]+\]|[^\s/@?#:[\]]+)(:[0-9]*)?\/?$/i.test(url) || url.length > 255) {
+    if (!/^https:\/\/(\[[0-9a-z:.%]+\]|[^\s/@?#:[\]%\\]+)(:[0-9]*)?\/?$/i.test(url) || url.length > 255) {
       return `${row} must be an HTTPS origin without credentials, path, query or fragment, such as https://pve1.example.com:8006.`;
     }
     // Go keeps the port as typed (u.Host), so "https://a:443" and "https://a" are two hosts there; do the same.

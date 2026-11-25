@@ -29,12 +29,11 @@ function pveUrlProblem(value: unknown): string | null {
   if (!Array.isArray(value) || value.length < 1 || value.length > 16) return "expected 1 to 16 HTTPS origins";
   const hosts = new Set<string>();
   for (const raw of value) {
-    const url = typeof raw === "string" && raw.length <= 255 && !/[?#\s]/.test(raw) ? URL.parse(raw) : null;
-    if (!url || !/^https:\/\//i.test(raw) || url.username || url.password || /^https:\/\/[^/]*@/i.test(raw)) {
+    // Go's url.Parse, not WHATWG URL: that one drops a default port, trims spaces, decodes %41 and refuses a zone.
+    const origin = /^https:\/\/(\[[0-9a-z:.%]+\]|[^\s/@?#:[\]%\\]+)(:[0-9]*)?\/?$/i;
+    if (typeof raw !== "string" || raw.length > 255 || !origin.test(raw)) {
       return "each entry must be an HTTPS origin without credentials, query or fragment";
     }
-    if (url.pathname !== "/") return "each entry must be an HTTPS origin without credentials, query or fragment";
-    // Go keeps the port as typed (u.Host); URL drops a default one, so the host is read from the text instead.
     const host = raw.slice("https://".length).replace(/\/$/, "").toLowerCase();
     if (hosts.has(host)) return "duplicate entry";
     hosts.add(host);
