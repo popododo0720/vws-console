@@ -29,16 +29,23 @@ function pveUrlProblem(value: unknown): string | null {
   if (!Array.isArray(value) || value.length < 1 || value.length > 16) return "expected 1 to 16 HTTPS origins";
   const hosts = new Set<string>();
   for (const raw of value) {
-    const url = typeof raw === "string" && raw.length <= 255 && !/[?#]/.test(raw) ? URL.parse(raw) : null;
-    if (!url || url.protocol !== "https:" || url.username || url.password || /^https:\/\/[^/]*@/i.test(raw)) {
+    const url = typeof raw === "string" && raw.length <= 255 && !/[?#\s]/.test(raw) ? URL.parse(raw) : null;
+    if (!url || !/^https:\/\//i.test(raw) || url.username || url.password || /^https:\/\/[^/]*@/i.test(raw)) {
       return "each entry must be an HTTPS origin without credentials, query or fragment";
     }
     if (url.pathname !== "/") return "each entry must be an HTTPS origin without credentials, query or fragment";
-    if (hosts.has(url.host)) return "duplicate entry";
-    hosts.add(url.host);
+    // Go keeps the port as typed (u.Host); URL drops a default one, so the host is read from the text instead.
+    const host = raw.slice("https://".length).replace(/\/$/, "").toLowerCase();
+    if (hosts.has(host)) return "duplicate entry";
+    hosts.add(host);
   }
   return null;
 }
+
+/** The proxmox endpointKey: the daemon reuses a stored secret only for addresses that match one stored this way. */
+const endpointKey = (url: unknown) => String(url).toLowerCase().replace(/\/$/, "");
+const storedAddress = (stored: unknown, url: unknown) =>
+  (stored as unknown[]).some((s) => endpointKey(s) === endpointKey(url));
 
 /** A partial copy of validateRegion (vws-console-api internal/surface/console/admin_regions.go). */
 function refused(region: Json, secret: unknown, create: boolean) {
@@ -308,8 +315,7 @@ createServer(async (request, response) => {
   const moved =
     saved !== undefined &&
     ((input.caPem !== undefined && input.caPem !== saved.body.caPem) ||
-      (Array.isArray(input.pveApiUrls) &&
-        input.pveApiUrls.some((url) => !(saved.body.pveApiUrls as unknown[]).includes(url))));
+      (Array.isArray(input.pveApiUrls) && input.pveApiUrls.some((url) => !storedAddress(saved.body.pveApiUrls, url))));
   if (moved && tokenSecret === undefined && tail !== "test") {
     return send(400, invalid("tokenSecret", "the token secret is needed when the CA or the URLs change"));
   }
@@ -317,7 +323,7 @@ createServer(async (request, response) => {
   const firstMoved =
     saved !== undefined &&
     Array.isArray(input.pveApiUrls) &&
-    input.pveApiUrls[0] !== (saved.body.pveApiUrls as unknown[])[0];
+    endpointKey(input.pveApiUrls[0]) !== endpointKey((saved.body.pveApiUrls as unknown[])[0]);
   for (const [field, id, secret] of [
     ["firewallTokenSecret", body.firewallTokenId, firewallTokenSecret],
     ["backupTokenSecret", body.backupTokenId, backupTokenSecret],
