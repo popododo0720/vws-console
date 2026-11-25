@@ -3,11 +3,14 @@
 # in a vws-console-api checkout: "checks" against resource.CheckPVEAPIURLs and "destinations" against the proxmox
 # endpointKey that decides whether a stored secret may be reused. The test files are removed again on exit.
 set -euo pipefail
-api=${1:-${VWS_CONSOLE_API_DIR:?usage: $0 VWS_CONSOLE_API_DIR}}
+api=$(cd "${1:-${VWS_CONSOLE_API_DIR:?usage: $0 VWS_CONSOLE_API_DIR}}" && pwd)
 fixture=$(cd "$(dirname "$0")/.." && pwd)/src/lib/vws-api/testdata/proxmox-api-urls.json
-resource=$api/internal/resource/zz_console_fixture_test.go
-proxmox=$api/internal/backend/proxmox/zz_console_fixture_test.go
+# Absolute paths and fresh names: the cleanup runs after the cd below and never touches a file it did not create.
+resource=
+proxmox=
 trap 'rm -f "$resource" "$proxmox"' EXIT
+resource=$(mktemp --suffix=_test.go "$api/internal/resource/zz_console_fixture_XXXXXX")
+proxmox=$(mktemp --suffix=_test.go "$api/internal/backend/proxmox/zz_console_fixture_XXXXXX")
 cat > "$resource" <<'GO'
 package resource
 
