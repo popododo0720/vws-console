@@ -443,14 +443,16 @@ export const MAX_PVE_API_URLS = 16;
 
 /**
  * The PVE API URL rules of console-api (resource.CheckPVEAPIURLs): 1 to 16 HTTPS origins without credentials, path,
- * query or fragment, each at most 255 characters, and no two with the same host. Returns the first problem, or null.
+ * query or fragment, with a numeric port if any, each at most 255 characters, and no two with the same host. Returns
+ * the first problem, or null. testdata/proxmox-api-urls.json holds the cases; scripts/check-proxmox-api-urls.sh runs them
+ * against the Go code.
  */
 export function checkPveApiUrls(urls: readonly string[]): string | null {
   if (urls.length < 1 || urls.length > MAX_PVE_API_URLS) return `Enter 1 to ${MAX_PVE_API_URLS} Proxmox API URLs.`;
   const seen = new Set<string>();
   for (const [index, url] of urls.entries()) {
     const row = `Proxmox API URL ${index + 1}`;
-    if (!/^https:\/\/[^\s/@?#]+\/?$/i.test(url) || url.length > 255) {
+    if (!/^https:\/\/(\[[0-9a-f:.]+\]|[^\s/@?#:[\]]+)(:[0-9]*)?\/?$/i.test(url) || url.length > 255) {
       return `${row} must be an HTTPS origin without credentials, path, query or fragment, such as https://pve1.example.com:8006.`;
     }
     // Go keeps the port as typed (u.Host), so "https://a:443" and "https://a" are two hosts there; do the same.
@@ -460,6 +462,12 @@ export function checkPveApiUrls(urls: readonly string[]): string | null {
   }
   return null;
 }
+
+/**
+ * The key under which the region daemon (vws-console-api proxmox endpointKey) compares a sent address with the stored
+ * ones: the whole URL in lower case without a trailing slash. An explicit default port stays a different address.
+ */
+export const pveEndpointKey = (url: string) => url.trim().toLowerCase().replace(/\/$/, "");
 
 /**
  * What a save sends. caPem is left out when the operator did not touch it: the daemon compares it byte for byte, so a

@@ -235,6 +235,7 @@ describe("admin Regions pages on a mocked admin API", () => {
     ["http://pve1.lab.example", "Proxmox API URL 1 must be an HTTPS origin"],
     ["https://u:p@pve1.lab.example", "Proxmox API URL 1 must be an HTTPS origin"],
     ["https://pve1.lab.example/api2", "Proxmox API URL 1 must be an HTTPS origin"],
+    ["https://pve1.lab.example:80a6", "Proxmox API URL 1 must be an HTTPS origin"],
     ["https://pve2.lab.example:8006", "Proxmox API URL 2 repeats the host pve2.lab.example:8006"],
   ])("refuses the PVE API URL %s before it sends anything", async (url, message) => {
     adminApi({ "/regions/pve-lab-1": saved });
@@ -324,6 +325,24 @@ describe("admin Regions pages on a mocked admin API", () => {
         firewallTokenSecret: "new-fw",
         backupTokenSecret: "new-bk",
       });
+    });
+
+    it("keeps every stored secret when an address only changes case or gains a trailing slash", async () => {
+      adminApi({
+        "/regions/pve-lab-1": [200, withTokens, { etag: '"3"' }],
+        "PATCH /regions/pve-lab-1": [200, withTokens],
+      });
+      await show(edit());
+      fill("Proxmox API URL 1", "https://PVE1.lab.example:8006/");
+      fill("Proxmox API URL 2", "https://pve2.LAB.example:8006");
+      click("Save changes");
+      await waitFor(() => expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1));
+      expect(calls.at(-1)?.body).toMatchObject({
+        pveApiUrls: ["https://PVE1.lab.example:8006/", "https://pve2.LAB.example:8006"],
+      });
+      for (const field of ["tokenSecret", "firewallTokenSecret", "backupTokenSecret"]) {
+        expect(calls.at(-1)?.body).not.toHaveProperty(field);
+      }
     });
 
     it("keeps the stored write secrets when only zones change", async () => {

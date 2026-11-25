@@ -18,6 +18,7 @@ import {
   parseSecurityGroups,
   parseSnapshots,
   checkPveApiUrls,
+  pveEndpointKey,
   toAdminRegion,
   toAdminRegionHealth,
   toAdminRegionInput,
@@ -558,6 +559,20 @@ describe("checkPveApiUrls", () => {
     const result = checkPveApiUrls(urls);
     if (problem === null) expect(result).toBeNull();
     else expect(result).toContain(problem);
+  });
+});
+
+/** The cases scripts/check-proxmox-api-urls.sh also runs against resource.CheckPVEAPIURLs and the proxmox endpointKey. */
+describe("the PVE API URL fixtures shared with console-api", () => {
+  const fixture = JSON.parse(readFileSync("src/lib/vws-api/testdata/proxmox-api-urls.json", "utf8")) as {
+    checks: { urls: string[]; ok: boolean }[];
+    destinations: { stored: string; sent: string; same: boolean }[];
+  };
+  it.each(fixture.checks)("checkPveApiUrls(%j)", ({ urls, ok }) => {
+    expect(checkPveApiUrls(urls) === null).toBe(ok);
+  });
+  it.each(fixture.destinations)("pveEndpointKey: %j", ({ stored, sent, same }) => {
+    expect(pveEndpointKey(stored) === pveEndpointKey(sent)).toBe(same);
   });
 });
 

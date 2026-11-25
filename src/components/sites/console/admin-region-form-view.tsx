@@ -8,6 +8,7 @@ import { adminNav } from "@/lib/console-data";
 import {
   MAX_PVE_API_URLS,
   checkPveApiUrls,
+  pveEndpointKey,
   type AdminRegion,
   type ApiError,
   type ApiResult,
@@ -34,9 +35,12 @@ const inputClass = "field max-w-[783px]";
 const nameHint = "Lowercase: pve, a location and a number, joined by hyphens. It cannot be changed later.";
 const pemClass = "w-full max-w-[783px] rounded-lg border border-[#aab7b8] px-2.5 py-2 font-mono text-[13px]";
 
-/** console-api reuses a stored secret only when every URL sent is already stored (a subset), with the same CA. */
+/**
+ * The region daemon reuses a stored secret only when every URL sent is already stored (a subset), with the same CA. It
+ * compares addresses by pveEndpointKey, so a case change or a trailing slash is the same address.
+ */
 const withinStored = (sent: readonly string[], stored: readonly string[]) =>
-  sent.every((url) => stored.includes(url.trim()));
+  sent.every((url) => stored.some((held) => pveEndpointKey(held) === pveEndpointKey(url)));
 
 /** The failure code of a save that console-api stored but could not apply to the region daemon. */
 const APPLY_FAILED = "ApplyFailed";
@@ -86,7 +90,7 @@ function RegionForm({ region, save }: Pick<Props, "region"> & { save: ReturnType
   const caChanged = !region || draft.caPem !== region.caPem;
   const trustMoved = Boolean(region) && (caChanged || !withinStored(urls, region?.pveApiUrls ?? []));
   /** The firewall and backup tokens only ever went to the first address, so moving that one asks for them too. */
-  const firstMoved = Boolean(region) && urls[0]?.trim() !== region?.pveApiUrls[0];
+  const firstMoved = Boolean(region) && pveEndpointKey(urls[0] ?? "") !== pveEndpointKey(region?.pveApiUrls[0] ?? "");
   const secretInput = (id: string) => (id === "firewall" ? firewallSecret : backupSecret);
   const writeTokens = [
     {
