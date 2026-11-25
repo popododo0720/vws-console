@@ -151,24 +151,31 @@ export default async function setup() {
       file("cert.pem"),
     ]);
     chmodSync(file("key.pem"), 0o600);
-    const pve = start("pvefake", file("pvefake"), [
-      "-scenario",
-      file("scenario.yaml"),
-      "-listen",
-      `127.0.0.1:${pvePort}`,
-      "-ca-file",
-      file("pve-ca.pem"),
-    ]);
-    const lines = createInterface({ input: pve.stdout! });
-    const [pveURL] = await Promise.race([
-      once(lines, "line"),
-      once(pve, "exit").then(() => {
-        throw new Error("pvefake exited before readiness");
-      }),
-    ]);
-    lines.close();
-    expect(pveURL).toBe(`https://127.0.0.1:${pvePort}`);
-    writeFileSync(file("pve-token.json"), JSON.stringify({ pveURL, tokenId, tokenSecret }), { mode: 0o600 });
+    // Two pvefake nodes of one cluster, on two loopback IPs: each signs its own certificate, so the region's CA is
+    // both certificates.
+    const startPve = async (ip: string, n: number) => {
+      const pve = start(`pvefake-${n}`, file("pvefake"), [
+        "-scenario",
+        file("scenario.yaml"),
+        "-listen",
+        `${ip}:${pvePort}`,
+        "-ca-file",
+        file(`pve-ca-${n}.pem`),
+      ]);
+      const lines = createInterface({ input: pve.stdout! });
+      const [url] = await Promise.race([
+        once(lines, "line"),
+        once(pve, "exit").then(() => {
+          throw new Error("pvefake exited before readiness");
+        }),
+      ]);
+      lines.close();
+      expect(url).toBe(`https://${ip}:${pvePort}`);
+      return url as string;
+    };
+    const pveURLs = [await startPve("127.0.0.1", 1), await startPve("127.0.0.2", 2)];
+    save("pve-ca.pem", [1, 2].map((n) => readFileSync(file(`pve-ca-${n}.pem`), "utf8")).join(""));
+    writeFileSync(file("pve-token.json"), JSON.stringify({ pveURLs, tokenId, tokenSecret }), { mode: 0o600 });
     start("region", file("vws-region"), [
       "-config",
       file("region.yaml"),

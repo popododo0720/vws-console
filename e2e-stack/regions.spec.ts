@@ -17,7 +17,7 @@ import {
 } from "./setup";
 
 const name = regionName;
-type Registration = { pveURL: string; tokenId: string; tokenSecret: string };
+type Registration = { pveURLs: string[]; tokenId: string; tokenSecret: string };
 const registration = () => JSON.parse(readFileSync(resolve(stackRoot, "pve-token.json"), "utf8")) as Registration;
 
 async function signIn(page: Page, user: string, password: string) {
@@ -50,7 +50,8 @@ const test = base.extend<{ capture: void }>({
 });
 
 test("root registers, tests, discovers, edits and removes a real region", async ({ page, request }) => {
-  const { pveURL, tokenId, tokenSecret } = registration();
+  const { pveURLs, tokenId, tokenSecret } = registration();
+  expect(pveURLs).toHaveLength(2);
   await signIn(page, "root", rootPassword);
   await page.getByRole("button", { name: "Services" }).click();
   await page.getByRole("menuitem", { name: "Regions", exact: true }).click();
@@ -59,12 +60,14 @@ test("root registers, tests, discovers, edits and removes a real region", async 
   for (const [label, value] of Object.entries({
     "Region name": name,
     "Cluster name": "test",
-    "Proxmox API URL 1": pveURL,
     "Region endpoint": regionEndpoint,
     "API token ID": tokenId,
     "API token secret": tokenSecret,
   }))
     await page.getByLabel(label, { exact: true }).fill(value);
+  await page.getByLabel("Proxmox API URL 1", { exact: true }).fill(pveURLs[0]);
+  await page.getByRole("button", { name: "Add Proxmox API URL" }).click();
+  await page.getByLabel("Proxmox API URL 2", { exact: true }).fill(pveURLs[1]);
   await page.getByLabel("CA certificate").fill(readFileSync(resolve(stackRoot, "pve-ca.pem"), "utf8"));
   await page.getByRole("button", { name: "Add Availability Zone" }).click();
   await page.getByLabel("Zone letter", { exact: true }).fill("a");
@@ -75,7 +78,8 @@ test("root registers, tests, discovers, edits and removes a real region", async 
   await page.getByRole("button", { name: "Refresh status", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Nodes (1)", exact: true })).toBeVisible();
   await expect(page.getByText("Online", { exact: true })).toBeVisible();
-  await expect(page.getByText("API node", { exact: true })).toBeVisible();
+  const apiNode = page.getByRole("term").filter({ hasText: /^API node$/ });
+  await expect(apiNode.locator("xpath=following-sibling::dd[1]")).toHaveText("pve1");
   await expect(page.getByText("Leader", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("term").filter({ hasText: /^pve1$/ })).toBeVisible();
   await page.getByRole("link", { name: "Edit", exact: true }).click();
@@ -94,6 +98,16 @@ test("root registers, tests, discovers, edits and removes a real region", async 
   await expect(page.getByText(`${name}b`, { exact: true })).toBeVisible();
   const identity = readFileSync(resolve(stackRoot, "state/registration.json"), "utf8");
   expect(JSON.parse(identity) as { zones: { letter: string }[] }).toMatchObject({ zones: [{ letter: "b" }] });
+  // Removing an address keeps the stored secret: the daemon reuses it for a subset of the addresses that held it,
+  // compared without a trailing slash.
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Remove Proxmox API URL 2" }).click();
+  await page.getByLabel("Proxmox API URL 1", { exact: true }).fill(`${pveURLs[0]}/`);
+  await expect(page.getByLabel("API token secret", { exact: true })).toHaveValue("");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/regions/${name}$`));
+  const subset = readFileSync(resolve(stackRoot, "state/registration.json"), "utf8");
+  expect(JSON.parse(subset) as { pveApiUrls: string[] }).toMatchObject({ pveApiUrls: [`${pveURLs[0]}/`] });
   // Register the optional write tokens through the admin API (the form edits only the stored ones), then change the
   // CA: the daemon compares it byte for byte, so every secret has to be entered again.
   const cookies = await page.context().cookies();
