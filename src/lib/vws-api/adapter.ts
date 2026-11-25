@@ -442,24 +442,46 @@ export type Versioned<T> = T & { etag: string };
 export const MAX_PVE_API_URLS = 16;
 
 /**
+ * Go's strings.ToLower: one code point to one, so "İ" becomes "i" (JavaScript's toLowerCase gives "i̇") and a final
+ * "Σ" stays "σ". console-api keys hosts and endpoints with it.
+ */
+export const goLower = (s: string) => Array.from(s, (c) => (c === "\u0130" ? "i" : c.toLowerCase())).join("");
+
+/**
+ * An HTTPS origin as Go's url.Parse reads one: a bracketed IPv6 address with an optional RFC 6874 zone after "%25"
+ * (unreserved and sub-delim characters, non-ASCII or %-escapes), or a host without delimiters, then an optional
+ * numeric port and slash.
+ */
+export const PVE_ORIGIN =
+  /^https:\/\/(\[[0-9a-f:.]+(%25([\w\-.~!$&'()*+,;=:<>"\u0080-\uffff]|%[0-9a-f]{2})+)?\]|[^\s/@?#:[\]%\\]+)(:[0-9]*)?\/?$/i;
+
+/**
  * The PVE API URL rules of console-api (resource.CheckPVEAPIURLs): 1 to 16 HTTPS origins without credentials, path,
- * query or fragment, each at most 255 characters, and no two with the same host. Returns the first problem, or null.
+ * query or fragment, with a numeric port if any, each at most 255 characters, and no two with the same host. Returns
+ * the first problem, or null. testdata/proxmox-api-urls.json holds the cases; scripts/check-proxmox-api-urls.sh runs them
+ * against the Go code.
  */
 export function checkPveApiUrls(urls: readonly string[]): string | null {
   if (urls.length < 1 || urls.length > MAX_PVE_API_URLS) return `Enter 1 to ${MAX_PVE_API_URLS} Proxmox API URLs.`;
   const seen = new Set<string>();
   for (const [index, url] of urls.entries()) {
     const row = `Proxmox API URL ${index + 1}`;
-    if (!/^https:\/\/[^\s/@?#]+\/?$/i.test(url) || url.length > 255) {
+    if (!PVE_ORIGIN.test(url) || url.length > 255) {
       return `${row} must be an HTTPS origin without credentials, path, query or fragment, such as https://pve1.example.com:8006.`;
     }
     // Go keeps the port as typed (u.Host), so "https://a:443" and "https://a" are two hosts there; do the same.
-    const host = url.slice("https://".length).replace(/\/$/, "").toLowerCase();
+    const host = goLower(url.slice("https://".length).replace(/\/$/, ""));
     if (seen.has(host)) return `${row} repeats the host ${host}. Each host can be listed once.`;
     seen.add(host);
   }
   return null;
 }
+
+/**
+ * The key under which the region daemon (vws-console-api proxmox endpointKey) compares a sent address with the stored
+ * ones: the whole URL in lower case without a trailing slash. An explicit default port stays a different address.
+ */
+export const pveEndpointKey = (url: string) => goLower(url.trim()).replace(/\/$/, "");
 
 /**
  * What a save sends. caPem is left out when the operator did not touch it: the daemon compares it byte for byte, so a

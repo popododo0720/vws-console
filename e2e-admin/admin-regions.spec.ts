@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 const api = `http://127.0.0.1:${process.env.E2E_FAKE_API_PORT ?? 43321}`;
@@ -168,6 +169,36 @@ test("the fake console-api refuses a write without the session's CSRF token", as
 });
 
 const headers = { cookie: "__Host-vws_session=root; vws_csrf=root", "x-csrf-token": "root", origin: api };
+
+/** The cases scripts/check-proxmox-api-urls.sh runs against console-api's Go rules, sent to the fake. */
+const fixture = JSON.parse(readFileSync("src/lib/vws-api/testdata/proxmox-api-urls.json", "utf8")) as {
+  checks: { urls: string[]; ok: boolean }[];
+  destinations: { stored: string; sent: string; same: boolean }[];
+};
+
+test("the fake console-api checks PVE API URLs and reuses a stored secret as console-api does", async ({ request }) => {
+  const region = { name: "pve-lab-1", clusterName: "lab", caPem: CA, tokenId: "vws@pve!console" };
+  for (const { urls, ok } of fixture.checks) {
+    const answer = await request.post(`${api}/api/v1/admin/regions/test`, {
+      headers,
+      data: { ...region, pveApiUrls: urls, tokenSecret: CANARY },
+    });
+    expect([urls, answer.status()]).toEqual([urls, ok ? 200 : 400]);
+  }
+  for (const { stored, sent, same } of fixture.destinations) {
+    await request.post(`${api}/__reset`);
+    const created = await request.post(`${api}/api/v1/admin/regions`, {
+      headers,
+      data: { ...region, pveApiUrls: [stored], tokenSecret: CANARY },
+    });
+    const etag = created.headers().etag;
+    const edited = await request.patch(`${api}/api/v1/admin/regions/pve-lab-1`, {
+      headers: { ...headers, "if-match": etag },
+      data: { pveApiUrls: [sent] },
+    });
+    expect([stored, sent, edited.status()]).toEqual([stored, sent, same ? 200 : 400]);
+  }
+});
 
 test("an edit that adds an address asks for the write secrets again, and sends them without echoing the stored ones", async ({
   page,

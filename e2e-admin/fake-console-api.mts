@@ -24,21 +24,31 @@ const failure = (code: string, message: string, field?: string) => ({
 });
 const invalid = (field: string, message: string) => failure("InvalidArgument", message, field);
 
+/** Copies of adapter.ts PVE_ORIGIN and goLower: Go's url.Parse origin and strings.ToLower. node runs this file alone. */
+const PVE_ORIGIN =
+  /^https:\/\/(\[[0-9a-f:.]+(%25([\w\-.~!$&'()*+,;=:<>"\u0080-\uffff]|%[0-9a-f]{2})+)?\]|[^\s/@?#:[\]%\\]+)(:[0-9]*)?\/?$/i;
+const goLower = (s: string) => Array.from(s, (c) => (c === "\u0130" ? "i" : c.toLowerCase())).join("");
+
 /** A copy of resource.CheckPVEAPIURLs: 1 to 16 distinct-host HTTPS origins without credentials, query or fragment. */
 function pveUrlProblem(value: unknown): string | null {
   if (!Array.isArray(value) || value.length < 1 || value.length > 16) return "expected 1 to 16 HTTPS origins";
   const hosts = new Set<string>();
   for (const raw of value) {
-    const url = typeof raw === "string" && raw.length <= 255 && !/[?#]/.test(raw) ? URL.parse(raw) : null;
-    if (!url || url.protocol !== "https:" || url.username || url.password || /^https:\/\/[^/]*@/i.test(raw)) {
+    // Go's url.Parse, not WHATWG URL: that one drops a default port, trims spaces, decodes %41 and refuses a zone.
+    if (typeof raw !== "string" || raw.length > 255 || !PVE_ORIGIN.test(raw)) {
       return "each entry must be an HTTPS origin without credentials, query or fragment";
     }
-    if (url.pathname !== "/") return "each entry must be an HTTPS origin without credentials, query or fragment";
-    if (hosts.has(url.host)) return "duplicate entry";
-    hosts.add(url.host);
+    const host = goLower(raw.slice("https://".length).replace(/\/$/, ""));
+    if (hosts.has(host)) return "duplicate entry";
+    hosts.add(host);
   }
   return null;
 }
+
+/** The proxmox endpointKey: the daemon reuses a stored secret only for addresses that match one stored this way. */
+const endpointKey = (url: unknown) => goLower(String(url)).replace(/\/$/, "");
+const storedAddress = (stored: unknown, url: unknown) =>
+  (stored as unknown[]).some((s) => endpointKey(s) === endpointKey(url));
 
 /** A partial copy of validateRegion (vws-console-api internal/surface/console/admin_regions.go). */
 function refused(region: Json, secret: unknown, create: boolean) {
@@ -308,8 +318,7 @@ createServer(async (request, response) => {
   const moved =
     saved !== undefined &&
     ((input.caPem !== undefined && input.caPem !== saved.body.caPem) ||
-      (Array.isArray(input.pveApiUrls) &&
-        input.pveApiUrls.some((url) => !(saved.body.pveApiUrls as unknown[]).includes(url))));
+      (Array.isArray(input.pveApiUrls) && input.pveApiUrls.some((url) => !storedAddress(saved.body.pveApiUrls, url))));
   if (moved && tokenSecret === undefined && tail !== "test") {
     return send(400, invalid("tokenSecret", "the token secret is needed when the CA or the URLs change"));
   }
@@ -317,7 +326,7 @@ createServer(async (request, response) => {
   const firstMoved =
     saved !== undefined &&
     Array.isArray(input.pveApiUrls) &&
-    input.pveApiUrls[0] !== (saved.body.pveApiUrls as unknown[])[0];
+    endpointKey(input.pveApiUrls[0]) !== endpointKey((saved.body.pveApiUrls as unknown[])[0]);
   for (const [field, id, secret] of [
     ["firewallTokenSecret", body.firewallTokenId, firewallTokenSecret],
     ["backupTokenSecret", body.backupTokenId, backupTokenSecret],

@@ -137,6 +137,8 @@ jobs:
           go-version-file: vws-console-api/go.mod
           cache-dependency-path: vws-console-api/go.sum
       - run: npm ci
+      # The console's PVE API URL fixtures must hold for console-api's Go rules too.
+      - run: bash scripts/check-proxmox-api-urls.sh ../vws-console-api
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:stack
         env:
